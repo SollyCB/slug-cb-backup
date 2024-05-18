@@ -1,0 +1,6 @@
+exe
+external/glfw-shared-linux/
+obj/
+pl-caches/
+*.spv
+models/

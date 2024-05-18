@@ -1,0 +1,625 @@
+{
+    "materials": [
+        {
+            "name": "Material0",
+            "pbrMetallicRoughness": {
+                "baseColorFactor": [ 0.5, 0.5, 0.5, 1.0 ],
+                "baseColorTexture": {
+                    "index": 1,
+                    "texCoord": 1
+                },
+                "metallicFactor": 1,
+                "roughnessFactor": 1,
+                "metallicRoughnessTexture": {
+                    "index": 2,
+                    "texCoord": 1
+                }
+            },
+            "normalTexture": {
+                "scale": 2,
+                "index": 3,
+                "texCoord": 1
+            },
+            "emissiveFactor": [ 0.2, 0.1, 0.0 ]
+        },
+        {
+            "name": "Material1",
+            "pbrMetallicRoughness": {
+                "baseColorFactor": [ 2.5, 4.5, 2.5, 1.0 ],
+                "baseColorTexture": {
+                    "index": 3,
+                    "texCoord": 4
+                },
+                "metallicFactor": 5.0,
+                "roughnessFactor": 6.0,
+                "metallicRoughnessTexture": {
+                    "index": 8,
+                    "texCoord": 8
+                }
+            },
+            "normalTexture": {
+                "scale": 1.0,
+                "index": 12,
+                "texCoord": 11
+            },
+            "occlusionTexture": {
+                "index": 79,
+                "texCoord": 9906
+                "strength": 0.679
+            },
+            "emissiveTexture": {
+                "index": 3,
+                "texCoord": 56070
+            },
+            "emissiveFactor": [ 11.2, 0.1, 0.0 ]
+        }
+    ],
+    "meshes": [
+        {
+            "primitives": [
+                {
+                    "attributes": {
+                        "NORMAL": 23,
+                        "POSITION": 22,
+                        "TEXCOORD_1": 25
+                        "TANGENT": 24,
+                        "TEXCOORD_0": 25
+                    },
+                    "indices": 21,
+                    "material": 3,
+                    "mode": 1
+                },
+                {
+                    "attributes": {
+                        "NORMAL": 33,
+                        "POSITION": 32,
+                        "TEXCOORD_0": 35
+                        "TANGENT": 34,
+                        "TEXCOORD_1": 35
+                    },
+                    "indices": 31,
+                    "material": 33,
+                    "targets": [
+                        {
+                            "NORMAL": 33,
+                            "POSITION": 32,
+                            "TANGENT": 34
+                        },
+                        {
+                            "COLOR_1": 3,
+                            "NORMAL": 43,
+                            "COLOR_0": 2,
+                        }
+                    ]
+                }
+            ],
+            "weights": [0, 0.5]
+        },
+        {
+            "primitives": [
+                {
+                    "attributes": {
+                        "NORMAL": 13,
+                        "POSITION": 12,
+                        "TANGENT": 14,
+                        "TEXCOORD_0": 15
+                    },
+                    "indices": 11,
+                    "material": 13,
+                    "mode": 3
+                },
+                {
+                    "attributes": {
+                        "NORMAL": 13,
+                        "POSITION": 12,
+                        "JOINTS_0": 14,
+                        "WEIGHTS_0": 15
+                        "JOINTS_1": 14,
+                        "WEIGHTS_1": 15
+                    },
+                    "indices": 11,
+                    "material": 13,
+                    "targets": [
+                        {
+                            "NORMAL": 13,
+                            "POSITION": 12,
+                            "TANGENT": 14
+                        },
+                        {
+                            "NORMAL": 23,
+                            "POSITION": 22,
+                            "TANGENT": 24
+                        }
+                    ]
+                },
+                {
+                    "attributes": {
+                        "NORMAL": 3,
+                        "POSITION": 2,
+                        "TANGENT": 4,
+                        "TEXCOORD_1": 5
+                        "TEXCOORD_0": 5
+                    },
+                    "indices": 1,
+                    "material": 3,
+                    "mode": 0,
+                    "targets": [
+                        {
+                            "NORMAL": 3,
+                            "JOINTS_0": 2,
+                            "WEIGHTS_0": 4
+                        },
+                        {
+                            "NORMAL": 9,
+                            "POSITION": 7,
+                            "TANGENT": 6
+                        }
+                    ]
+                }
+            ],
+            "weights": [0, 0.5]
+        }
+    ]
+    "accessors": [
+        {
+            "bufferView": 1,
+            "byteOffset": 100,
+            "componentType": 5123,
+            "count": 12636,
+            "max": [
+                4212
+            ],
+            "min": [
+                0
+            ],
+            "type": "SCALAR"
+        },
+        {
+            "bufferView": 2,
+            "byteOffset": 200,
+            "componentType": 5126,
+            "count": 2399,
+            "max": [
+              0.9971418380737304,
+              -4.371139894487897e-8,
+              0.9996265172958374,
+              0,
+              4.3586464215650273e-8,
+              1,
+              4.3695074225524884e-8,
+              0,
+              0.9999366402626038,
+              0,
+              0.9971418380737304,
+              0,
+              1.1374080181121828,
+              0.44450080394744873,
+              1.0739599466323853,
+              1
+            ],
+            "min": [
+              -0.9999089241027832,
+              -4.371139894487897e-8,
+              -0.9999366402626038,
+              0,
+              -4.3707416352845037e-8,
+              1,
+              -4.37086278282095e-8,
+              0,
+              -0.9996265172958374,
+              0,
+              -0.9999089241027832,
+              0,
+              -1.189831018447876,
+              -0.45450031757354736,
+              -1.058603048324585,
+              1
+            ],
+            "type": "MAT4"
+        },
+        {
+            "bufferView": 3,
+            "byteOffset": 300,
+            "componentType": 5125,
+            "count": 12001,
+            "type": "VEC3",
+            "sparse": {
+                "values": {
+                    "bufferView": 4,
+                    "byteOffset": 9999
+                }
+                "count": 10,
+                "indices": {
+                    "bufferView": 7,
+                    "byteOffset": 8888,
+                    "componentType": 5123
+                },
+            }
+        }
+        {
+            "bufferView": 3,
+            "byteOffset": 300,
+            "componentType": 5125,
+            "count": 12001,
+            "type": "VEC4",
+            "sparse": {
+                "values": {
+                    "bufferView": 4,
+                    "byteOffset": 9999
+                }
+                "count": 10,
+                "indices": {
+                    "bufferView": 7,
+                    "byteOffset": 8888,
+                    "componentType": 5123
+                },
+            }
+        }
+    ],
+    "animations": [
+        {
+            "name": "Animate all properties of one node with different samplers",
+            "channels": [
+                {
+                    "sampler": 0,
+                    "target": {
+                        "node": 1,
+                        "path": "rotation"
+                    }
+                },
+                {
+                    "sampler": 1,
+                    "target": {
+                        "node": 2,
+                        "path": "scale"
+                    }
+                },
+                {
+                    "sampler": 2,
+                    "target": {
+                        "node": 3,
+                        "path": "translation"
+                    }
+                }
+            ],
+            "samplers": [
+                {
+                    "input": 888,
+                    "interpolation": "LINEAR",
+                    "output": 5
+                },
+                {
+                    "input": 4,
+                    "interpolation": "CUBICSPLINE",
+                    "output": 6
+                },
+                {
+                    "input": 4,
+                    "interpolation": "STEP",
+                    "output": 7
+                }
+            ]
+        },
+        {
+            "name": "Animate two nodes with different samplers",
+            "channels": [
+                {
+                    "sampler": 0,
+                    "target": {
+                        "node": 0,
+                        "path": "rotation"
+                    }
+                },
+                {
+                    "sampler": 1,
+                    "target": {
+                        "node": 1,
+                        "path": "rotation"
+                    }
+                }
+            ],
+            "samplers": [
+                {
+                    "input": 0,
+                    "interpolation": "LINEAR",
+                    "output": 1
+                },
+                {
+                    "input": 2,
+                    "interpolation": "LINEAR",
+                    "output": 3
+                }
+            ]
+        },
+        {
+            "name": "Animate two nodes with the same sampler",
+            "channels": [
+                {
+                    "sampler": 1000,
+                    "target": {
+                        "node": 2000,
+                        "path": "translation"
+                    }
+                },
+                {
+                    "sampler": 799,
+                    "target": {
+                        "node": 899,
+                        "path": "weights"
+                    }
+                }
+            ],
+            "samplers": [
+                {
+                    "input": 676,
+                    "interpolation": "STEP",
+                    "output": 472
+                }
+            ]
+        },
+        {
+            "name": "Animate a node rotation channel and the weights of a Morph Target it instantiates",
+            "channels": [
+                {
+                    "sampler": 24,
+                    "target": {
+                        "node": 27,
+                        "path": "rotation"
+                    }
+                },
+                {
+                    "sampler": 31,
+                    "target": {
+                        "node": 27,
+                        "path": "weights"
+                    }
+                }
+                {
+                    "sampler": 4,
+                    "target": {
+                        "node": 27,
+                        "path": "translation"
+                    }
+                }
+            ],
+            "samplers": [
+                {
+                    "input": 999,
+                    "interpolation": "LINEAR",
+                    "output": 753
+                },
+                {
+                    "input": 4,
+                    "interpolation": "LINEAR",
+                    "output": 6
+                }
+            ]
+        }
+    ],
+    "buffers": [
+       {
+           "byteLength": 10001,
+           "uri": "duck1.bin"
+       },
+       {
+           "byteLength": 10002,
+           "uri": "duck2.bin"
+       },
+       {
+           "byteLength": 10003,
+           "uri": "duck3.bin"
+       },
+    ],
+    "bufferViews": [
+        {
+            "buffer": 1,
+            "byteLength": 25272,
+            "byteOffset": 2,
+            "target": 34963
+        },
+        {
+            "buffer": 6,
+            "byteLength": 76768,
+            "byteOffset": 25272,
+            "byteStride": 32,
+            "target": 34962
+        },
+        {
+            "buffer": 9999,
+            "byteLength": 99907654,
+            "byteOffset": 6969,
+            "target": 34962
+        },
+        {
+            "buffer": 9,
+            "byteLength": 76768,
+            "byteOffset": 25272,
+            "byteStride": 32,
+            "target": 34963
+        }
+    ],
+    "cameras": [
+        {
+            "name": "Finite perspective camera",
+            "type": "perspective",
+            "perspective": {
+                "aspectRatio": 1.5,
+                "yfov": 0.646464,
+                "zfar": 99.8,
+                "znear": 0.01
+            }
+        },
+        {
+            "name": "Infinite perspective camera",
+            "type": "perspective",
+            "perspective": {
+                "aspectRatio": 1.9,
+                "yfov": 0.797979,
+                "znear": 0.02
+            }
+        },
+        {
+            "name": "An ortho camera",
+            "type": "orthographic",
+            "orthographic": {
+                "xmag": 1.822,
+                "ymag": 0.489,
+                "zfar": 1.4,
+                "znear": 0.01
+            }
+        }
+    ],
+    "images": [
+        {
+            "uri": "duckCM.png"
+        },
+        {
+            "bufferView": 14,
+            "mimeType": "image/jpeg"
+        },
+        {
+            "uri": "duck_but_better.jpeg"
+        },
+    ],
+    "nodes": [
+        {
+            "name": "node-camera",
+            "camera": 1,
+            "matrix": [
+                -0.99975,   -0.00679829, 0.0213218, 0,
+                 0.00167596, 0.927325,   0.374254,  0,
+                -0.0223165,  0.374196,  -0.927081,  0,
+                -0.0115543,  0.194711,  -0.478297,  1
+            ],
+            "weights": [0.5, 0.6, 0.7, 0.8]
+        },
+        {
+            "name": "Box",
+            "rotation": [
+                0,
+                0,
+                0,
+                1
+            ],
+            "scale": [
+                1,
+                1,
+                1
+            ],
+            "translation": [
+                -17.7082,
+                -11.4156,
+                2.0922
+            ]
+        },
+        {
+            "name": "Car",
+            "children": [1, 2, 3, 4]
+        },
+        {
+            "name": "wheel_1"
+        },
+        {
+            "name": "wheel_2"
+        },
+        {
+            "name": "wheel_3"
+        },
+        {
+            "name": "wheel_4"
+        }
+    ],
+    "samplers": [
+        {
+            "magFilter": 9729,
+            "minFilter": 9987,
+            "wrapS": 33648,
+            "wrapT": 10497
+        },
+        {
+            "magFilter": 9729,
+            "minFilter": 9985,
+            "wrapS": 10497,
+            "wrapT": 33648
+        },
+        {
+            "magFilter": 9729,
+            "minFilter": 9987,
+            "wrapS": 33648,
+            "wrapT": 10497
+        }
+    ],
+    "scene": 99,
+    "scenes": [
+        {
+            "name": "first",
+            "nodes": [
+                0,
+                1,
+                2,
+                3,
+                4,
+            ]
+        },
+        {
+            "name": "second",
+            "nodes": [
+                5,
+                6,
+                7,
+                8,
+                9,
+            ]
+        }
+        {
+            "name": "third",
+            "nodes": [
+                10,
+                11,
+                12,
+                13,
+                14,
+            ]
+        }
+    ],
+    "textures": [
+        {
+            "sampler": 0,
+            "source":  1,
+        },
+        {
+            "sampler": 2,
+            "source":  3,
+        },
+        {
+            "sampler": 4,
+            "source":  5,
+        },
+        {
+            "sampler": 6,
+            "source":  7,
+        }
+    ],
+    "skins": [
+        {
+            "inverseBindMatrices": 0,
+            "joints": [ 1, 2 ],
+            "skeleton": 1
+        }
+        {
+            "inverseBindMatrices": 1,
+            "joints": [ 3, 4 ],
+            "skeleton": 2
+        }
+        {
+            "inverseBindMatrices": 2,
+            "joints": [ 5, 6 ],
+            "skeleton": 3
+        }
+        {
+            "inverseBindMatrices": 3,
+            "joints": [ 7, 8 ],
+            "skeleton": 4
+        }
+    ],
+}

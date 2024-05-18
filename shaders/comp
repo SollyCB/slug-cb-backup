@@ -1,0 +1,3 @@
+#!/usr/bin/bash
+
+glslangValidator -V $1.$2 -o $1.$2.spv
