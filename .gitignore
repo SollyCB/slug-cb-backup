@@ -4,3 +4,4 @@ obj/
 pl-caches/
 *.spv
 models/
+shaders/dir_info.bin
