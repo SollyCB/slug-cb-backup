@@ -2,7 +2,7 @@
 #define SOL_GLFW_H_INCLUDE_GUARD_
 
 #include "sol_vulkan.h"
-#include "external/glfw-shared-linux/include/GLFW/glfw3.h"
+#include "GLFW/glfw3.h"
 
 struct glfw {
     GLFWwindow *window;

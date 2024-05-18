@@ -5,7 +5,7 @@
 CF="-g -mbmi -msse4.1 -pthread -mlzcnt -fstack-protector-all -O0 -lm"
 
 SHADERC="/home/solly/vulkan/1.3.261.1/x86_64/lib/libshaderc_combined.a"
-L="-L./external/glfw-shared-linux/lib/ -lglfw -lvulkan"
+L="-lglfw -lvulkan"
 
 gcc -std=c99 -c source.c -o source.o $CF $L
 
