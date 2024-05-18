@@ -1579,11 +1579,6 @@ void gpu_blit_gltf_texture_mipmaps(gltf *model, struct gpu_image *images, VkComm
     }
 }
 
-static inline size_t gpu_buffer_align(struct gpu *gpu, size_t size)
-{
-    return align(size, gpu->props.limits.optimalBufferCopyOffsetAlignment);
-}
-
 size_t gpu_buffer_allocate(struct gpu *gpu, struct gpu_buffer *buf, size_t size)
 {
     size = gpu_buffer_align(gpu, size);

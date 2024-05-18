@@ -78,7 +78,7 @@ struct load_model_info {
 
 /* - work argument should be a 'struct load_model_info', where 'ret' has all command
    buffers started.
-   - 'ret.result' will be any LOAD_MODEL_RESULT_ other than
+   - 'ret.result' will be any LOAD_MODEL_RESULT other than
    LOAD_MODEL_RESULT_INCOMPLETE when ret is safe to use; command buffers will still be in
    the recording state.
    - draw_info pointer will be overwritten with a pointer to a draw info structure, if 'result'

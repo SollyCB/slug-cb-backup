@@ -121,17 +121,17 @@ void load_model_tf(struct thread_work_arg *arg)
     struct model_resources *resources;
     uint resources_size = sizeof(*resources)                      * 1                     +
                           sizeof(*resources->images)              * model->image_count    +
-                          sizeof(*resources->samplers)            * model->sampler_count  +
-                          sizeof(*resources->texture_dsls)        * model->material_count +
-                          sizeof(*resources->transforms_ubo_dsls) * model->mesh_count     +
-                          sizeof(*resources->pipelines)           * prim_count            +
-                          sizeof(*resources->pipeline_layouts)    * prim_count;
+                          sizeof(*resources->samplers)            * model->sampler_count  + // NOLINT - sizeof(vulkan_handle)
+                          sizeof(*resources->texture_dsls)        * model->material_count + // NOLINT - sizeof(vulkan_handle)
+                          sizeof(*resources->transforms_ubo_dsls) * model->mesh_count     + // NOLINT - sizeof(vulkan_handle)
+                          sizeof(*resources->pipelines)           * prim_count            + // NOLINT - sizeof(vulkan_handle)
+                          sizeof(*resources->pipeline_layouts)    * prim_count;             // NOLINT - sizeof(vulkan_handle)
 
     struct draw_model_info *draw_info;
     uint draw_infos_size = sizeof(*draw_info)                                                             * 1                      +
                            sizeof(*draw_info->mesh_instance_counts)                                       * model->mesh_count      +
                            sizeof(*draw_info->mesh_primitive_counts)                                      * model->mesh_count      +
-                           sizeof(*draw_info->bind_buffers)                                               * attr_count_upper_bound +
+                           sizeof(*draw_info->bind_buffers)                                               * attr_count_upper_bound + // NOLINT - sizeof(vulkan_handle)
                            sizeof(*draw_info->primitive_infos)                                            * prim_count             +
                            sizeof(*draw_info->primitive_infos->vertex_offsets)                            * attr_count             +
                            sizeof(*draw_info->primitive_infos->vertex_input.pVertexBindingDescriptions)   * attr_count             +

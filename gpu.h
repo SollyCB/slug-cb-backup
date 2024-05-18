@@ -194,6 +194,11 @@ void gpu_destroy_sampler(struct gpu *gpu, VkSampler sampler);
 #define GPU_BUF_ALLOC_FAIL Max_u64
 size_t gpu_buffer_allocate(struct gpu *gpu, struct gpu_buffer *buf, size_t size);
 
+static inline size_t gpu_buffer_align(struct gpu *gpu, size_t size)
+{
+    return align(size, gpu->props.limits.optimalBufferCopyOffsetAlignment);
+}
+
 struct htp_rsc { // hdr_to_present_resources silly name, but others are too long
     VkShaderModule        shader_modules[2];
     VkDescriptorSetLayout dsl;

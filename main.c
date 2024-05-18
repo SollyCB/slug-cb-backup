@@ -20,7 +20,6 @@
 #include "asset.h"
 #include "vulkan_errors.h"
 #include "timer.h"
-#include <math.h>
 
 #define DRAW_SUBPASS 0
 #define HTP_SUBPASS  1
