@@ -1709,7 +1709,7 @@ void create_simple_renderpass(struct gpu *gpu, struct renderpass *rp)
             .format = GPU_HDR_COLOR_ATTACHMENT_FORMAT,
             .samples = VK_SAMPLE_COUNT_1_BIT,
             .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
             .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
             .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
             .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -1856,6 +1856,17 @@ void begin_simple_renderpass(VkCommandBuffer cmd, struct renderpass *rp, VkRect2
         .pClearValues = clears,
     };
     vk_cmd_begin_renderpass(cmd, &bi, VK_SUBPASS_CONTENTS_INLINE);
+}
+
+void create_shadow_compatible_renderpass(struct gpu *gpu, uint shadow_view_count,
+                                         VkImageView shadow_views, struct renderpass *rp)
+{
+    // attachment descriptions
+    // subpass descriptions
+    // subpass dependencies
+
+    // uint ad_cnt = shadow_view_count + 3; // +4 = player cam depth, hdr, present
+    // uint ar_cnt = shadow_view
 }
 
 VkCommandPool create_commandpool(VkDevice device, uint queue_family_index, uint flags)
