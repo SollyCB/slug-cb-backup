@@ -53,6 +53,29 @@ static inline vector get_vector(float x, float y, float z, float w)
 {
     return (vector) {.x = x, .y = y, .z = z, .w = w};
 }
+#define vector4(x, y, z, w) get_vector(x, y, z, w)
+#define vector3(x, y, z)    get_vector(x, y, z, 0)
+#define vector2(x, y)       get_vector(x, y, 0, 0)
+
+static inline void get_matrix(vector colx, vector coly, vector colz, vector colw, matrix *m)
+{
+    __m128 a = _mm_load_ps(&colx.x);
+    __m128 b = _mm_load_ps(&coly.x);
+    __m128 c = _mm_load_ps(&colz.x);
+    __m128 d = _mm_load_ps(&colw.x);
+    _mm_store_ps(&m->m[ 0], a);
+    _mm_store_ps(&m->m[ 4], b);
+    _mm_store_ps(&m->m[ 8], c);
+    _mm_store_ps(&m->m[12], d);
+}
+#define matrix4(x, y, z, w, m) get_matrix(x, y, z, w, m)
+#define matrix3(x, y, z, m) get_matrix(x, y, z, (vector){0}, m)
+
+static inline float vector_i(vector v, uint i)
+{
+    assert(i < 4);
+    return ((float*)&v)[i];
+}
 
 static inline void get_trs(vector t, vector r, vector s, struct trs *trs)
 {
@@ -80,6 +103,20 @@ static inline void print_matrix(matrix *m)
 static inline void println_vector(vector v)
 {
     print("[%f, %f, %f, %f]\n", v.x, v.y, v.z, v.w);
+}
+
+static inline void set_vector_if(vector *x, vector *y, bool z)
+{
+    uint32 p = zeroif(z);
+    uint32 q =  maxif(z);
+    __m128i a = _mm_load_si128((__m128i*)x);
+    __m128i b = _mm_load_si128((__m128i*)y);
+    __m128i c = _mm_set1_epi32(p);
+    __m128i d = _mm_set1_epi32(q);
+    a = _mm_and_si128(a, c);
+    b = _mm_and_si128(b, d);
+    a = _mm_add_epi32(a, b);
+    _mm_store_si128((__m128i*)x, a);
 }
 
 static inline void array_to_vector(float *arr, vector v)
@@ -121,15 +158,17 @@ static inline vector mul_vector(vector v1, vector v2)
 static inline float dot(vector v1, vector v2)
 {
     vector v3 = mul_vector(v1, v2);
-    return v3.x + v3.y + v3.z;
+    return v3.x + v3.y + v3.z + v3.w;
 }
 
+// w component returned as 0
 static inline vector cross(vector p, vector q)
 {
     vector ret;
     ret.x = p.y * q.z - p.z * q.y;
     ret.y = p.z * q.x - p.x * q.z;
     ret.z = p.x * q.y - p.y * q.x;
+    ret.w = 0;
     return ret;
 }
 
@@ -351,28 +390,28 @@ static inline void scalar_mul_matrix(matrix *m, float f)
     m->m[15] = 1;
 }
 
-static inline vector mul_matrix_vector(matrix *m, vector *p)
+static inline vector mul_matrix_vector(matrix *m, vector p)
 {
     __m128 a;
     __m128 b;
     __m128 c;
 
     a = _mm_load_ps(m->m + 0);
-    b = _mm_set1_ps(p->x);
+    b = _mm_set1_ps(p.x);
     c = _mm_mul_ps(a, b);
 
     a = _mm_load_ps(m->m + 4);
-    b = _mm_set1_ps(p->y);
+    b = _mm_set1_ps(p.y);
     a = _mm_mul_ps(a, b);
     c = _mm_add_ps(a, c);
 
     a = _mm_load_ps(m->m + 8);
-    b = _mm_set1_ps(p->z);
+    b = _mm_set1_ps(p.z);
     a = _mm_mul_ps(a, b);
     c = _mm_add_ps(a, c);
 
     a = _mm_load_ps(m->m + 12);
-    b = _mm_set1_ps(p->w);
+    b = _mm_set1_ps(p.w);
     a = _mm_mul_ps(a, b);
     c = _mm_add_ps(a, c);
 
@@ -392,9 +431,82 @@ static inline void transpose(matrix *m)
     copy_matrix(m, &t);
 }
 
+// Inverts a 3x3
+static inline bool invert(matrix *x, matrix *y)
+{
+    float m[3][8] cl_align(16);
+    memset(m, 0, sizeof(m));
+
+    m[0][0] = x->m[0]; m[1][0] = x->m[4]; m[2][0] = x->m[ 8];
+    m[0][1] = x->m[1]; m[1][1] = x->m[5]; m[2][1] = x->m[ 9];
+    m[0][2] = x->m[2]; m[1][2] = x->m[6]; m[2][2] = x->m[10];
+
+    m[0][3] = 1; m[0][4] = 0; m[0][5] = 0;
+    m[1][3] = 0; m[1][4] = 1; m[1][5] = 0;
+    m[2][3] = 0; m[2][4] = 0; m[2][5] = 1;
+
+    __m128 a,b,c,d,e,f,g;
+
+    for(uint j=0; j < 3; ++j) {
+        float max = 0;
+        uint r;
+        for(uint row=j; row < 3; ++row)
+            if (fabs(m[row][j]) > max) {
+                max = fabs(m[row][j]);
+                r = row;
+            }
+
+        if (feq(max, 0))
+            return false;
+
+        a = _mm_load_ps(m[j] + 0);
+        b = _mm_load_ps(m[j] + 4);
+
+        if (r != j) {
+            c = _mm_load_ps(m[r] + 0);
+            d = _mm_load_ps(m[r] + 4);
+            // @Optimise I feel that I can remove half these stores by avoiding
+            // loading the same data later...
+            _mm_store_ps(m[r] + 0, a);
+            _mm_store_ps(m[r] + 4, b);
+            _mm_store_ps(m[j] + 0, c);
+            _mm_store_ps(m[j] + 4, d);
+            a = c;
+            b = d;
+        }
+
+        e = _mm_set1_ps(1 / m[j][j]);
+        a = _mm_mul_ps(a, e);
+        b = _mm_mul_ps(b, e);
+        _mm_store_ps(m[j] + 0, a);
+        _mm_store_ps(m[j] + 4, b);
+
+        for(r=0; r < 3; ++r) {
+            if (r == j)
+                continue;
+
+            e = _mm_set1_ps(-m[r][j]);
+            f = _mm_mul_ps(e, a);
+            g = _mm_mul_ps(e, b);
+            c = _mm_load_ps(m[r] + 0);
+            d = _mm_load_ps(m[r] + 4);
+            c = _mm_add_ps(c, f);
+            d = _mm_add_ps(d, g);
+            _mm_store_ps(m[r] + 0, c);
+            _mm_store_ps(m[r] + 4, d);
+        }
+    }
+
+    matrix3(vector3(m[0][3], m[0][4], m[0][5]),
+            vector3(m[1][3], m[1][4], m[1][5]),
+            vector3(m[2][3], m[2][4], m[2][5]), y);
+
+    return true;
+}
+
 static inline void view_matrix(vector pos, vector fwd, matrix *m)
 {
-    vector fo = get_vector(0, 0, 1, 0);
+    vector fo = vector3(0, 0, 1);
     vector fn = normalize(fwd);
     vector ax = cross(fo, fn);
     normalize(ax);
@@ -411,10 +523,16 @@ static inline void view_matrix(vector pos, vector fwd, matrix *m)
     mul_matrix(&mr, &mt, m);
 }
 
+static inline float focal_length(float fov)
+{
+    return 1 / tanf(fov / 2);
+}
+
 // args: horizontal fov, 1 / aspect ratio, near plane, far plane
 static inline void proj_matrix(float fov, float a, float n, float f, matrix *m)
 {
-    float e = 1 / tanf(fov / 2);
+    float e = focal_length(fov);
+
     float l = -n / e;
     float r = n / e;
     float t = (a * n) / e;
@@ -428,6 +546,37 @@ static inline void proj_matrix(float fov, float a, float n, float f, matrix *m)
     m->m[10] = -(f + n) / (f - n);
     m->m[11] = -1;
     m->m[14] = -(2 * n * f) / (f - n);
+}
+
+// point of intersection of three planes, does not check det == 0
+static inline vector intersect_three_planes(vector l1, vector l2, vector l3)
+{
+    matrix m;
+    vector d = vector3(-l1.w, -l2.w, -l3.w);
+    matrix3(vector3(l1.x, l2.x, l3.x), vector3(l1.y, l2.y, l3.y), vector3(l1.z, l2.z, l3.z), &m);
+
+    invert(&m, &m);
+    return mul_matrix_vector(&m, d);
+}
+
+// find the point of intersection of two planes l1 and l2, q1 and q2 are points on the respective planes
+static inline vector intersect_two_planes_point(vector l1, vector l2, vector q1, vector q2)
+{
+    matrix m;
+    vector v,q,d;
+    float d1,d2;
+
+    d1 = dot(vector3(-l1.x, -l1.y, -l1.z), vector3(q1.x, q1.y, q1.z));
+    d2 = dot(vector3(-l2.x, -l2.y, -l2.z), vector3(q2.x, q2.y, q2.z));
+
+    v = cross(l1, l2);
+    d = vector3(-d1, -d2, 0);
+    matrix3(vector3(l1.x, l2.x, v.x), vector3(l1.y, l2.y, v.y), vector3(l1.z, l2.z, v.z), &m);
+
+    invert(&m, &m);
+    q = mul_matrix_vector(&m, d);
+
+    return add_vector(q, scale_vector(v, -dot(v, q) / dot(v, v)));
 }
 
 #endif // include guard
