@@ -548,6 +548,16 @@ static inline void proj_matrix(float fov, float a, float n, float f, matrix *m)
     m->m[14] = -(2 * n * f) / (f - n);
 }
 
+static inline void ortho_matrix(float l, float r, float t, float b,
+                                float n, float f, matrix *m)
+{
+    matrix4(vector4(2 / (r-l), 0, 0,  0),
+            vector4(0, 2 / (t-b), 0,  0),
+            vector4(0, 0, -2 / (f-n), 0),
+            vector4((r+l) / (r-l), (t+b) / (t-b), (f+n) / (f-n), 1),
+            m);
+}
+
 // point of intersection of three planes, does not check det == 0
 static inline vector intersect_three_planes(vector l1, vector l2, vector l3)
 {
