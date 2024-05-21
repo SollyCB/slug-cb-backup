@@ -1,3 +1,4 @@
+#include "defs.h"
 #include "gpu.h"
 #include "sol_vulkan.h"
 #include "vulkan_errors.h"
@@ -1108,7 +1109,7 @@ void init_vs_info(struct gpu *gpu, struct vs_info_descriptor *ret)
     view_matrix(pos, fwd, &view);
 
     matrix proj;
-    proj_matrix(PI / 4, 480.0/640.0, 0.1, 100, &proj);
+    proj_matrix(FOV, ASPECT_RATIO, 0.1, 100, &proj);
 
     memcpy(&vs->model, &model, sizeof(model));
     memcpy(&vs->view, &view, sizeof(view));

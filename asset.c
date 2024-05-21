@@ -563,7 +563,7 @@ static uint allocate_model_resources(
     if (gpu->flags & GPU_DESCRIPTOR_BUFFER_NOT_HOST_VISIBLE_BIT) {
         for(uint i=0; i < model->mesh_count; ++i)
             offsets->transforms_ubo_dsls[i] += stage_size;
-        offsets->material_ubo_dsl.x += stage_size; // already contains transforms offset
+        offsets->material_ubo_dsl.a += stage_size; // already contains transforms offset
 
         for(uint i=0; i < model->material_count; ++i)
             offsets->material_textures_dsls[i] += stage_size +
@@ -816,7 +816,7 @@ static struct model_material* material_descriptors_and_pipeline_info(
     if (gpu->flags & GPU_DESCRIPTOR_BUFFER_NOT_HOST_VISIBLE_BIT) {
         ubo_dsl_data = gpu->mem.transfer_buffer.data +
                        offsets->base_stage +
-                       offsets->material_ubo_dsl.x;
+                       offsets->material_ubo_dsl.a;
 
         // specific dsl offsets added when used
         texture_dsl_data = gpu->mem.transfer_buffer.data +
@@ -824,7 +824,7 @@ static struct model_material* material_descriptors_and_pipeline_info(
     } else {
         ubo_dsl_data = gpu->mem.descriptor_buffer_resource.data +
                        offsets->base_descriptor_resource +
-                       offsets->material_ubo_dsl.y;
+                       offsets->material_ubo_dsl.b;
 
         // specific dsl offsets added when used
         texture_dsl_data = gpu->mem.descriptor_buffer_sampler.data +
@@ -1193,7 +1193,7 @@ static void model_vertex_state_and_draw_info(
     if (prim->material != Max_u32) {
         ret->db_indices[ret->dsl_count] = DESCRIPTOR_BUFFER_RESOURCE_BIND_INDEX;
         ret->db_offsets[ret->dsl_count] = offsets->base_descriptor_resource +
-                                          offsets->material_ubo_dsl.y +
+                                          offsets->material_ubo_dsl.b +
                                           offsets->material_ubo_dsl_stride * prim->material;
         dsl_buf[ret->dsl_count] = resources->material_ubo_dsl;
         ret->dsl_count++;

@@ -1,5 +1,6 @@
 #include "glfw.h"
 #include "log.h"
+#include "defs.h"
 
 static void glfw_mouse_callback(GLFWwindow *window, double x, double y) {
     /*
@@ -39,8 +40,8 @@ void init_glfw(struct glfw *glfw) {
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-    glfw->width = 640;
-    glfw->height = 480;
+    glfw->width = SCR_W;
+    glfw->height = SCR_H;
     glfw->window = glfwCreateWindow(glfw->width, glfw->height, "Glfw Window", NULL, NULL);
     log_print_error_if(!glfw->window, "failed to create glfw window");
 

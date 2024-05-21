@@ -25,6 +25,9 @@
 #define HTP_SUBPASS  1
 
 int FRAME_I = 0;
+int SCR_W = 640;
+int SCR_H = 480;
+float FOV = PI / 4;
 
 #define MAIN_HEAP_ALLOCATOR_SIZE (48 * 1024 * 1024)
 #define MAIN_TEMP_ALLOCATOR_SIZE (8 * 1024 * 1024)

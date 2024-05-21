@@ -2,6 +2,12 @@
 #define SOL_DEFS_H_INCLUDE_GUARD_
 
 extern int FRAME_I;
+extern int SCR_H;
+extern int SCR_W;
+extern float ASPECT_RATIO;
+extern float FOV;
+
+#define ASPECT_RATIO ((float)SCR_H / SCR_W)
 
 #define _GNU_SOURCE
 
@@ -114,7 +120,11 @@ struct range64 {
 };
 
 struct pair_uint {
-    uint x,y;
+    uint a,b;
+};
+
+struct pair_float {
+    float a,b;
 };
 
 static inline uint64 align(uint64 size, uint64 alignment) {
