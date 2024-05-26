@@ -181,7 +181,7 @@ int main() {
         fence_wait_secs_and_reset(&pr.gpu, fence, 1); // Is there an optimal place to wait on this?
 
         struct renderpass renderpass;
-        create_simple_renderpass(&pr.gpu, &renderpass);
+        create_color_renderpass(&pr.gpu, &renderpass);
 
         VkCommandBuffer transfer_cmd;
         allocate_command_buffers(&pr.gpu, transfer_pool, 1, &transfer_cmd);
@@ -213,7 +213,7 @@ int main() {
             .dsls[0] = vs_info.dsl,
             .db_indices[0] = DESCRIPTOR_BUFFER_RESOURCE_BIND_INDEX,
             .db_offsets[0] = vs_info.db_offset,
-            .renderpass = renderpass.renderpass,
+            .renderpass = renderpass.rp,
             .viewport = pr.gpu.settings.viewport,
             .scissor = pr.gpu.settings.scissor,
         };
@@ -241,7 +241,7 @@ int main() {
         {
             bind_descriptor_buffers(draw_cmd, &pr.gpu);
 
-            begin_simple_renderpass(draw_cmd, &renderpass, pr.gpu.settings.scissor);
+            begin_color_renderpass(draw_cmd, &renderpass, pr.gpu.settings.scissor);
 
             draw_model(draw_cmd, lmr.draw_info);
 

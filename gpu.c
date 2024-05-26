@@ -162,6 +162,9 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
     vk_get_descriptor_ext(gpu->device, &desc_info, gpu->descriptors.props.combinedImageSamplerDescriptorSize, gpu->defaults.texture.descriptor);
 
     gpu->shader_dir = load_shader_dir(gpu, gpu->alloc_heap);
+
+    gpu->settings.shadow_maps.width = 640;
+    gpu->settings.shadow_maps.height = 480;
 }
 
 void shutdown_gpu(struct gpu *gpu) {
@@ -507,10 +510,13 @@ static void gpu_create_device_and_queues(struct gpu *gpu)
 #define GPU_BIND_BUFFER_SIZE 1048576 // align(1000000, 16)
 #define GPU_TRANSFER_BUFFER_SIZE align(32000000, 16)
 #define GPU_TEXTURE_MEMORY_SIZE align(12000000, 16)
-#define GPU_DEPTH_ATTACHMENT_FORMAT VK_FORMAT_D16_UNORM
-#define GPU_HDR_COLOR_ATTACHMENT_FORMAT VK_FORMAT_R16G16B16A16_SFLOAT
 #define GPU_DESCRIPTOR_BUFFER_SIZE_RESOURCE 1048576 / 2 // align(100000, 16)
 #define GPU_DESCRIPTOR_BUFFER_SIZE_SAMPLER 1048576 / 2 // align(100000, 16)
+
+#define GPU_DEPTH_ATTACHMENT_FORMAT  VK_FORMAT_D16_UNORM
+#define GPU_SHADOW_ATTACHMENT_FORMAT VK_FORMAT_D16_UNORM
+
+#define GPU_HDR_COLOR_ATTACHMENT_FORMAT VK_FORMAT_R16G16B16A16_SFLOAT
 
 static uint gpu_get_memory_type(uint mask, bool prefer_device, bool prefer_host, uint32 gpu_flags, VkPhysicalDeviceMemoryProperties *pd)
 {
@@ -1692,7 +1698,7 @@ void gpu_destroy_sampler(struct gpu *gpu, VkSampler sampler)
     vk_destroy_sampler(gpu->device, sampler, GAC);
 }
 
-void create_simple_renderpass(struct gpu *gpu, struct renderpass *rp)
+void create_color_renderpass(struct gpu *gpu, struct renderpass *rp)
 {
     VkAttachmentDescription attachment_descs[] = {
         { // Depth
@@ -1797,9 +1803,8 @@ void create_simple_renderpass(struct gpu *gpu, struct renderpass *rp)
             .dependencyCount = carrlen(subpass_deps),
             .pDependencies = subpass_deps,
         };
-        rp->subpass_count = carrlen(subpass_descriptions);
 
-        VkResult check = vk_create_renderpass(gpu->device, &ci, GAC, &rp->renderpass);
+        VkResult check = vk_create_renderpass(gpu->device, &ci, GAC, &rp->rp);
         DEBUG_VK_OBJ_CREATION(vkCreateRenderpass, check);
     }
 
@@ -1811,18 +1816,104 @@ void create_simple_renderpass(struct gpu *gpu, struct renderpass *rp)
 
     VkFramebufferCreateInfo ci = {
         .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-        .renderPass = rp->renderpass,
+        .renderPass = rp->rp,
         .attachmentCount = carrlen(views),
         .pAttachments = views,
         .width = gpu->swapchain.info.imageExtent.width,
         .height = gpu->swapchain.info.imageExtent.height,
         .layers = 1,
     };
-    VkResult check = vk_create_framebuffer(gpu->device, &ci, GAC, &rp->framebuffer);
+    VkResult check = vk_create_framebuffer(gpu->device, &ci, GAC, &rp->fb);
     DEBUG_VK_OBJ_CREATION(vkCreateFrameBuffer, check);
 }
 
-void begin_simple_renderpass(VkCommandBuffer cmd, struct renderpass *rp, VkRect2D area) {
+
+// @Optimise Move to thread fn
+void create_shadow_renderpass(struct gpu *gpu, uint shadow_map_count,
+                              VkImageView *shadow_maps, struct renderpass *rp)
+{
+    VkAttachmentReference *ar;
+    VkSubpassDescription *ds;
+    VkSubpassDependency *dp;
+
+    VkAttachmentDescription *ad = allocate(gpu->alloc_temp,
+            sizeof(*ad) * shadow_map_count +
+            sizeof(*ar) * shadow_map_count +
+            sizeof(*ds) * shadow_map_count +
+            sizeof(*dp) * shadow_map_count);
+
+    ar = (VkAttachmentReference*)(ad + shadow_map_count);
+    ds =  (VkSubpassDescription*)(ar + shadow_map_count);
+    dp =   (VkSubpassDependency*)(ds + shadow_map_count);
+
+    for(uint i=0; i < shadow_map_count; ++i) {
+        ad[i] = (VkAttachmentDescription) {
+            .format         = GPU_SHADOW_ATTACHMENT_FORMAT,
+            .samples        = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .storeOp        = VK_ATTACHMENT_STORE_OP_STORE,
+            .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
+            .finalLayout    = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        };
+    }
+
+    for(uint i=0; i < shadow_map_count; ++i) {
+        ar[i] = (VkAttachmentReference) {
+            .attachment = i,
+            .layout     = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        };
+    }
+
+    for(uint i=0; i < shadow_map_count; ++i) {
+        ds[i] = (VkSubpassDescription) {
+            .pDepthStencilAttachment = &ar[i],
+        };
+    }
+
+    for(uint i=0; i < shadow_map_count; ++i) {
+        dp[i] = (VkSubpassDependency) {
+            .srcSubpass      = VK_SUBPASS_EXTERNAL,
+            .dstSubpass      = i,
+            .srcStageMask    = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT|VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+            .dstStageMask    = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT|VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+            .srcAccessMask   = VK_ACCESS_NONE,
+            .dstAccessMask   = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
+        };
+    }
+
+    VkRenderPassCreateInfo rpci = {
+        .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .attachmentCount = shadow_map_count,
+        .pAttachments    = ad,
+        .subpassCount    = shadow_map_count,
+        .pSubpasses      = ds,
+        .dependencyCount = shadow_map_count,
+        .pDependencies   = dp,
+    };
+    {
+        VkResult check = vk_create_renderpass(gpu->device, &rpci, GAC, &rp->rp);
+        DEBUG_VK_OBJ_CREATION(vkCreateRenderpass, check);
+    }
+
+    VkFramebufferCreateInfo fbci = {
+        .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+        .renderPass      = rp->rp,
+        .attachmentCount = shadow_map_count,
+        .pAttachments    = shadow_maps,
+        .width           = gpu->settings.shadow_maps.width,
+        .height          = gpu->settings.shadow_maps.height,
+        .layers          = 1,
+    };
+    {
+        VkResult check = vk_create_framebuffer(gpu->device, &fbci, GAC, &rp->fb);
+        DEBUG_VK_OBJ_CREATION(vkCreateFramebuffer, check);
+    }
+}
+
+void begin_color_renderpass(VkCommandBuffer cmd, struct renderpass *rp, VkRect2D area) {
     VkClearValue clears[] = {
         (VkClearValue) {
             .depthStencil = (VkClearDepthStencilValue) {
@@ -1849,24 +1940,13 @@ void begin_simple_renderpass(VkCommandBuffer cmd, struct renderpass *rp, VkRect2
     };
     VkRenderPassBeginInfo bi = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .renderPass = rp->renderpass,
-        .framebuffer = rp->framebuffer,
+        .renderPass = rp->rp,
+        .framebuffer = rp->fb,
         .renderArea = area,
         .clearValueCount = carrlen(clears),
         .pClearValues = clears,
     };
     vk_cmd_begin_renderpass(cmd, &bi, VK_SUBPASS_CONTENTS_INLINE);
-}
-
-void create_shadow_compatible_renderpass(struct gpu *gpu, uint shadow_view_count,
-                                         VkImageView shadow_views, struct renderpass *rp)
-{
-    // attachment descriptions
-    // subpass descriptions
-    // subpass dependencies
-
-    // uint ad_cnt = shadow_view_count + 3; // +4 = player cam depth, hdr, present
-    // uint ar_cnt = shadow_view
 }
 
 VkCommandPool create_commandpool(VkDevice device, uint queue_family_index, uint flags)
@@ -2149,7 +2229,7 @@ bool htp_allocate_resources(
             .pColorBlendState = &blend,
             .pDynamicState = &dynamic,
             .layout = rsc->pipeline_layout,
-            .renderPass = rp->renderpass,
+            .renderPass = rp->rp,
             .subpass = subpass,
         };
         check = vk_create_graphics_pipelines(gpu->device, gpu->pipeline_cache, 1, &ci, GAC, &rsc->pipeline);

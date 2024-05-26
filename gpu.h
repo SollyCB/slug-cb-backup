@@ -40,6 +40,10 @@ struct gpu_settings {
     VkRect2D              scissor;
     uint32                pl_dynamic_state_count;
     VkDynamicState        pl_dynamic_states;
+    struct {
+        uint width;
+        uint height;
+    } shadow_maps;
 };
 
 #define GPU_SWAPCHAIN_MAX_IMAGE_COUNT 4
@@ -340,18 +344,19 @@ static inline void gpu_upload_descriptor_buffer_sampler(
 void gpu_blit_gltf_texture_mipmaps(gltf *model, struct gpu_image *images, VkCommandBuffer graphics);
 
 struct renderpass {
-    VkRenderPass  renderpass;
-    VkFramebuffer framebuffer;
-    uint          subpass_count;
+    VkRenderPass  rp;
+    VkFramebuffer fb;
 };
 
-void create_simple_renderpass(struct gpu *gpu, struct renderpass *rp);
-void begin_simple_renderpass(VkCommandBuffer cmd, struct renderpass *rp, VkRect2D area);
+void create_color_renderpass(struct gpu *gpu, struct renderpass *rp);
+void create_shadow_renderpass(struct gpu *gpu, uint shadow_map_count, VkImageView *shadow_maps, struct renderpass *rp);
+void begin_color_renderpass(VkCommandBuffer cmd, struct renderpass *rp, VkRect2D area);
+
 static inline void end_renderpass(VkCommandBuffer cmd) {vk_cmd_end_renderpass(cmd);}
 static inline void destroy_renderpass(struct gpu *gpu, struct renderpass *rp)
 {
-    vk_destroy_renderpass(gpu->device, rp->renderpass, GAC);
-    vk_destroy_framebuffer(gpu->device, rp->framebuffer, GAC);
+    vk_destroy_renderpass(gpu->device, rp->rp, GAC);
+    vk_destroy_framebuffer(gpu->device, rp->fb, GAC);
 }
 
 static inline void bind_descriptor_buffers(VkCommandBuffer cmd, struct gpu *gpu)
