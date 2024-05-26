@@ -42,6 +42,8 @@ struct model_resources {
     VkDescriptorSetLayout  material_ubo_dsl;
     VkPipeline            *pipelines;
     VkPipelineLayout      *pipeline_layouts;
+    VkShaderModule         depth_shader_vert;
+    VkShaderModule         depth_shader_frag;
 
     VkShaderModule shader_modules[2]; // @TempShader
 };
@@ -123,8 +125,8 @@ void load_model_tf(struct thread_work_arg *arg)
                           sizeof(*resources->samplers)            * model->sampler_count  + // NOLINT - sizeof(vulkan_handle)
                           sizeof(*resources->texture_dsls)        * model->material_count + // NOLINT - sizeof(vulkan_handle)
                           sizeof(*resources->transforms_ubo_dsls) * model->mesh_count     + // NOLINT - sizeof(vulkan_handle)
-                          sizeof(*resources->pipelines)           * prim_count            + // NOLINT - sizeof(vulkan_handle)
-                          sizeof(*resources->pipeline_layouts)    * prim_count;             // NOLINT - sizeof(vulkan_handle)
+                          sizeof(*resources->pipelines)           * prim_count * 2        + // NOLINT - sizeof(vulkan_handle)
+                          sizeof(*resources->pipeline_layouts)    * prim_count + 1;         // NOLINT - sizeof(vulkan_handle)
 
     struct draw_model_info *draw_info;
     uint draw_infos_size = sizeof(*draw_info)                                  * 1                      +
@@ -151,7 +153,7 @@ void load_model_tf(struct thread_work_arg *arg)
     resources->texture_dsls         = (VkDescriptorSetLayout*)(resources->samplers            + model->sampler_count);
     resources->transforms_ubo_dsls  =                          resources->texture_dsls        + model->material_count;
     resources->pipelines            =            (VkPipeline*)(resources->transforms_ubo_dsls + model->mesh_count);
-    resources->pipeline_layouts     =      (VkPipelineLayout*)(resources->pipelines           + prim_count);
+    resources->pipeline_layouts     =      (VkPipelineLayout*)(resources->pipelines           + prim_count * 2);
 
     draw_info->pipelines = resources->pipelines;
     draw_info->pipeline_layouts = resources->pipeline_layouts;
@@ -164,6 +166,9 @@ void load_model_tf(struct thread_work_arg *arg)
 
     for(uint i=0; i < attr_count_upper_bound; ++i)
         draw_info->bind_buffers[i] = lmi->arg->gpu->mem.bind_buffer.buf;
+
+    resources->pipeline_count = prim_count * 2;
+    resources->pipeline_layout_count = prim_count + 1;
 
     uint ac = 0;
     uint pc = 0;
@@ -961,13 +966,69 @@ model_pipelines_transform_descriptors_and_draw_info(
         if (gpu->flags & GPU_DESCRIPTOR_BUFFER_NOT_HOST_VISIBLE_BIT)
             offsets->transforms_ubo_dsls[i] -= offsets->transforms_ubo_dsls[0];
     }
-    VkPipelineViewportStateCreateInfo viewport = {
+
+    {
+        struct file f = file_read_bin_all("shaders/depth.vert.spv", allocs->temp);
+        VkShaderModuleCreateInfo ci = {
+            .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+            .codeSize = f.size,
+            .pCode = (const uint32*)f.data,
+        };
+        VkResult check = vk_create_shader_module(gpu->device, &ci, GAC, &resources->depth_shader_vert);
+        DEBUG_VK_OBJ_CREATION(vkCreateShaderModule, check);
+    } {
+        struct file f = file_read_bin_all("shaders/depth.frag.spv", allocs->temp);
+        VkShaderModuleCreateInfo ci = {
+            .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+            .codeSize = f.size,
+            .pCode = (const uint32*)f.data,
+        };
+        VkResult check = vk_create_shader_module(gpu->device, &ci, GAC, &resources->depth_shader_frag);
+        DEBUG_VK_OBJ_CREATION(vkCreateShaderModule, check);
+    }
+
+    VkPipelineShaderStageCreateInfo depth_shaders[2] = {
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_VERTEX_BIT,
+            .module = resources->depth_shader_vert,
+            .pName = SHADER_ENTRY_POINT,
+        }, {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .module = resources->depth_shader_frag,
+            .pName = SHADER_ENTRY_POINT,
+        },
+    };
+
+    VkPipelineViewportStateCreateInfo color_viewport = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
         .viewportCount = 1,
         .pViewports = &arg->viewport,
         .scissorCount = 1,
         .pScissors = &arg->scissor,
     };
+
+    VkViewport dvp = {
+        .width = gpu->settings.shadow_maps.width,
+        .height = gpu->settings.shadow_maps.height,
+        .minDepth = 0,
+        .maxDepth = 1,
+    };
+
+    VkRect2D dsci = {
+        .extent = (VkExtent2D) {.width  = gpu->settings.shadow_maps.width,
+                                .height = gpu->settings.shadow_maps.height,}
+    };
+
+    VkPipelineViewportStateCreateInfo depth_viewport = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        .viewportCount = 1,
+        .pViewports = &dvp,
+        .scissorCount = 1,
+        .pScissors = &dsci,
+    };
+
     // @Todo This is supposed to be an 'over' operator blend. I am assuming
     // that that is the same as the vulkan VK_BLEND_OVER.
     VkPipelineRasterizationStateCreateInfo rasterization[2] = {
@@ -984,18 +1045,27 @@ model_pipelines_transform_descriptors_and_draw_info(
             .lineWidth = 1.0f,
         },
     };
+
     // @Todo I want to look at multisampling. Idk how important it is for a good image.
     VkPipelineMultisampleStateCreateInfo multisample = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
         .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
     };
-    // @Depth @Shadow Need to set stuff here for depth / shadow passes
-    VkPipelineDepthStencilStateCreateInfo depth = {
+
+    VkPipelineDepthStencilStateCreateInfo color_depth = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .depthTestEnable = 1,
+        .depthWriteEnable = 1, // @DepthPass @ForwardPlus
+        .depthCompareOp = VK_COMPARE_OP_LESS,
+    };
+
+    VkPipelineDepthStencilStateCreateInfo depth_depth = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
         .depthTestEnable = 1,
         .depthWriteEnable = 1,
         .depthCompareOp = VK_COMPARE_OP_LESS,
     };
+
     // @Optimise These blend attachments are references to globals, idk if that
     // is slow. STB mentioned smtg weird about it...
     VkPipelineColorBlendStateCreateInfo blend[2] = {
@@ -1022,24 +1092,19 @@ model_pipelines_transform_descriptors_and_draw_info(
     VkVertexInputAttributeDescription *va;
 
     VkGraphicsPipelineCreateInfo *pipeline_infos = allocate(allocs->temp,
-            sizeof(*pipeline_infos) * pc +
-            sizeof(*shaders)        * pc +
-            sizeof(*vi)             * pc +
-            sizeof(*ia)             * pc +
-            sizeof(*vb)             * ac +
-            sizeof(*va)             * ac);
+            sizeof(*pipeline_infos) * pc * 2 +
+            sizeof(*shaders)        * pc * 2 +
+            sizeof(*vi)             * pc * 2 +
+            sizeof(*ia)             * pc * 2 +
+            sizeof(*vb)             * ac * 2 +
+            sizeof(*va)             * ac * 2);
 
-    shaders =                   (struct model_shaders*)(pipeline_infos + pc);
-    vi      =   (VkPipelineVertexInputStateCreateInfo*)(shaders        + pc);
-    ia      = (VkPipelineInputAssemblyStateCreateInfo*)(vi             + pc);
-    vb      =        (VkVertexInputBindingDescription*)(ia             + pc);
-    va      =      (VkVertexInputAttributeDescription*)(vb             + ac);
+    shaders =                   (struct model_shaders*)(pipeline_infos + pc * 2);
+    vi      =   (VkPipelineVertexInputStateCreateInfo*)(shaders        + pc * 2);
+    ia      = (VkPipelineInputAssemblyStateCreateInfo*)(vi             + pc * 2);
+    vb      =        (VkVertexInputBindingDescription*)(ia             + pc * 2);
+    va      =      (VkVertexInputAttributeDescription*)(vb             + ac * 2);
 
-    /* I think that it is more efficient to keep the above loop and the below
-     * separate. Even though the above one loads mesh data, the meshes are
-     * quite small, especially compared to primitives, and a lot of work has to
-     * happen in the below loop, so I think keeping the above one tighter is
-     * better, especially since it is making a bunch of the same api calls. */
     VkShaderModule mod_v;
     VkShaderModule mod_f;
     {
@@ -1068,10 +1133,25 @@ model_pipelines_transform_descriptors_and_draw_info(
         resources->shader_modules[1] = mod_f;
     }
 
+    {
+        VkPushConstantRange pc = {
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .offset = 0,
+            .size = sizeof(matrix),
+        };
+        VkPipelineLayoutCreateInfo ci = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .pushConstantRangeCount = 1,
+            .pPushConstantRanges = &pc,
+        };
+        VkResult check = vk_create_pipeline_layout(gpu->device, &ci, GAC, &resources->pipeline_layouts[pc]);
+        DEBUG_VK_OBJ_CREATION(vkCreatePipelineLayout, check);
+    }
+
     VkDescriptorSetLayout dsl_buf[SHADER_MAX_DESCRIPTOR_SET_COUNT];
     pc = 0;
     ac = 0;
-    for(uint i=0; i < model->mesh_count; ++i)
+    for(uint i=0; i < model->mesh_count; ++i) // color pipelines
         for(uint j=0; j < model->meshes[i].primitive_count; ++j) {
             gltf_mesh_primitive *prim = &model->meshes[i].primitives[j];
 
@@ -1107,24 +1187,63 @@ model_pipelines_transform_descriptors_and_draw_info(
             DEBUG_VK_OBJ_CREATION(vkCreatePipelineLayout, check);
 
             pipeline_infos[pc] = (VkGraphicsPipelineCreateInfo) {
-                .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-                .flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
-                .stageCount = 2, // @ShaderCount
-                .pStages = (VkPipelineShaderStageCreateInfo*)&shaders[pc],
-                .pVertexInputState = &vi[pc],
+                .sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+                .flags               = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+                .stageCount          = 2, // @ShaderCount
+                .pStages             = (VkPipelineShaderStageCreateInfo*)&shaders[pc],
+                .pVertexInputState   = &vi[pc],
                 .pInputAssemblyState = &ia[pc],
-                .pViewportState = &viewport,
+                .pViewportState      = &color_viewport,
                 .pRasterizationState = &rasterization[flag_check(materials[prim->material].flags, MODEL_MATERIAL_CULL_BACK_BIT)],
-                .pMultisampleState = &multisample,
-                .pDepthStencilState = &depth,
-                .pColorBlendState = &blend[flag_check(materials[prim->material].flags, MODEL_MATERIAL_BLEND_BIT)],
-                .pDynamicState = &dyn,
-                .layout = resources->pipeline_layouts[pc],
-                .renderPass = arg->renderpass,
-                .subpass = arg->subpasses[ctz(LOAD_MODEL_SUBPASS_DRAW)], // @Todo Different subpasses.
+                .pMultisampleState   = &multisample,
+                .pDepthStencilState  = &color_depth,
+                .pColorBlendState    = &blend[flag_check(materials[prim->material].flags, MODEL_MATERIAL_BLEND_BIT)],
+                .pDynamicState       = &dyn,
+                .layout              = resources->pipeline_layouts[pc],
+                .renderPass          = arg->color_renderpass,
+                .subpass             = arg->subpasses[ctz(LOAD_MODEL_SUBPASS_DRAW)],
             };
             pc++;
         }
+
+    uint prim_count = pc;
+    for(uint i=0; i < model->mesh_count; ++i) // depth pipelines initial
+        for(uint j=0; j < model->meshes[i].primitive_count; ++j) {
+            gltf_mesh_primitive *prim = &model->meshes[i].primitives[j];
+
+            vi[pc] = vi[pc - prim_count];
+            vi[pc].vertexBindingDescriptionCount = 1; // only position
+            vi[pc].vertexAttributeDescriptionCount = 1;
+
+            ia[pc] = ia[pc - prim_count];
+
+            pipeline_infos[pc] = (VkGraphicsPipelineCreateInfo) {
+                .sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+                .flags               = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+                .stageCount          = 2, // @ShaderCount
+                .pStages             = (VkPipelineShaderStageCreateInfo*)&shaders[pc],
+                .pVertexInputState   = &vi[pc],
+                .pInputAssemblyState = &ia[pc],
+                .pViewportState      = &depth_viewport,
+                .pRasterizationState = pipeline_infos[pc - prim_count].pRasterizationState,
+                .pMultisampleState   = &multisample,
+                .pDepthStencilState  = &depth_depth,
+                .pColorBlendState    = pipeline_infos[pc - prim_count].pColorBlendState,
+                .pDynamicState       = &dyn,
+                .layout              = resources->pipeline_layouts[prim_count],
+                .renderPass          = arg->depth_renderpass,
+                .subpass             = 0,
+            };
+            pc++;
+        }
+
+    for(uint j=1; j < arg->depth_pass_count; ++j) // depth pipelines copy out
+        for(uint i=0; i < prim_count; ++i) {
+            pipeline_infos[pc] = pipeline_infos[prim_count];
+            pipeline_infos[pc].subpass = j;
+            pc++;
+        }
+
     VkResult check = vk_create_graphics_pipelines(gpu->device, gpu->pipeline_cache, pc, pipeline_infos,
                                                   GAC, resources->pipelines);
     DEBUG_VK_OBJ_CREATION(vkCreateGraphicsPipelines, check);
