@@ -61,17 +61,15 @@ struct model_material {
 };
 
 struct model_primitive_draw_info {
-    bool                                   draw_indexed;
-    uint                                   draw_count;
-    uint                                   vertex_offset_count;
-    uint                                   dsl_count;
-    VkIndexType                            index_type;
-    uint                                   db_indices[SHADER_MAX_DESCRIPTOR_SET_COUNT];
-    size_t                                 index_offset;
-    size_t                                 db_offsets[SHADER_MAX_DESCRIPTOR_SET_COUNT];
-    size_t                                *vertex_offsets;
-    VkPipelineVertexInputStateCreateInfo   vertex_input;
-    VkPipelineInputAssemblyStateCreateInfo input_assembly;
+    bool         draw_indexed;
+    uint         draw_count;
+    uint         vertex_offset_count;
+    uint         dsl_count;
+    VkIndexType  index_type;
+    uint         db_indices[SHADER_MAX_DESCRIPTOR_SET_COUNT];
+    size_t       index_offset;
+    size_t       db_offsets[SHADER_MAX_DESCRIPTOR_SET_COUNT];
+    size_t      *vertex_offsets;
 };
 
 struct draw_model_info {
@@ -128,14 +126,12 @@ void load_model_tf(struct thread_work_arg *arg)
                           sizeof(*resources->pipeline_layouts)    * prim_count;             // NOLINT - sizeof(vulkan_handle)
 
     struct draw_model_info *draw_info;
-    uint draw_infos_size = sizeof(*draw_info)                                                             * 1                      +
-                           sizeof(*draw_info->mesh_instance_counts)                                       * model->mesh_count      +
-                           sizeof(*draw_info->mesh_primitive_counts)                                      * model->mesh_count      +
-                           sizeof(*draw_info->bind_buffers)                                               * attr_count_upper_bound + // NOLINT - sizeof(vulkan_handle)
-                           sizeof(*draw_info->primitive_infos)                                            * prim_count             +
-                           sizeof(*draw_info->primitive_infos->vertex_offsets)                            * attr_count             +
-                           sizeof(*draw_info->primitive_infos->vertex_input.pVertexBindingDescriptions)   * attr_count             +
-                           sizeof(*draw_info->primitive_infos->vertex_input.pVertexAttributeDescriptions) * attr_count;
+    uint draw_infos_size = sizeof(*draw_info)                                  * 1                      +
+                           sizeof(*draw_info->mesh_instance_counts)            * model->mesh_count      +
+                           sizeof(*draw_info->mesh_primitive_counts)           * model->mesh_count      +
+                           sizeof(*draw_info->bind_buffers)                    * attr_count_upper_bound + // NOLINT - sizeof(vulkan_handle)
+                           sizeof(*draw_info->primitive_infos)                 * prim_count             +
+                           sizeof(*draw_info->primitive_infos->vertex_offsets) * attr_count;
 
     resources = allocate(arg->allocs.persistent, resources_size + draw_infos_size);
     draw_info = (struct draw_model_info*)((uchar*)resources + resources_size);
@@ -168,35 +164,19 @@ void load_model_tf(struct thread_work_arg *arg)
     for(uint i=0; i < attr_count_upper_bound; ++i)
         draw_info->bind_buffers[i] = lmi->arg->gpu->mem.bind_buffer.buf;
 
-    uint stride = sizeof(*draw_info->primitive_infos->vertex_offsets)                          +
-                  sizeof(*draw_info->primitive_infos->vertex_input.pVertexBindingDescriptions) +
-                  sizeof(*draw_info->primitive_infos->vertex_input.pVertexAttributeDescriptions);
-    draw_info->primitive_infos[0].vertex_offsets = (size_t*)(draw_info->primitive_infos + prim_count);
-
     uint ac = 0;
-    prim_count = 0;
+    uint pc = 0;
     for(uint i=0; i < model->mesh_count; ++i)
         for(uint j=0; j < model->meshes[i].primitive_count; ++j) {
             cnt = model->meshes[i].primitives[j].attribute_count;
             for(uint k=0; k < model->meshes[i].primitives[j].target_count; ++k)
                 cnt += model->meshes[i].primitives[j].morph_targets[k].attribute_count;
 
-            draw_info->primitive_infos[prim_count].vertex_offset_count = cnt;
-            draw_info->primitive_infos[prim_count].vertex_input = (VkPipelineVertexInputStateCreateInfo) {
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-                .vertexBindingDescriptionCount = cnt,
-                .vertexAttributeDescriptionCount = cnt,
-            };
+            draw_info->primitive_infos[pc].vertex_offset_count = cnt;
+            draw_info->primitive_infos[pc].vertex_offsets = (size_t*)(draw_info->primitive_infos + prim_count) + ac;
 
-            draw_info->primitive_infos[prim_count].vertex_offsets =
-                (size_t*)((uchar*)draw_info->primitive_infos[0].vertex_offsets + stride*ac);
-            draw_info->primitive_infos[prim_count].vertex_input.pVertexBindingDescriptions =
-                (VkVertexInputBindingDescription*)(draw_info->primitive_infos[prim_count].vertex_offsets + cnt);
-            draw_info->primitive_infos[prim_count].vertex_input.pVertexAttributeDescriptions =
-                (VkVertexInputAttributeDescription*)(draw_info->primitive_infos[prim_count].vertex_input.pVertexBindingDescriptions + cnt);
-
-            prim_count++;
             ac += cnt;
+            pc++;
         }
 
     lmi->ret->draw_info = draw_info;
@@ -896,16 +876,17 @@ struct model_shaders { // @Note This struct is cast to an array for the pipeline
     VkPipelineShaderStageCreateInfo fragment;
 };
 
-static void
-model_vertex_state_and_draw_info(
-    struct load_model_arg            *arg,
-    struct model_resources           *resources,
-    struct model_memory_offsets      *offsets,
-    struct model_material            *materials,
-    uint                              mesh_i,
-    uint                              prim_i,
-    struct model_primitive_draw_info *ret,
-    VkDescriptorSetLayout            *dsl_buf);
+static uint model_vertex_state_and_draw_info(
+    struct load_model_arg                  *arg,
+    struct model_resources                 *resources,
+    struct model_memory_offsets            *offsets,
+    struct model_material                  *materials,
+    uint                                    mesh_i,
+    uint                                    prim_i,
+    struct model_primitive_draw_info       *ret,
+    VkDescriptorSetLayout                  *dsl_buf,
+    VkPipelineVertexInputStateCreateInfo   *vi,
+    VkPipelineInputAssemblyStateCreateInfo *ia);
 
 void draw_model(VkCommandBuffer cmd, struct draw_model_info *info);
 
@@ -925,9 +906,16 @@ model_pipelines_transform_descriptors_and_draw_info(
 
     // @Note The descriptor offset code in the loop is particularly brutal to ensure is correct.
     uint pc = 0;
+    uint ac = 0;
     uint descriptor_size = gpu->descriptors.props.uniformBufferDescriptorSize;
     for(uint i=0; i < model->mesh_count; ++i) {
         pc += model->meshes[i].primitive_count;
+
+        for(uint j=0; j < model->meshes[i].primitive_count; ++j) {
+            ac += model->meshes[i].primitives[j].attribute_count;
+            for(uint k=0; k < model->meshes[i].primitives[j].target_count; ++k)
+                ac += model->meshes[i].primitives[j].morph_targets[k].attribute_count;
+        }
 
         draw_info->mesh_primitive_counts[i] = model->meshes[i].primitive_count;
         draw_info->mesh_instance_counts[i] = offsets->mesh_instance_counts[i];
@@ -953,13 +941,13 @@ model_pipelines_transform_descriptors_and_draw_info(
                                     offsets->transforms_ubo_dsls[i] +
                                     descriptor_size * j;
                 vk_get_descriptor_ext(gpu->device, &gi, descriptor_size,
-                    gpu->mem.transfer_buffer.data + dsl_offset);
+                                      gpu->mem.transfer_buffer.data + dsl_offset);
             } else {
                 size_t dsl_offset = offsets->base_descriptor_resource +
                                     offsets->transforms_ubo_dsls[i] +
                                     descriptor_size * j;
                 vk_get_descriptor_ext(gpu->device, &gi, descriptor_size,
-                        gpu->mem.descriptor_buffer_resource.data + dsl_offset);
+                                      gpu->mem.descriptor_buffer_resource.data + dsl_offset);
             }
         }
         // no longer require stage offset if it was there.
@@ -1021,18 +1009,30 @@ model_pipelines_transform_descriptors_and_draw_info(
     };
 
     struct model_shaders *shaders;
-    VkGraphicsPipelineCreateInfo *pipeline_infos = allocate(allocs->temp, pc * (
-            sizeof(*pipeline_infos) +
-            sizeof(*shaders)
-    ));
-    shaders = (struct model_shaders*)(pipeline_infos + pc);
+    VkPipelineVertexInputStateCreateInfo *vi;
+    VkPipelineInputAssemblyStateCreateInfo *ia;
+    VkVertexInputBindingDescription *vb;
+    VkVertexInputAttributeDescription *va;
+
+    VkGraphicsPipelineCreateInfo *pipeline_infos = allocate(allocs->temp,
+            sizeof(*pipeline_infos) * pc +
+            sizeof(*shaders)        * pc +
+            sizeof(*vi)             * pc +
+            sizeof(*ia)             * pc +
+            sizeof(*vb)             * ac +
+            sizeof(*va)             * ac);
+
+    shaders =                   (struct model_shaders*)(pipeline_infos + pc);
+    vi      =   (VkPipelineVertexInputStateCreateInfo*)(shaders        + pc);
+    ia      = (VkPipelineInputAssemblyStateCreateInfo*)(vi             + pc);
+    vb      =        (VkVertexInputBindingDescription*)(ia             + pc);
+    va      =      (VkVertexInputAttributeDescription*)(vb             + ac);
 
     /* I think that it is more efficient to keep the above loop and the below
      * separate. Even though the above one loads mesh data, the meshes are
      * quite small, especially compared to primitives, and a lot of work has to
      * happen in the below loop, so I think keeping the above one tighter is
-     * better, especially since it is making a bunch of the same api calls.
-     */
+     * better, especially since it is making a bunch of the same api calls. */
     VkShaderModule mod_v;
     VkShaderModule mod_f;
     {
@@ -1063,6 +1063,7 @@ model_pipelines_transform_descriptors_and_draw_info(
 
     VkDescriptorSetLayout dsl_buf[SHADER_MAX_DESCRIPTOR_SET_COUNT];
     pc = 0;
+    ac = 0;
     for(uint i=0; i < model->mesh_count; ++i)
         for(uint j=0; j < model->meshes[i].primitive_count; ++j) {
             gltf_mesh_primitive *prim = &model->meshes[i].primitives[j];
@@ -1081,8 +1082,13 @@ model_pipelines_transform_descriptors_and_draw_info(
                     .pName = SHADER_ENTRY_POINT,
                 },
             };
-            model_vertex_state_and_draw_info(arg, resources, offsets, materials, i, j,
-                                             &draw_info->primitive_infos[pc], dsl_buf);
+
+            vi[pc].pVertexBindingDescriptions   = vb + ac;
+            vi[pc].pVertexAttributeDescriptions = va + ac;
+
+            ac += model_vertex_state_and_draw_info(arg, resources, offsets, materials, i, j,
+                                                  &draw_info->primitive_infos[pc], dsl_buf,
+                                                  vi + pc, ia + pc);
             assert(dsl_buf[arg->dsl_count] == resources->transforms_ubo_dsls[i]);
 
             VkPipelineLayoutCreateInfo plc = {
@@ -1098,8 +1104,8 @@ model_pipelines_transform_descriptors_and_draw_info(
                 .flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
                 .stageCount = 2, // @ShaderCount
                 .pStages = (VkPipelineShaderStageCreateInfo*)&shaders[pc],
-                .pVertexInputState = &draw_info->primitive_infos[pc].vertex_input,
-                .pInputAssemblyState = &draw_info->primitive_infos[pc].input_assembly,
+                .pVertexInputState = &vi[pc],
+                .pInputAssemblyState = &ia[pc],
                 .pViewportState = &viewport,
                 .pRasterizationState = &rasterization[flag_check(materials[prim->material].flags, MODEL_MATERIAL_CULL_BACK_BIT)],
                 .pMultisampleState = &multisample,
@@ -1144,15 +1150,17 @@ inline static size_t model_get_accessor_ofs(
         return offsets->base_stage + buf + bv->byte_offset + acc->byte_offset;
 }
 
-static void model_vertex_state_and_draw_info(
-    struct load_model_arg            *arg,
-    struct model_resources           *resources,
-    struct model_memory_offsets      *offsets,
-    struct model_material            *materials,
-    uint                              mesh_i,
-    uint                              prim_i,
-    struct model_primitive_draw_info *ret,
-    VkDescriptorSetLayout            *dsl_buf)
+static uint model_vertex_state_and_draw_info(
+    struct load_model_arg                  *arg,
+    struct model_resources                 *resources,
+    struct model_memory_offsets            *offsets,
+    struct model_material                  *materials,
+    uint                                    mesh_i,
+    uint                                    prim_i,
+    struct model_primitive_draw_info       *ret,
+    VkDescriptorSetLayout                  *dsl_buf,
+    VkPipelineVertexInputStateCreateInfo   *vi,
+    VkPipelineInputAssemblyStateCreateInfo *ia)
 {
     gltf *model = arg->model;
     gltf_mesh_primitive *prim = &model->meshes[mesh_i].primitives[prim_i];
@@ -1206,13 +1214,13 @@ static void model_vertex_state_and_draw_info(
         ret->dsl_count += flag_check(materials[prim->material].flags, MODEL_MATERIAL_TEXTURED_BIT);
     }
 
-    ret->input_assembly = (VkPipelineInputAssemblyStateCreateInfo) {
+    *ia = (VkPipelineInputAssemblyStateCreateInfo) {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
         .topology = (VkPrimitiveTopology)prim->topology,
     };
 
-    VkVertexInputBindingDescription *bindings = (VkVertexInputBindingDescription*)ret->vertex_input.pVertexBindingDescriptions;
-    VkVertexInputAttributeDescription *attrs = (VkVertexInputAttributeDescription*)ret->vertex_input.pVertexAttributeDescriptions;
+    VkVertexInputBindingDescription *bindings = (VkVertexInputBindingDescription*)vi->pVertexBindingDescriptions;
+    VkVertexInputAttributeDescription *attrs = (VkVertexInputAttributeDescription*)vi->pVertexAttributeDescriptions;
 
     uint ac = 0;
     for(uint i=0; i < prim->attribute_count; ++i) {
@@ -1256,6 +1264,12 @@ static void model_vertex_state_and_draw_info(
             ac++;
         }
     }
+
+    vi->sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vi->vertexBindingDescriptionCount   = ac;
+    vi->vertexAttributeDescriptionCount = ac;
+
+    return ac;
 }
 
 struct model_animations_arg {
