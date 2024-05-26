@@ -1913,7 +1913,8 @@ void create_shadow_renderpass(struct gpu *gpu, uint shadow_map_count,
     }
 }
 
-void begin_color_renderpass(VkCommandBuffer cmd, struct renderpass *rp, VkRect2D area) {
+void begin_color_renderpass(VkCommandBuffer cmd, struct renderpass *rp, VkRect2D area)
+{
     VkClearValue clears[] = {
         (VkClearValue) {
             .depthStencil = (VkClearDepthStencilValue) {
@@ -1945,6 +1946,32 @@ void begin_color_renderpass(VkCommandBuffer cmd, struct renderpass *rp, VkRect2D
         .renderArea = area,
         .clearValueCount = carrlen(clears),
         .pClearValues = clears,
+    };
+    vk_cmd_begin_renderpass(cmd, &bi, VK_SUBPASS_CONTENTS_INLINE);
+}
+
+void begin_shadow_renderpass(VkCommandBuffer cmd, struct renderpass *rp, struct gpu *gpu, uint count)
+{
+    assert(gpu->settings.shadow_maps.width && gpu->settings.shadow_maps.height);
+
+    VkClearValue *clears = sallocate(gpu->alloc_temp, *clears, count);
+
+    for(uint i=0; i < count; ++i)
+        clears[i] = (VkClearValue) {
+            .depthStencil = (VkClearDepthStencilValue) {
+                .depth = 1,
+                .stencil = 0,
+            }
+        };
+
+    VkRenderPassBeginInfo bi = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .renderPass = rp->rp,
+        .framebuffer = rp->fb,
+        .clearValueCount = count,
+        .pClearValues = clears,
+        .renderArea.extent = (VkExtent2D) {.width  = gpu->settings.shadow_maps.width,
+                                           .height = gpu->settings.shadow_maps.height},
     };
     vk_cmd_begin_renderpass(cmd, &bi, VK_SUBPASS_CONTENTS_INLINE);
 }
