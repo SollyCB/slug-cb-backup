@@ -31,6 +31,7 @@ struct model_resources {
     uint                   texture_dsl_count;
     uint                   mesh_count;
     uint                   pipeline_count;
+    uint                   pipeline_layout_count;
     void                  *free_me;
     allocator             *alloc;
     struct gpu            *gpu;
@@ -228,6 +229,12 @@ static void model_cleanup(struct model_resources *resources)
 
     for(uint i=0; i < resources->mesh_count; ++i)
         vk_destroy_descriptor_set_layout(gpu->device, resources->transforms_ubo_dsls[i], GAC);
+
+    for(uint i=0; i < resources->pipeline_layout_count + 1; ++i)
+        vk_destroy_pipeline_layout(gpu->device, resources->pipeline_layouts[i], GAC);
+
+    for(uint i=0; i < resources->pipeline_count; ++i)
+        vk_destroy_pipeline(gpu->device, resources->pipelines[i], GAC);
 
     allocator *alloc = resources->alloc;
     deallocate(alloc, resources);
