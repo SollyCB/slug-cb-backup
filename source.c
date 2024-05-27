@@ -23,3 +23,4 @@
 #include "shader.c"
 #include "asset.c"
 #include "blend_types.c"
+#include "shadows.c"

@@ -1042,7 +1042,7 @@ static void gpu_reset_viewport_and_scissor_to_window_extent(struct gpu *gpu)
 }
 
 // @Todo This only works for UMA and DESCRIPTOR_BUFFER_HOST_VISIBLE
-void init_vs_info(struct gpu *gpu, struct vs_info_descriptor *ret)
+struct vs_info* init_vs_info(struct gpu *gpu, struct vs_info_descriptor *ret)
 {
     VkDescriptorSetLayoutBinding binding = {
         .binding = 0,
@@ -1120,6 +1120,8 @@ void init_vs_info(struct gpu *gpu, struct vs_info_descriptor *ret)
     memcpy(&vs->model, &model, sizeof(model));
     memcpy(&vs->view, &view, sizeof(view));
     memcpy(&vs->proj, &proj, sizeof(proj));
+
+    return vs;
 }
 
 #ifdef _WIN32 // Different drivers for different OSs, so I assume cache impl would be different
@@ -2137,7 +2139,7 @@ void begin_color_renderpass(VkCommandBuffer cmd, struct renderpass *rp, VkRect2D
     vk_cmd_begin_renderpass(cmd, &bi, VK_SUBPASS_CONTENTS_INLINE);
 }
 
-void begin_depth_renderpass(VkCommandBuffer cmd, struct renderpass *rp, struct gpu *gpu, uint count)
+void begin_shadow_renderpass(VkCommandBuffer cmd, struct renderpass *rp, struct gpu *gpu, uint count)
 {
     assert(gpu->settings.shadow_maps.width && gpu->settings.shadow_maps.height);
 

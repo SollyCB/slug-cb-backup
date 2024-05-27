@@ -63,28 +63,6 @@ struct model_material {
     uint flags;
 };
 
-struct model_primitive_draw_info {
-    bool         draw_indexed;
-    uint         draw_count;
-    uint         vertex_offset_count;
-    uint         dsl_count;
-    VkIndexType  index_type;
-    uint         db_indices[SHADER_MAX_DESCRIPTOR_SET_COUNT];
-    size_t       index_offset;
-    size_t       db_offsets[SHADER_MAX_DESCRIPTOR_SET_COUNT];
-    size_t      *vertex_offsets;
-};
-
-struct draw_model_info {
-    uint                              mesh_count;
-    uint                             *mesh_instance_counts;
-    uint                             *mesh_primitive_counts;
-    VkPipeline                       *pipelines;
-    VkPipelineLayout                 *pipeline_layouts;
-    struct model_primitive_draw_info *primitive_infos;
-    VkBuffer                         *bind_buffers;
-};
-
 static uint
 load_model(
     struct load_model_arg  *arg,
@@ -243,7 +221,7 @@ static void model_cleanup(struct model_resources *resources)
     deallocate(alloc, resources);
 }
 
-void draw_model(VkCommandBuffer cmd, struct draw_model_info *info)
+void draw_model_color(VkCommandBuffer cmd, struct draw_model_info *info)
 {
     uint pc = 0;
     for(uint i=0; i < info->mesh_count; ++i)
@@ -266,6 +244,43 @@ void draw_model(VkCommandBuffer cmd, struct draw_model_info *info)
             vk_cmd_bind_vertex_buffers(cmd,
                     0,
                     info->primitive_infos[pc].vertex_offset_count,
+                    info->bind_buffers,
+                    info->primitive_infos[pc].vertex_offsets);
+
+            if (info->primitive_infos[pc].draw_indexed) {
+
+                vk_cmd_bind_index_buffer(cmd,
+                     *info->bind_buffers,
+                     info->primitive_infos[pc].index_offset,
+                     info->primitive_infos[pc].index_type);
+
+                vk_cmd_draw_indexed(cmd,
+                                    info->primitive_infos[pc].draw_count,
+                                    info->mesh_instance_counts[i],
+                                    0, 0, 0);
+            } else {
+                vk_cmd_draw(cmd,
+                            info->primitive_infos[pc].draw_count,
+                            info->mesh_instance_counts[i],
+                            0, 0);
+            }
+
+            pc++;
+        }
+}
+
+void draw_model_depth(VkCommandBuffer cmd, struct draw_model_info *info, uint pass)
+{
+    uint pi = info->prim_count + (info->prim_count * pass);
+    uint pc = 0;
+    for(uint i=0; i < info->mesh_count; ++i)
+        for(uint j=0; j < info->mesh_primitive_counts[i]; ++j) {
+            vk_cmd_bind_pipeline(cmd,
+                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    info->pipelines[pi]);
+
+            vk_cmd_bind_vertex_buffers(cmd,
+                    0, 1,
                     info->bind_buffers,
                     info->primitive_infos[pc].vertex_offsets);
 
@@ -898,7 +913,7 @@ static uint model_vertex_state_and_draw_info(
     VkPipelineVertexInputStateCreateInfo   *vi,
     VkPipelineInputAssemblyStateCreateInfo *ia);
 
-void draw_model(VkCommandBuffer cmd, struct draw_model_info *info);
+void draw_model_color(VkCommandBuffer cmd, struct draw_model_info *info);
 
 static uint
 model_pipelines_transform_descriptors_and_draw_info(
@@ -964,6 +979,8 @@ model_pipelines_transform_descriptors_and_draw_info(
         if (gpu->flags & GPU_DESCRIPTOR_BUFFER_NOT_HOST_VISIBLE_BIT)
             offsets->transforms_ubo_dsls[i] -= offsets->transforms_ubo_dsls[0];
     }
+
+    draw_info->prim_count = pc;
 
     {
         struct file f = file_read_bin_all("shaders/depth.vert.spv", allocs->temp);

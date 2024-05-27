@@ -1,12 +1,51 @@
-#include "math.h"
+#include "shadows.h"
 
-struct frustum {
-    vector tl_near, tr_near, bl_near, br_near;
-    vector tl_far,  tr_far,  bl_far,  br_far;
-};
+void scene_bounding_box(uint count, matrix *positions, gltf *models, struct bounding_box *bb)
+{
+    memset(bb, 0, sizeof(*bb));
+
+    vector cmin = vector3(0,0,0);
+    vector cmax = vector3(0,0,0);
+    float minlen = 0;
+    float maxlen = 0;
+
+    for(uint i=0; i < count; ++i) {
+        for(uint j=0; j < models[i].mesh_count; ++j)
+            for(uint k=0; k < models[i].meshes[j].primitive_count; ++k) {
+                gltf_accessor *a = &models[i].accessors[models[i].meshes[j].primitives[k].attributes[0].accessor];
+                log_print_error_if(feq(a->max_min.max[0], Max_f32) || feq(a->max_min.max[0], Max_f32),
+                                   "gltf mesh primitve position attribute has invalid max_min");
+
+                vector min = vector3(a->max_min.min[0], a->max_min.min[1], a->max_min.min[2]);
+                min = mul_matrix_vector(&positions[i], min);
+
+                if (vector_len(min) > minlen) {
+                    minlen = vector_len(min);
+                    cmin = min;
+                }
+
+                vector max = vector3(a->max_min.max[0], a->max_min.max[1], a->max_min.max[2]);
+                max = mul_matrix_vector(&positions[i], max);
+
+                if (vector_len(max) > maxlen) {
+                    maxlen = vector_len(max);
+                    cmax = max;
+                }
+            }
+    }
+
+    bb->p[0] = vector3(cmin.x, cmin.y, cmin.z);
+    bb->p[1] = vector3(cmin.x, cmin.y, cmax.z);
+    bb->p[2] = vector3(cmax.x, cmin.y, cmax.z);
+    bb->p[3] = vector3(cmax.x, cmin.y, cmin.z);
+    bb->p[4] = vector3(cmin.x, cmax.y, cmin.z);
+    bb->p[5] = vector3(cmin.x, cmax.y, cmax.z);
+    bb->p[6] = vector3(cmax.x, cmax.y, cmax.z);
+    bb->p[7] = vector3(cmax.x, cmax.y, cmin.z);
+}
 
 // The four corners of a frustum
-static inline void get_frustum(float fov, float near, float far, struct frustum *ret)
+void get_frustum(float fov, float near, float far, struct frustum *ret)
 {
     float e = focal_length(fov);
     float a = fov / 2;
@@ -37,39 +76,37 @@ static inline void get_frustum(float fov, float near, float far, struct frustum 
     ret->br_far = intersect_three_planes(pf, pr, pb);
 }
 
-static inline void minmax_frustum_points(struct frustum *f, matrix *space,
-                                         struct pair_float *minmax_x,
-                                         struct pair_float *minmax_y)
+void minmax_frustum_points(struct frustum *f, matrix *space, struct minmax *minmax_x, struct minmax *minmax_y)
 {
     vector p[8];
     vector *q = (vector*)f;
     for(uint i=0; i < 8; ++i)
         p[i] = mul_matrix_vector(space, q[i]);
 
-    struct pair_float x = {Max_f32,-Max_f32};
-    struct pair_float y = {Max_f32,-Max_f32};
+    struct minmax x = {Max_f32,-Max_f32};
+    struct minmax y = {Max_f32,-Max_f32};
 
     for(uint i=0; i < 8; ++i) {
-        if (p[i].x < x.a)
-            x.a = p[i].x;
-        if (p[i].x > x.b)
-            x.b = p[i].x;
-        if (p[i].y < y.a)
-            y.a = p[i].y;
-        if (p[i].y > y.b)
-            y.b = p[i].y;
+        if (p[i].x < x.min)
+            x.min = p[i].x;
+        if (p[i].x > x.max)
+            x.max = p[i].x;
+        if (p[i].y < y.min)
+            y.min = p[i].y;
+        if (p[i].y > y.max)
+            y.max = p[i].y;
     }
-    assert(x.a < Max_f32 && x.b > -Max_f32 &&
-           y.a < Max_f32 && y.b > -Max_f32);
+    assert(x.min < Max_f32 && x.max > -Max_f32 &&
+           y.min < Max_f32 && y.max > -Max_f32);
 
     *minmax_x = x;
     *minmax_y = y;
 }
 
 // min max x and y, scene bounding box (credit dx-sdk-samples for the implementation)
-static struct pair_float near_far(struct pair_float minmax_x, struct pair_float minmax_y, vector bb[8])
+struct minmax near_far(struct minmax x, struct minmax y, struct bounding_box *bb)
 {
-    static uint indices[] = { // Idk if this is best statically initialized, but probably.
+    uint indices[] = { // Idk if this is best statically initialized, but probably.
         0,1,2,  1,2,3,
         4,5,6,  5,6,7,
         0,2,4,  2,4,6,
@@ -78,8 +115,8 @@ static struct pair_float near_far(struct pair_float minmax_x, struct pair_float 
         2,3,6,  3,6,7,
     };
 
-    float edges[] = {minmax_x.a,minmax_x.b,
-                     minmax_y.a,minmax_y.b};
+    float edges[] = {x.min,x.max,
+                     y.min,y.max};
 
     float near = Max_f32;
     float far  = -Max_f32;
@@ -95,9 +132,9 @@ static struct pair_float near_far(struct pair_float minmax_x, struct pair_float 
     #define isculled(t) ((uint)t.p[0].w != 0)
 
     for(uint i=0; i < 12; ++i) {
-        triangles[0].p[0] = bb[indices[i * 3 + 0]];
-        triangles[0].p[1] = bb[indices[i * 3 + 1]];
-        triangles[0].p[2] = bb[indices[i * 3 + 2]];
+        triangles[0].p[0] = bb->p[indices[i * 3 + 0]];
+        triangles[0].p[1] = bb->p[indices[i * 3 + 1]];
+        triangles[0].p[2] = bb->p[indices[i * 3 + 2]];
         uncull(triangles[0]);
 
         uint tc = 1; // triangle count
@@ -218,6 +255,6 @@ static struct pair_float near_far(struct pair_float minmax_x, struct pair_float 
             }
         }
     }
-    return (struct pair_float) {near, far};
+    return (struct minmax) {near, far};
 }
 

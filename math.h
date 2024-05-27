@@ -192,7 +192,7 @@ static inline vector sub_vector(vector v1, vector v2)
     return r;
 }
 
-static inline float magnitude_vector(vector v) {
+static inline float vector_len(vector v) {
     __m128 a = _mm_load_ps(&v.x);
     __m128 b = a;
     a = _mm_mul_ps(a,b);
@@ -201,7 +201,7 @@ static inline float magnitude_vector(vector v) {
 }
 
 static inline vector normalize(vector v) {
-    float f = magnitude_vector(v);
+    float f = vector_len(v);
     vector r = scalar_div_vector(v, f);
     r.w = 0;
     return r;

@@ -620,6 +620,9 @@ static void gltf_parse_accessors(uint index, json *j, allocator *alloc, gltf *g)
             log_print_error_if(ki == Max_u32, "if accessors.max is defined, accessors.min must also be defined");
             for(tmp = 0; tmp < tmp_cnt; ++tmp)
                 accessor->max_min.min[tmp] = accessor_obj->values[ki].arr.nums[tmp];
+        } else {
+            accessor->max_min.max[0] = Max_f32;
+            accessor->max_min.min[0] = Max_f32;
         }
 
         ki = json_find_key(accessor_obj, "sparse");

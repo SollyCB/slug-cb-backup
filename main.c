@@ -20,6 +20,7 @@
 #include "asset.h"
 #include "vulkan_errors.h"
 #include "timer.h"
+#include "shadows.h"
 
 #define DRAW_SUBPASS 0
 #define HTP_SUBPASS  1
@@ -115,8 +116,8 @@ int main() {
     gltf model = parse_gltf("models/cube-static/Cube.gltf", &pr.gpu.shader_dir,
                             &conf, &pr.allocs.temp, &pr.allocs.temp, &model_size);
 
-    struct vs_info_descriptor vs_info;
-    init_vs_info(&pr.gpu, &vs_info);
+    struct vs_info_descriptor vs_info_desc;
+    struct vs_info *vs_info = init_vs_info(&pr.gpu, &vs_info_desc);
 
     VkCommandPool transfer_pool = create_transient_transfer_command_pool(&pr.gpu);
     VkCommandPool graphics_pool = create_transient_graphics_command_pool(&pr.gpu);
@@ -139,6 +140,9 @@ int main() {
     while(1) {
         allocator_reset_linear(&pr.allocs.temp);
         reset_gpu_buffers(&pr.gpu);
+
+        struct bounding_box scene_bb;
+        scene_bounding_box(1, &IDENTITY_MATRIX, &model, &scene_bb);
 
         {
             matrix mat_view;
@@ -173,8 +177,8 @@ int main() {
             );
             convert_trs(&model_trs, &mat_model);
 
-            update_vs_info_mat_model(&pr.gpu, vs_info.bb_offset, &mat_model);
-            update_vs_info_mat_view(&pr.gpu, vs_info.bb_offset, &mat_view);
+            update_vs_info_mat_model(&pr.gpu, vs_info_desc.bb_offset, &mat_model);
+            update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &mat_view);
         }
 
         pr.gpu.swapchain.i = next_swapchain_image(&pr.gpu, sem_have_swapchain_image, fence);
@@ -219,9 +223,9 @@ int main() {
             .gpu = &pr.gpu,
             .animations = NULL,
             .scenes = &scene,
-            .dsls[0] = vs_info.dsl,
+            .dsls[0] = vs_info_desc.dsl,
             .db_indices[0] = DESCRIPTOR_BUFFER_RESOURCE_BIND_INDEX,
-            .db_offsets[0] = vs_info.db_offset,
+            .db_offsets[0] = vs_info_desc.db_offset,
             .dsls[1] = shadow_maps.dsl,
             .db_indices[1] = DESCRIPTOR_BUFFER_SAMPLER_BIND_INDEX,
             .db_offsets[1] = shadow_maps.dsl_ofs,
@@ -252,11 +256,42 @@ int main() {
             ;
 
         {
+            begin_shadow_renderpass(draw_cmd, &depth_rp, &pr.gpu, shadow_maps.count);
+
+            for(uint i=0; i < shadow_maps.count; ++i) {
+                struct frustum f;
+                get_frustum(FOV, 0.1, 100, &f);
+
+                struct minmax x,y;
+                minmax_frustum_points(&f, &vs_info->dir_lights[i].space, &x, &y);
+
+                struct minmax nf = near_far(x, y, &scene_bb);
+
+                matrix m; // light projection
+                ortho_matrix(x.min, x.max, y.min, y.max, nf.min, nf.max, &m);
+
+                mul_matrix(&m, &vs_info->dir_lights[i].space, &m);
+
+                vk_cmd_push_constants(draw_cmd,
+                                      lmr.draw_info->pipeline_layouts[lmr.draw_info->prim_count],
+                                      VK_SHADER_STAGE_VERTEX_BIT,
+                                      0,
+                                      sizeof(matrix),
+                                      &m);
+
+                draw_model_depth(draw_cmd, lmr.draw_info, i);
+
+                if (i < shadow_maps.count - 1)
+                    vk_cmd_next_subpass(draw_cmd, VK_SUBPASS_CONTENTS_INLINE);
+            }
+
+            end_renderpass(draw_cmd);
+
             bind_descriptor_buffers(draw_cmd, &pr.gpu);
 
             begin_color_renderpass(draw_cmd, &color_rp, pr.gpu.settings.scissor);
 
-            draw_model(draw_cmd, lmr.draw_info);
+            draw_model_color(draw_cmd, lmr.draw_info);
 
             vk_cmd_next_subpass(draw_cmd, VK_SUBPASS_CONTENTS_INLINE);
 

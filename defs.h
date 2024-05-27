@@ -123,8 +123,8 @@ struct pair_uint {
     uint a,b;
 };
 
-struct pair_float {
-    float a,b;
+struct minmax {
+    float min,max;
 };
 
 static inline uint64 align(uint64 size, uint64 alignment) {

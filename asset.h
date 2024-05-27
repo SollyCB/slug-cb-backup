@@ -63,7 +63,29 @@ struct load_model_arg {
     VkRect2D               scissor;
 };
 
-struct draw_model_info;
+struct model_primitive_draw_info {
+    bool         draw_indexed;
+    uint         draw_count;
+    uint         vertex_offset_count;
+    uint         dsl_count;
+    VkIndexType  index_type;
+    uint         db_indices[SHADER_MAX_DESCRIPTOR_SET_COUNT];
+    size_t       index_offset;
+    size_t       db_offsets[SHADER_MAX_DESCRIPTOR_SET_COUNT];
+    size_t      *vertex_offsets;
+};
+
+struct draw_model_info {
+    uint                              mesh_count;
+    uint                              prim_count;
+    uint                             *mesh_instance_counts;
+    uint                             *mesh_primitive_counts;
+    VkPipeline                       *pipelines;
+    VkPipelineLayout                 *pipeline_layouts;
+    struct model_primitive_draw_info *primitive_infos;
+    VkBuffer                         *bind_buffers;
+};
+
 struct load_model_ret {
     uint                    result;
     uint                    allocation_mask;
@@ -89,7 +111,8 @@ struct load_model_info {
    freed, the address itself must not be moved. */
 void load_model_tf(struct thread_work_arg *arg);
 
-void draw_model(VkCommandBuffer cmd, struct draw_model_info *info);
+void draw_model_color(VkCommandBuffer cmd, struct draw_model_info *info);
+void draw_model_depth(VkCommandBuffer cmd, struct draw_model_info *info, uint pass);
 
 #endif
 

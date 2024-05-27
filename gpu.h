@@ -240,7 +240,7 @@ struct vs_info_descriptor { // @BadName
     size_t bb_offset;
 };
 
-void init_vs_info(struct gpu *gpu, struct vs_info_descriptor *ret);
+struct vs_info* init_vs_info(struct gpu *gpu, struct vs_info_descriptor *ret);
 
 static inline void update_vs_info_mat_model(struct gpu *gpu, size_t bb_ofs, matrix *model)
 {
@@ -361,6 +361,7 @@ struct renderpass {
 void create_color_renderpass(struct gpu *gpu, struct renderpass *rp);
 void create_shadow_renderpass(struct gpu *gpu, uint shadow_map_count, struct shadow_maps *shadow_maps, struct renderpass *rp);
 void begin_color_renderpass(VkCommandBuffer cmd, struct renderpass *rp, VkRect2D area);
+void begin_shadow_renderpass(VkCommandBuffer cmd, struct renderpass *rp, struct gpu *gpu, uint count);
 
 static inline void end_renderpass(VkCommandBuffer cmd) {vk_cmd_end_renderpass(cmd);}
 static inline void destroy_renderpass(struct gpu *gpu, struct renderpass *rp)
