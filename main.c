@@ -101,7 +101,7 @@ static void run_tests(allocator *alloc);
 static void thread_tests(thread_pool *pool);
 static void run_tests_thread(struct thread_work_arg *w);
 
-#define ONE_FRAME true
+#define ONE_FRAME 0
 
 int main() {
     prog_resources pr;
@@ -180,8 +180,8 @@ int main() {
         pr.gpu.swapchain.i = next_swapchain_image(&pr.gpu, sem_have_swapchain_image, fence);
         fence_wait_secs_and_reset(&pr.gpu, fence, 1); // Is there an optimal place to wait on this?
 
-        struct renderpass renderpass;
-        create_color_renderpass(&pr.gpu, &renderpass);
+        struct renderpass color_rp;
+        create_color_renderpass(&pr.gpu, &color_rp);
 
         VkCommandBuffer transfer_cmd;
         allocate_command_buffers(&pr.gpu, transfer_pool, 1, &transfer_cmd);
@@ -195,7 +195,15 @@ int main() {
         begin_onetime_command_buffers(2, cmds_graphics);
 
         struct htp_rsc htp_rsc;
-        htp_allocate_resources(&pr.gpu, &renderpass, HTP_SUBPASS, transfer_cmd, graphics_cmd, &htp_rsc);
+        if (!htp_allocate_resources(&pr.gpu, &color_rp, HTP_SUBPASS, transfer_cmd, graphics_cmd, &htp_rsc))
+            return -1;
+
+        struct shadow_maps shadow_maps = {1};
+        if (!create_shadow_maps(&pr.gpu, transfer_cmd, graphics_cmd, &shadow_maps))
+            return -1;
+
+        struct renderpass depth_rp;
+        create_shadow_renderpass(&pr.gpu, 1, &shadow_maps, &depth_rp);
 
         uint scene = 0;
 
@@ -206,6 +214,7 @@ int main() {
             .scene_count = 1,
             .subpass_mask = LOAD_MODEL_SUBPASS_DRAW,
             .subpasses[1] = DRAW_SUBPASS,
+            .depth_pass_count = shadow_maps.count,
             .model = &model,
             .gpu = &pr.gpu,
             .animations = NULL,
@@ -213,7 +222,11 @@ int main() {
             .dsls[0] = vs_info.dsl,
             .db_indices[0] = DESCRIPTOR_BUFFER_RESOURCE_BIND_INDEX,
             .db_offsets[0] = vs_info.db_offset,
-            .renderpass = renderpass.rp,
+            .dsls[1] = shadow_maps.dsl,
+            .db_indices[1] = DESCRIPTOR_BUFFER_SAMPLER_BIND_INDEX,
+            .db_offsets[1] = shadow_maps.dsl_ofs,
+            .color_renderpass = color_rp.rp,
+            .depth_renderpass = depth_rp.rp,
             .viewport = pr.gpu.settings.viewport,
             .scissor = pr.gpu.settings.scissor,
         };
@@ -241,7 +254,7 @@ int main() {
         {
             bind_descriptor_buffers(draw_cmd, &pr.gpu);
 
-            begin_color_renderpass(draw_cmd, &renderpass, pr.gpu.settings.scissor);
+            begin_color_renderpass(draw_cmd, &color_rp, pr.gpu.settings.scissor);
 
             draw_model(draw_cmd, lmr.draw_info);
 
@@ -291,13 +304,16 @@ int main() {
         fence_wait_secs_and_reset(&pr.gpu, fence, 3);
         signal_thread_true(&t_cleanup[FRAME_I]);
 
-        destroy_renderpass(&pr.gpu, &renderpass);
+        destroy_renderpass(&pr.gpu, &color_rp);
         htp_free_resources(&pr.gpu, &htp_rsc);
 
         reset_command_pool(&pr.gpu, transfer_pool);
         reset_command_pool(&pr.gpu, graphics_pool);
 
         FRAME_I = (FRAME_I + 1) & 1;
+
+        while(ONE_FRAME)
+            ;
     }
 
     store_shader_dir(&pr.gpu.shader_dir);

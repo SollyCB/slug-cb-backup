@@ -35,7 +35,7 @@ struct model_resources {
     void                  *free_me;
     allocator             *alloc;
     struct gpu            *gpu;
-    struct gpu_image      *images;
+    struct gpu_texture      *images;
     VkSampler             *samplers;
     VkDescriptorSetLayout *texture_dsls;
     VkDescriptorSetLayout *transforms_ubo_dsls;
@@ -118,6 +118,8 @@ void load_model_tf(struct thread_work_arg *arg)
         attr_count += cnt;
     }
 
+    uint pipeline_count = prim_count + (prim_count * lmi->arg->depth_pass_count);
+
     // vulkan handles are typedef'd pointers which makes the linter complain.
     struct model_resources *resources;
     uint resources_size = sizeof(*resources)                      * 1                     +
@@ -125,8 +127,8 @@ void load_model_tf(struct thread_work_arg *arg)
                           sizeof(*resources->samplers)            * model->sampler_count  + // NOLINT - sizeof(vulkan_handle)
                           sizeof(*resources->texture_dsls)        * model->material_count + // NOLINT - sizeof(vulkan_handle)
                           sizeof(*resources->transforms_ubo_dsls) * model->mesh_count     + // NOLINT - sizeof(vulkan_handle)
-                          sizeof(*resources->pipelines)           * prim_count * 2        + // NOLINT - sizeof(vulkan_handle)
-                          sizeof(*resources->pipeline_layouts)    * prim_count + 1;         // NOLINT - sizeof(vulkan_handle)
+                          sizeof(*resources->pipelines)           * pipeline_count        + // NOLINT - sizeof(vulkan_handle)
+                          sizeof(*resources->pipeline_layouts)    * (prim_count + 1);       // NOLINT - sizeof(vulkan_handle)
 
     struct draw_model_info *draw_info;
     uint draw_infos_size = sizeof(*draw_info)                                  * 1                      +
@@ -139,25 +141,21 @@ void load_model_tf(struct thread_work_arg *arg)
     resources = allocate(arg->allocs.persistent, resources_size + draw_infos_size);
     draw_info = (struct draw_model_info*)((uchar*)resources + resources_size);
 
-    // Lol I was getting a great symptom due to not zeroing here: after deallocating this memory,
-    // when I asked for memory again on the next loop I got the same memory back, so the resources
-    // counts were incrementing. Very funny.
     memset(resources, 0, sizeof(*resources));
     memset(draw_info, 0, sizeof(*draw_info));
 
     resources->alloc = arg->allocs.persistent;
     resources->gpu = lmi->arg->gpu;
 
-    resources->images               =      (struct gpu_image*)(resources                      + 1);
+    resources->images               =    (struct gpu_texture*)(resources                      + 1);
     resources->samplers             =             (VkSampler*)(resources->images              + model->image_count);
     resources->texture_dsls         = (VkDescriptorSetLayout*)(resources->samplers            + model->sampler_count);
     resources->transforms_ubo_dsls  =                          resources->texture_dsls        + model->material_count;
     resources->pipelines            =            (VkPipeline*)(resources->transforms_ubo_dsls + model->mesh_count);
-    resources->pipeline_layouts     =      (VkPipelineLayout*)(resources->pipelines           + prim_count * 2);
+    resources->pipeline_layouts     =      (VkPipelineLayout*)(resources->pipelines           + pipeline_count);
 
     draw_info->pipelines = resources->pipelines;
     draw_info->pipeline_layouts = resources->pipeline_layouts;
-    assert(draw_info->pipelines && draw_info->pipeline_layouts);
 
     draw_info->mesh_instance_counts  =                             (uint*)(draw_info                        + 1);
     draw_info->mesh_primitive_counts =                                     draw_info->mesh_instance_counts  + model->mesh_count;
@@ -167,7 +165,7 @@ void load_model_tf(struct thread_work_arg *arg)
     for(uint i=0; i < attr_count_upper_bound; ++i)
         draw_info->bind_buffers[i] = lmi->arg->gpu->mem.bind_buffer.buf;
 
-    resources->pipeline_count = prim_count * 2;
+    resources->pipeline_count = pipeline_count;
     resources->pipeline_layout_count = prim_count + 1;
 
     uint ac = 0;
@@ -235,7 +233,7 @@ static void model_cleanup(struct model_resources *resources)
     for(uint i=0; i < resources->mesh_count; ++i)
         vk_destroy_descriptor_set_layout(gpu->device, resources->transforms_ubo_dsls[i], GAC);
 
-    for(uint i=0; i < resources->pipeline_layout_count + 1; ++i)
+    for(uint i=0; i < resources->pipeline_layout_count; ++i)
         vk_destroy_pipeline_layout(gpu->device, resources->pipeline_layouts[i], GAC);
 
     for(uint i=0; i < resources->pipeline_count; ++i)
@@ -519,8 +517,8 @@ static uint allocate_model_resources(
 
         // @Optimise Might be better to create images after allocating to staging
         // buffer? Probably not, since stage allocation unlikely to fail.
-        gpu_create_image(gpu, &image, &resources->images[i]);
-        struct memreq mr = gpu_get_image_memreq(gpu, &resources->images[i]);
+        gpu_create_texture(gpu, &image, &resources->images[i]);
+        struct memreq mr = gpu_texture_memreq(gpu, &resources->images[i]);
 
         if (!images_base_alignment)
             images_base_alignment = mr.alignment;
@@ -670,8 +668,8 @@ static uint allocate_model_resources(
     for(uint i=0; i < model->image_count; ++i) {
         memcpy((char*)gpu->mem.transfer_buffer.data + offsets->base_stage + image_offsets_stage[i],
                 resources->images[i].image.data, image_size(&resources->images[i].image));
-        gpu_bind_image(gpu, &resources->images[i], base_image_device_offset + image_offsets_device[i]);
-        gpu_create_image_view(gpu, &resources->images[i]);
+        gpu_bind_image(gpu, resources->images[i].vkimage, base_image_device_offset + image_offsets_device[i]);
+        gpu_create_texture_view(gpu, &resources->images[i]);
     }
     gpu_upload_images_with_base_offset(gpu, model->image_count, resources->images,
             offsets->base_stage, image_offsets_stage, ret->cmd_transfer, ret->cmd_graphics);
@@ -1092,18 +1090,18 @@ model_pipelines_transform_descriptors_and_draw_info(
     VkVertexInputAttributeDescription *va;
 
     VkGraphicsPipelineCreateInfo *pipeline_infos = allocate(allocs->temp,
-            sizeof(*pipeline_infos) * pc * 2 +
-            sizeof(*shaders)        * pc * 2 +
-            sizeof(*vi)             * pc * 2 +
-            sizeof(*ia)             * pc * 2 +
-            sizeof(*vb)             * ac * 2 +
-            sizeof(*va)             * ac * 2);
+            sizeof(*pipeline_infos) * pc * (arg->depth_pass_count + 1) +
+            sizeof(*shaders)        * pc * 1                           +
+            sizeof(*vi)             * pc * 2                           +
+            sizeof(*ia)             * pc * 2                           +
+            sizeof(*vb)             * ac * 1                           +
+            sizeof(*va)             * ac * 1);
 
-    shaders =                   (struct model_shaders*)(pipeline_infos + pc * 2);
-    vi      =   (VkPipelineVertexInputStateCreateInfo*)(shaders        + pc * 2);
+    shaders =                   (struct model_shaders*)(pipeline_infos + pc * (arg->depth_pass_count + 1));
+    vi      =   (VkPipelineVertexInputStateCreateInfo*)(shaders        + pc * 1);
     ia      = (VkPipelineInputAssemblyStateCreateInfo*)(vi             + pc * 2);
     vb      =        (VkVertexInputBindingDescription*)(ia             + pc * 2);
-    va      =      (VkVertexInputAttributeDescription*)(vb             + ac * 2);
+    va      =      (VkVertexInputAttributeDescription*)(vb             + ac * 1);
 
     VkShaderModule mod_v;
     VkShaderModule mod_f;
@@ -1119,8 +1117,7 @@ model_pipelines_transform_descriptors_and_draw_info(
 
         // @TempShader
         resources->shader_modules[0] = mod_v;
-    }
-    {
+    } {
         struct file f = file_read_bin_all("shaders/manual.frag.spv", allocs->temp);
         VkShaderModuleCreateInfo ci = {
             .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
@@ -1134,15 +1131,15 @@ model_pipelines_transform_descriptors_and_draw_info(
     }
 
     {
-        VkPushConstantRange pc = {
-            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+        VkPushConstantRange pcr = {
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
             .offset = 0,
             .size = sizeof(matrix),
         };
         VkPipelineLayoutCreateInfo ci = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
             .pushConstantRangeCount = 1,
-            .pPushConstantRanges = &pc,
+            .pPushConstantRanges = &pcr,
         };
         VkResult check = vk_create_pipeline_layout(gpu->device, &ci, GAC, &resources->pipeline_layouts[pc]);
         DEBUG_VK_OBJ_CREATION(vkCreatePipelineLayout, check);
@@ -1221,7 +1218,7 @@ model_pipelines_transform_descriptors_and_draw_info(
                 .sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
                 .flags               = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
                 .stageCount          = 2, // @ShaderCount
-                .pStages             = (VkPipelineShaderStageCreateInfo*)&shaders[pc],
+                .pStages             = depth_shaders,
                 .pVertexInputState   = &vi[pc],
                 .pInputAssemblyState = &ia[pc],
                 .pViewportState      = &depth_viewport,

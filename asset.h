@@ -49,6 +49,7 @@ struct load_model_arg {
     uint                   scene_count;
     uint                   subpass_mask;
     uint                   subpasses[LOAD_MODEL_SUBPASS_COUNT];
+    uint                   depth_pass_count;
     gltf                  *model;
     struct gpu            *gpu;
     struct animation_info *animations;
@@ -56,7 +57,8 @@ struct load_model_arg {
     VkDescriptorSetLayout  dsls[SHADER_MAX_DESCRIPTOR_SET_COUNT_OUTSIDE_MODEL_SCOPE];
     uint                   db_indices[SHADER_MAX_DESCRIPTOR_SET_COUNT_OUTSIDE_MODEL_SCOPE];
     size_t                 db_offsets[SHADER_MAX_DESCRIPTOR_SET_COUNT_OUTSIDE_MODEL_SCOPE];
-    VkRenderPass           renderpass;
+    VkRenderPass           color_renderpass;
+    VkRenderPass           depth_renderpass;
     VkViewport             viewport;
     VkRect2D               scissor;
 };

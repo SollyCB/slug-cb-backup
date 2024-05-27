@@ -1283,6 +1283,23 @@ void gpu_upload_descriptor_buffer(struct gpu *gpu, uint count, VkBufferCopy *reg
 
 
 // copy into an array of combined image sampler descriptors at position i
+static inline void ds_cis_arrcpy(struct gpu *gpu, uchar *arr_start, uint i, uint arr_len, uchar *desc)
+{
+    if (gpu->descriptors.props.combinedImageSamplerDescriptorSingleArray) {
+        size_t ofs = arr_len * gpu->descriptors.props.sampledImageDescriptorSize +
+            i * gpu->descriptors.props.samplerDescriptorSize;
+
+        memcpy(arr_start + i * gpu->descriptors.props.sampledImageDescriptorSize,
+               desc, gpu->descriptors.props.sampledImageDescriptorSize);
+        memcpy(arr_start + ofs, desc + gpu->descriptors.props.sampledImageDescriptorSize,
+               gpu->descriptors.props.samplerDescriptorSize);
+    } else {
+        memcpy(arr_start + i * gpu->descriptors.props.combinedImageSamplerDescriptorSize,
+               desc, gpu->descriptors.props.combinedImageSamplerDescriptorSize);
+    }
+}
+
+// copy into an array of combined image sampler descriptors at position i if b
 static inline void ds_cis_arrcpy_if(struct gpu *gpu, uchar *arr_start, uint i, uint arr_len, uchar *desc, bool b)
 {
     if (gpu->descriptors.props.combinedImageSamplerDescriptorSingleArray) {
@@ -1304,7 +1321,7 @@ static inline void ds_cis_arrcpy_if(struct gpu *gpu, uchar *arr_start, uint i, u
 static void gpu_upload_images(
     struct gpu       *gpu,
     uint              count,
-    struct gpu_image *images,
+    struct gpu_texture *images,
     size_t           *offsets,
     VkCommandBuffer   transfer,
     VkCommandBuffer   graphics)
@@ -1405,7 +1422,7 @@ static void gpu_upload_images(
 void gpu_upload_images_with_base_offset(
     struct gpu       *gpu,
     uint              count,
-    struct gpu_image *images,
+    struct gpu_texture *images,
     size_t            base_offset,
     uint             *offsets,
     VkCommandBuffer   transfer,
@@ -1506,7 +1523,7 @@ void gpu_upload_images_with_base_offset(
     }
 }
 
-void gpu_blit_gltf_texture_mipmaps(gltf *model, struct gpu_image *images, VkCommandBuffer graphics)
+void gpu_blit_gltf_texture_mipmaps(gltf *model, struct gpu_texture *images, VkCommandBuffer graphics)
 {
     VkImageMemoryBarrier2 barr = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
     barr.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
@@ -1595,7 +1612,21 @@ size_t gpu_buffer_allocate(struct gpu *gpu, struct gpu_buffer *buf, size_t size)
     return s;
 }
 
-bool gpu_create_image(struct gpu *gpu, struct image *image, struct gpu_image *ret)
+static inline VkSampler create_sampler(struct gpu *gpu, VkSamplerCreateInfo *ci)
+{
+    if (atomic_add(&gpu->sampler_count, 1) >= gpu->props.limits.maxSamplerAllocationCount) {
+        log_print_error("sampler creation would exceed max sampler allocation count (%u)",
+                gpu->props.limits.maxSamplerAllocationCount);
+        return NULL;
+    }
+
+    VkSampler ret;
+    VkResult check = vk_create_sampler(gpu->device, ci, GAC, &ret);
+    DEBUG_VK_OBJ_CREATION(vkCreateSampler, check);
+    return ret;
+}
+
+void gpu_create_texture(struct gpu *gpu, struct image *image, struct gpu_texture *ret)
 {
     ret->image = *image;
 
@@ -1612,24 +1643,189 @@ bool gpu_create_image(struct gpu *gpu, struct image *image, struct gpu_image *re
 
     VkResult check = vk_create_image(gpu->device, &img_info, GAC, &ret->vkimage);
     DEBUG_VK_OBJ_CREATION(vkCreateImage, check);
-
-    return check == VK_SUCCESS;
 }
 
-void gpu_destroy_image(struct gpu *gpu, struct gpu_image *image)
+bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommandBuffer graphics_cmd, struct shadow_maps *maps)
+{
+    VkMemoryRequirements *mr; // alignments
+    maps->images = allocate(gpu->alloc_temp,
+                           sizeof(*maps->images) * maps->count + // NOLINT sizeof(vulkan_handle)
+                           sizeof(*maps->views)  * maps->count + // NOLINT sizeof(vulkan_handle)
+                           sizeof(*mr)           * maps->count);
+
+    maps->views =          (VkImageView*)(maps->images + maps->count);
+    mr          = (VkMemoryRequirements*)(maps->views  + maps->count);
+
+    {
+        VkImageCreateInfo ci = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = GPU_SHADOW_ATTACHMENT_FORMAT,
+            .extent = (VkExtent3D){gpu->settings.shadow_maps.width,gpu->settings.shadow_maps.height,1},
+            .mipLevels = 1,
+            .arrayLayers = 1,
+            .samples = VK_SAMPLE_COUNT_1_BIT, // gpu->settings.texture_sample_count;
+            .tiling = VK_IMAGE_TILING_OPTIMAL,
+            .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        };
+
+        for(uint i=0; i < maps->count; ++i) {
+            VkResult check = vk_create_image(gpu->device, &ci, GAC, &maps->images[i]);
+            DEBUG_VK_OBJ_CREATION(vkCreateImage, check);
+        }
+    }
+
+    uint img_sz = 0;
+    for(uint i=0; i < maps->count; ++i) {
+        vk_get_image_memory_requirements(gpu->device, maps->images[i], &mr[i]);
+        img_sz += mr[i].size + mr[i].alignment;
+    }
+
+    size_t dsl_sz = 0;
+    {
+        VkDescriptorSetLayoutBinding b = {
+            .binding = 0,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount = maps->count,
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+        };
+
+        VkDescriptorSetLayoutCreateInfo ci = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+            .bindingCount = 1,
+            .pBindings = &b,
+        };
+
+        VkResult check = vk_create_descriptor_set_layout(gpu->device, &ci, GAC, &maps->dsl);
+        DEBUG_VK_OBJ_CREATION(vkCreateDescriptorSetLayout, check);
+
+        vk_get_descriptor_set_layout_size_ext(gpu->device, maps->dsl, &dsl_sz);
+        dsl_sz = align(dsl_sz, gpu->descriptors.props.descriptorBufferOffsetAlignment);
+    }
+
+    maps->dsl_ofs = gpu_buffer_allocate(gpu, &gpu->mem.descriptor_buffer_sampler, dsl_sz);
+    if (maps->dsl_ofs == GPU_BUF_ALLOC_FAIL) {
+        log_print_error("failed to allocate shadow map descriptor memory");
+        return false;
+    } else {
+        maps->dsl_ofs = align(maps->dsl_ofs, gpu->descriptors.props.descriptorBufferOffsetAlignment);
+    }
+
+    uchar *dsl_data;
+    if (gpu->flags & GPU_DESCRIPTOR_BUFFER_NOT_HOST_VISIBLE_BIT) {
+
+        size_t ofs = gpu_buffer_allocate(gpu, &gpu->mem.transfer_buffer, dsl_sz);
+        if (ofs == GPU_BUF_ALLOC_FAIL) {
+            log_print_error("failed to allocate shadow map transfer memory");
+            return false;
+        }
+
+        VkBufferCopy bc = {
+            .srcOffset = ofs,
+            .dstOffset = maps->dsl_ofs,
+            .size = dsl_sz,
+        };
+
+        struct range r = {.offset = maps->dsl_ofs, .size = dsl_sz};
+        gpu_upload_descriptor_buffer_sampler(gpu, 1, &bc, &r, transfer_cmd, graphics_cmd);
+
+        dsl_data = gpu->mem.transfer_buffer.data + ofs;
+    } else {
+        dsl_data = gpu->mem.descriptor_buffer_sampler.data + maps->dsl_ofs;
+    }
+
+    size_t img_ofs = gpu_allocate_image_memory(gpu, img_sz);
+    if (img_ofs == GPU_BUF_ALLOC_FAIL) {
+        log_print_error("failed to allocate shadow map image memory");
+        return false;
+    }
+
+    for(uint i=0; i < maps->count; ++i) {
+        img_ofs = align(img_ofs, mr[i].alignment);
+        gpu_bind_image(gpu, maps->images[i], img_ofs);
+        img_ofs += mr[i].size;
+    }
+
+    {
+        VkImageViewCreateInfo ci = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .viewType = VK_IMAGE_VIEW_TYPE_2D,
+            .format = GPU_SHADOW_ATTACHMENT_FORMAT,
+            .subresourceRange = {
+                .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+                .levelCount = 1,
+                .layerCount = 1,
+            },
+        };
+        for(uint i=0; i < maps->count; ++i) {
+            ci.image = maps->images[i];
+            VkResult check = vk_create_image_view(gpu->device, &ci, GAC, &maps->views[i]);
+            DEBUG_VK_OBJ_CREATION(vkCreateImageView, check);
+        }
+    }
+
+    {
+        VkSamplerCreateInfo ci = {
+            .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            .magFilter = VK_FILTER_NEAREST,
+            .minFilter = VK_FILTER_NEAREST,
+            .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+            .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+            .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+
+            // @Todo I do not really know what a lot of this stuff really does,
+            // especially with regard to shadow mapping.
+            .minLod = 0,
+            .maxLod = VK_LOD_CLAMP_NONE,
+            .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+            .anisotropyEnable = flag_check(gpu->flags, GPU_SAMPLER_ANISOTROPY_ENABLE_BIT),
+            .maxAnisotropy = gpu->defaults.sampler_anisotropy,
+            .compareEnable = 0, // This I especially do not know its function.
+        };
+
+        maps->sampler = create_sampler(gpu, &ci);
+    }
+
+    for(uint i=0; i < maps->count; ++i) {
+        VkDescriptorImageInfo ii = {
+            .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            .imageView = maps->views[i],
+            .sampler = maps->sampler,
+        };
+
+        VkDescriptorGetInfoEXT gi = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
+            .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .data.pCombinedImageSampler = &ii,
+        };
+
+        uint stride = gpu->descriptors.props.combinedImageSamplerDescriptorSize;
+        assert(stride <= 512);
+        uchar d[512];
+        vk_get_descriptor_ext(gpu->device, &gi, stride, d);
+
+        ds_cis_arrcpy(gpu, dsl_data, i, maps->count, d);
+    }
+
+    return true;
+}
+
+void gpu_destroy_image(struct gpu *gpu, struct gpu_texture *image)
 {
     vk_destroy_image(gpu->device, image->vkimage, GAC);
     free_image(&image->image);
 }
 
-void gpu_destroy_image_and_view(struct gpu *gpu, struct gpu_image *image)
+void gpu_destroy_image_and_view(struct gpu *gpu, struct gpu_texture *image)
 {
     vk_destroy_image(gpu->device, image->vkimage, GAC);
     vk_destroy_image_view(gpu->device, image->view, GAC);
     free_image(&image->image);
 }
 
-struct memreq gpu_get_image_memreq(struct gpu *gpu, struct gpu_image *image)
+struct memreq gpu_texture_memreq(struct gpu *gpu, struct gpu_texture *image)
 {
     VkMemoryRequirements mr;
     vk_get_image_memory_requirements(gpu->device, image->vkimage, &mr);
@@ -1644,13 +1840,13 @@ size_t gpu_allocate_image_memory(struct gpu *gpu, size_t size)
     return ofs;
 }
 
-void gpu_bind_image(struct gpu *gpu, struct gpu_image *image, size_t ofs)
+void gpu_bind_image(struct gpu *gpu, VkImage image, size_t ofs)
 {
-    VkResult check = vk_bind_image_memory(gpu->device, image->vkimage, gpu->mem.texture_memory.mem, ofs);
+    VkResult check = vk_bind_image_memory(gpu->device, image, gpu->mem.texture_memory.mem, ofs);
     DEBUG_VK_OBJ_CREATION(vkBindImageMemory, check);
 }
 
-void gpu_create_image_view(struct gpu *gpu, struct gpu_image *image)
+void gpu_create_texture_view(struct gpu *gpu, struct gpu_texture *image)
 {
     VkImageViewCreateInfo view_info = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
     view_info.image = image->vkimage;
@@ -1665,12 +1861,6 @@ void gpu_create_image_view(struct gpu *gpu, struct gpu_image *image)
 
 VkSampler gpu_create_gltf_sampler(struct gpu *gpu, gltf_sampler *info)
 {
-    if (atomic_add(&gpu->sampler_count, 1) >= gpu->props.limits.maxSamplerAllocationCount) {
-        log_print_error("Exceeded max sampler allocation count %u",
-                gpu->props.limits.maxSamplerAllocationCount);
-        return NULL;
-    }
-
     VkSamplerCreateInfo ci = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
     ci.magFilter = (VkFilter)info->mag_filter;
     ci.minFilter = (VkFilter)info->min_filter;
@@ -1686,10 +1876,7 @@ VkSampler gpu_create_gltf_sampler(struct gpu *gpu, gltf_sampler *info)
     ci.maxAnisotropy = gpu->defaults.sampler_anisotropy;
     ci.compareEnable = 0; // This I especially do not know its function.
 
-    VkSampler ret;
-    VkResult check = vk_create_sampler(gpu->device, &ci, GAC, &ret);
-    DEBUG_VK_OBJ_CREATION(vkCreateSampler, check);
-    return ret;
+    return create_sampler(gpu, &ci);
 }
 
 void gpu_destroy_sampler(struct gpu *gpu, VkSampler sampler)
@@ -1830,7 +2017,7 @@ void create_color_renderpass(struct gpu *gpu, struct renderpass *rp)
 
 // @Optimise Move to thread fn
 void create_shadow_renderpass(struct gpu *gpu, uint shadow_map_count,
-                              VkImageView *shadow_maps, struct renderpass *rp)
+                              struct shadow_maps *shadow_maps, struct renderpass *rp)
 {
     VkAttachmentReference *ar;
     VkSubpassDescription *ds;
@@ -1902,7 +2089,7 @@ void create_shadow_renderpass(struct gpu *gpu, uint shadow_map_count,
         .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .renderPass      = rp->rp,
         .attachmentCount = shadow_map_count,
-        .pAttachments    = shadow_maps,
+        .pAttachments    = shadow_maps->views,
         .width           = gpu->settings.shadow_maps.width,
         .height          = gpu->settings.shadow_maps.height,
         .layers          = 1,
@@ -1950,7 +2137,7 @@ void begin_color_renderpass(VkCommandBuffer cmd, struct renderpass *rp, VkRect2D
     vk_cmd_begin_renderpass(cmd, &bi, VK_SUBPASS_CONTENTS_INLINE);
 }
 
-void begin_shadow_renderpass(VkCommandBuffer cmd, struct renderpass *rp, struct gpu *gpu, uint count)
+void begin_depth_renderpass(VkCommandBuffer cmd, struct renderpass *rp, struct gpu *gpu, uint count)
 {
     assert(gpu->settings.shadow_maps.width && gpu->settings.shadow_maps.height);
 

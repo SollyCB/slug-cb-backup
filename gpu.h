@@ -108,22 +108,31 @@ struct gpu_memory {
     struct gpu_buffer descriptor_buffer_sampler;
 };
 
-struct gpu_image {
+struct gpu_texture {
     VkImage      vkimage;
     VkImageView  view;
     size_t       size;
     struct image image;
 };
 
+struct shadow_maps {
+    uint count;
+    VkImage *images;
+    VkImageView *views;
+    VkSampler sampler;
+    VkDescriptorSetLayout dsl;
+    size_t dsl_ofs;
+};
+
 #define GPU_MAX_DESCRIPTOR_SIZE 128
 
-struct gpu_texture {
-    struct gpu_image image;
+struct gpu_texture_deprecated {
+    struct gpu_texture image;
     uchar descriptor[GPU_MAX_DESCRIPTOR_SIZE];
 };
 
 struct gpu_defaults {
-    struct gpu_texture texture;
+    struct gpu_texture_deprecated texture;
     VkSampler          sampler;
     uint32             dynamic_state_count;
     VkDynamicState     dynamic_states[2];
@@ -185,13 +194,14 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args);
 void gpu_poll_hotloader(struct gpu *gpu);
 void shutdown_gpu(struct gpu *gpu);
 
-bool gpu_create_image(struct gpu *gpu, struct image *image, struct gpu_image *ret);
-void gpu_destroy_image(struct gpu *gpu, struct gpu_image *image);
-void gpu_destroy_image_and_view(struct gpu *gpu, struct gpu_image *image);
-struct memreq gpu_get_image_memreq(struct gpu *gpu, struct gpu_image *image);
+bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommandBuffer graphics_cmd, struct shadow_maps *maps);
+void gpu_create_texture(struct gpu *gpu, struct image *image, struct gpu_texture *ret);
+void gpu_destroy_image(struct gpu *gpu, struct gpu_texture *image);
+void gpu_destroy_image_and_view(struct gpu *gpu, struct gpu_texture *image);
+struct memreq gpu_texture_memreq(struct gpu *gpu, struct gpu_texture *image);
 size_t gpu_allocate_image_memory(struct gpu *gpu, size_t size);
-void gpu_bind_image(struct gpu *gpu, struct gpu_image *image, size_t ofs);
-void gpu_create_image_view(struct gpu *gpu, struct gpu_image *image);
+void gpu_bind_image(struct gpu *gpu, VkImage image, size_t ofs);
+void gpu_create_texture_view(struct gpu *gpu, struct gpu_texture *image);
 VkSampler gpu_create_gltf_sampler(struct gpu *gpu, gltf_sampler *info);
 void gpu_destroy_sampler(struct gpu *gpu, VkSampler sampler);
 
@@ -296,7 +306,7 @@ static inline void reset_gpu_buffers(struct gpu *gpu)
 void gpu_upload_images_with_base_offset(
     struct gpu       *gpu,
     uint              count,
-    struct gpu_image *images,
+    struct gpu_texture *images,
     size_t            base_offset,
     uint             *offsets,
     VkCommandBuffer   transfer,
@@ -341,7 +351,7 @@ static inline void gpu_upload_descriptor_buffer_sampler(
     gpu_upload_descriptor_buffer(gpu, count, regions, range, false, transfer_cmd, graphics_cmd);
 }
 
-void gpu_blit_gltf_texture_mipmaps(gltf *model, struct gpu_image *images, VkCommandBuffer graphics);
+void gpu_blit_gltf_texture_mipmaps(gltf *model, struct gpu_texture *images, VkCommandBuffer graphics);
 
 struct renderpass {
     VkRenderPass  rp;
@@ -349,7 +359,7 @@ struct renderpass {
 };
 
 void create_color_renderpass(struct gpu *gpu, struct renderpass *rp);
-void create_shadow_renderpass(struct gpu *gpu, uint shadow_map_count, VkImageView *shadow_maps, struct renderpass *rp);
+void create_shadow_renderpass(struct gpu *gpu, uint shadow_map_count, struct shadow_maps *shadow_maps, struct renderpass *rp);
 void begin_color_renderpass(VkCommandBuffer cmd, struct renderpass *rp, VkRect2D area);
 
 static inline void end_renderpass(VkCommandBuffer cmd) {vk_cmd_end_renderpass(cmd);}
