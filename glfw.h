@@ -1,20 +1,27 @@
 #ifndef SOL_GLFW_H_INCLUDE_GUARD_
 #define SOL_GLFW_H_INCLUDE_GUARD_
 
+extern float POS_X;
+extern float POS_Y;
+
 #include "sol_vulkan.h"
 #include "GLFW/glfw3.h"
 
-struct glfw {
+struct window {
     GLFWwindow *window;
     int width, height;
 };
 
-void init_glfw(struct glfw *glfw);
+void init_glfw(struct window *glfw);
 
-void shutdown_glfw(struct glfw *glfw);
+void shutdown_glfw(struct window *glfw);
 
-void glfw_poll_and_get_input(struct glfw *glfw);
+void glfw_poll_and_get_input(struct window *glfw);
 static inline void poll_glfw() {glfwPollEvents();}
 
+static inline void cursorpos(struct window *w, double *x, double *y)
+{
+    glfwGetCursorPos(w->window, x, y);
+}
 
 #endif // include guard

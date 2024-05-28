@@ -85,5 +85,6 @@ void main() {
         fs_info.dir_lights[i].color = vec3(vs_info.dir_lights[i].color);
         fs_info.dir_lights[i].ts_light_pos = tbn * vec3(vs_info.dir_lights[i].position);
         fs_info.dir_lights[i].ls_frag_pos = vec3(vs_info.dir_lights[i].space * world_pos);
+        // debugPrintfEXT("%f, %f\n", fs_info.dir_lights[i].ls_frag_pos.x * 0.5 + 0.5, fs_info.dir_lights[i].ls_frag_pos.y * 0.5 + 0.5);
     }
 }

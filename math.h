@@ -207,7 +207,6 @@ static inline float vector_len(vector v) {
 static inline vector normalize(vector v) {
     float f = vector_len(v);
     vector r = scalar_div_vector(v, f);
-    r.w = 0;
     return r;
 }
 
@@ -219,7 +218,7 @@ static inline vector lerp_vector(vector a, vector b, float c) {
 }
 
 // angle in radians
-    static inline vector quaternion(float angle, vector v)
+static inline vector quaternion(float angle, vector v)
 {
     float f = angle/2;
     float sf = sinf(f);
@@ -301,36 +300,36 @@ static inline void count_identity_matrix(uint count, matrix *m)
     }
 }
 
-static inline void scale_matrix(vector *v, matrix *m)
+static inline void scale_matrix(vector v, matrix *m)
 {
     memset(m, 0, sizeof(*m));
-    m->m[0] = v->x;
-    m->m[5] = v->y;
-    m->m[10] = v->z;
+    m->m[0] = v.x;
+    m->m[5] = v.y;
+    m->m[10] = v.z;
     m->m[15] = 1;
 }
 
-static inline void translation_matrix(vector *v, matrix *m)
+static inline void translation_matrix(vector v, matrix *m)
 {
     identity_matrix(m);
-    m->m[12] = v->x;
-    m->m[13] = v->y;
-    m->m[14] = v->z;
+    m->m[12] = v.x;
+    m->m[13] = v.y;
+    m->m[14] = v.z;
 }
 
-static inline void rotation_matrix(vector *r, matrix *m)
+static inline void rotation_matrix(vector r, matrix *m)
 {
-    __m128 a = (__m128)_mm_load_si128((__m128i*)r);
+    __m128 a = (__m128)_mm_load_si128((__m128i*)&r.x);
     __m128 b = a;
     a = _mm_mul_ps(a,b);
     float *f = (float*)&a;
 
-    float xy = 2 * r->x * r->y;
-    float xz = 2 * r->x * r->z;
-    float yz = 2 * r->y * r->z;
-    float wx = 2 * r->w * r->x;
-    float wy = 2 * r->w * r->y;
-    float wz = 2 * r->w * r->z;
+    float xy = 2 * r.x * r.y;
+    float xz = 2 * r.x * r.z;
+    float yz = 2 * r.y * r.z;
+    float wx = 2 * r.w * r.x;
+    float wy = 2 * r.w * r.y;
+    float wz = 2 * r.w * r.z;
 
     identity_matrix(m);
 
@@ -369,9 +368,9 @@ static inline void mul_matrix(matrix *x, matrix *y, matrix *z)
 static inline void convert_trs(struct trs *trs, matrix *ret)
 {
     matrix t,r,s;
-    translation_matrix(&trs->t, &t);
-    rotation_matrix(&trs->r, &r);
-    scale_matrix(&trs->s, &s);
+    translation_matrix(trs->t, &t);
+    rotation_matrix(trs->r, &r);
+    scale_matrix(trs->s, &s);
     mul_matrix(&t,&r,&r);
     mul_matrix(&r,&s,ret);
 }
@@ -518,11 +517,11 @@ static inline void view_matrix(vector pos, vector fwd, matrix *m)
     matrix mr;
     float angle = acosf(dot(fo, fn));
     vector rot = quaternion(angle, ax);
-    rotation_matrix(&rot, &mr);
+    rotation_matrix(rot, &mr);
 
     matrix mt;
     vector vt = get_vector(-pos.x, -pos.y, -pos.z, 0);
-    translation_matrix(&vt, &mt);
+    translation_matrix(vt, &mt);
 
     mul_matrix(&mr, &mt, m);
 }

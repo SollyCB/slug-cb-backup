@@ -2,31 +2,18 @@
 #include "log.h"
 #include "defs.h"
 
-static void glfw_mouse_callback(GLFWwindow *window, double x, double y) {
-    /*
-    if (!cam->have_turned) {
-        cam->last_x = x;
-        cam->last_y = y;
-        cam->have_turned = true;
-    }
-    float dx = cam->last_x - x;
-    float dy = cam->last_y - y;
-    cam->last_x = x;
-    cam->last_y = y;
-    camera_turn(cam, dx, dy);
-    */
+float POS_X = 0;
+float POS_Y = 0;
+
+static void glfw_mouse_callback(GLFWwindow *window, double x, double y)
+{
+    POS_X = x;
+    POS_Y = y;
 }
 
 static void glfw_cursor_enter_callback(GLFWwindow* window, int entered)
 {
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-    /*
-    if (entered) {
-        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    } else {
-        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-    }
-    */
+    // glfwSetCursorPos(window, (float)SCR_W / 2, (float)SCR_H / 2);
 }
 
 static void glfw_error_callback(int e, const char *desc)
@@ -34,7 +21,7 @@ static void glfw_error_callback(int e, const char *desc)
     log_print_error("glfw error code %u, %s", e, desc);
 }
 
-void init_glfw(struct glfw *glfw) {
+void init_glfw(struct window *glfw) {
     if (!glfwInit())
         log_print_error("failed to init glfw");
 
@@ -46,15 +33,10 @@ void init_glfw(struct glfw *glfw) {
     log_print_error_if(!glfw->window, "failed to create glfw window");
 
     glfwSetErrorCallback(glfw_error_callback);
-    glfwSetInputMode(glfw->window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-
-    // @Todo window resizing
-
-    glfwSetCursorEnterCallback(glfw->window, glfw_cursor_enter_callback);
-    glfwSetCursorPosCallback(glfw->window, glfw_mouse_callback);
+    glfwSetInputMode(glfw->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 }
 
-void shutdown_glfw(struct glfw *glfw) {
+void shutdown_glfw(struct window *glfw) {
     glfwDestroyWindow(glfw->window);
     glfwTerminate();
 }
@@ -68,7 +50,7 @@ enum InputValues {
     INPUT_JUMP          = GLFW_KEY_SPACE,
 };
 
-void glfw_poll_and_get_input(struct glfw *glfw) {
+void glfw_poll_and_get_input(struct window *glfw) {
     glfwPollEvents();
 
     int right = 0;

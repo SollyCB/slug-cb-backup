@@ -199,7 +199,7 @@ static void model_cleanup(struct model_resources *resources)
     vk_destroy_shader_module(gpu->device, resources->shader_modules[1], GAC);
 
     for(uint i=0; i < resources->image_count; ++i)
-        gpu_destroy_image(gpu, &resources->images[i]);
+        gpu_destroy_image_and_view(gpu, &resources->images[i]);
 
     for(uint i=0; i < resources->sampler_count; ++i)
         gpu_destroy_sampler(gpu, resources->samplers[i]);
@@ -1018,7 +1018,7 @@ model_pipelines_transform_descriptors_and_draw_info(
 
     // @Todo This is supposed to be an 'over' operator blend. I am assuming
     // that that is the same as the vulkan VK_BLEND_OVER.
-    VkPipelineRasterizationStateCreateInfo rasterization[2] = {
+    VkPipelineRasterizationStateCreateInfo color_rasterization[2] = {
         (VkPipelineRasterizationStateCreateInfo) {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
             .polygonMode = VK_POLYGON_MODE_LINE & maxif(arg->flags & LOAD_MODEL_WIREFRAME_BIT),
@@ -1028,9 +1028,16 @@ model_pipelines_transform_descriptors_and_draw_info(
         (VkPipelineRasterizationStateCreateInfo) {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
             .polygonMode = VK_POLYGON_MODE_LINE & maxif(arg->flags & LOAD_MODEL_WIREFRAME_BIT),
-            .cullMode = VK_CULL_MODE_NONE, // VK_CULL_MODE_BACK_BIT,
+            .cullMode = VK_CULL_MODE_BACK_BIT,
             .lineWidth = 1.0f,
         },
+    };
+
+    VkPipelineRasterizationStateCreateInfo depth_rasterization = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+            .polygonMode = VK_POLYGON_MODE_LINE & maxif(arg->flags & LOAD_MODEL_WIREFRAME_BIT),
+            .cullMode = VK_CULL_MODE_FRONT_BIT,
+            .lineWidth = 1.0f,
     };
 
     // @Todo I want to look at multisampling. Idk how important it is for a good image.
@@ -1180,7 +1187,7 @@ model_pipelines_transform_descriptors_and_draw_info(
                 .pVertexInputState   = &vi[pc],
                 .pInputAssemblyState = &ia[pc],
                 .pViewportState      = &color_viewport,
-                .pRasterizationState = &rasterization[flag_check(materials[prim->material].flags, MODEL_MATERIAL_CULL_BACK_BIT)],
+                .pRasterizationState = &color_rasterization[flag_check(materials[prim->material].flags, MODEL_MATERIAL_CULL_BACK_BIT)],
                 .pMultisampleState   = &multisample,
                 .pDepthStencilState  = &color_depth,
                 .pColorBlendState    = &blend[flag_check(materials[prim->material].flags, MODEL_MATERIAL_BLEND_BIT)],
@@ -1727,7 +1734,7 @@ static inline void model_anim_transform_translation(struct model_animation_times
     vector v1 = get_vector(uvec1[0], uvec1[1], uvec1[2], 0);
     vector v2 = get_vector(uvec2[0], uvec2[1], uvec2[2], 0);
     vector vt = lerp_vector(v1, v2, timestep.lerp_constant);
-    translation_matrix(&vt, ret);
+    translation_matrix(vt, ret);
 }
 
 static inline void model_anim_transform_rotation(struct model_animation_timestep timestep,
@@ -1744,7 +1751,7 @@ static inline void model_anim_transform_rotation(struct model_animation_timestep
     convert_accessor((timestep.frame_i+0) * 4, accessor_flags, data, 4, (float*)&q1);
     convert_accessor((timestep.frame_i+1) * 4, accessor_flags, data, 4, (float*)&q2);
     vector q = lerp_vector(q1, q2, timestep.lerp_constant);
-    rotation_matrix(&q, ret);
+    rotation_matrix(q, ret);
 }
 
 static inline void model_anim_transform_scale(struct model_animation_timestep timestep,
@@ -1755,7 +1762,7 @@ static inline void model_anim_transform_scale(struct model_animation_timestep ti
     vector v1 = get_vector(uvec1[0], uvec1[1], uvec1[2], 0);
     vector v2 = get_vector(uvec2[0], uvec2[1], uvec2[2], 0);
     vector vs = lerp_vector(v1, v2, timestep.lerp_constant);
-    scale_matrix(&vs, ret);
+    scale_matrix(vs, ret);
 }
 
 typedef void (*model_anim_transform_fn)(struct model_animation_timestep, uint, float*, matrix*);
@@ -1767,17 +1774,17 @@ model_anim_transform_fn MODEL_ANIM_TRANSFORM_FNS[3] = {
 
 static inline void model_node_translation(struct trs *trs, matrix *ret)
 {
-    translation_matrix(&trs->t, ret);
+    translation_matrix(trs->t, ret);
 }
 
 static inline void model_node_rotation(struct trs *trs, matrix *ret)
 {
-    rotation_matrix(&trs->r, ret);
+    rotation_matrix(trs->r, ret);
 }
 
 static inline void model_node_scale(struct trs *trs, matrix *ret)
 {
-    scale_matrix(&trs->s, ret);
+    scale_matrix(trs->s, ret);
 }
 
 typedef void (*model_node_trs_fn)(struct trs *trs, matrix *ret);

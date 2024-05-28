@@ -184,7 +184,7 @@ struct gpu {
 };
 
 struct init_gpu_args {
-    struct glfw *glfw;
+    struct window *glfw;
     thread_pool *threads;
     allocator   *alloc_heap;
     allocator   *alloc_temp;
@@ -240,7 +240,7 @@ struct vs_info_descriptor { // @BadName
     size_t bb_offset;
 };
 
-struct vs_info* init_vs_info(struct gpu *gpu, struct vs_info_descriptor *ret);
+struct vs_info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vs_info_descriptor *ret);
 
 // @Todo All these update functions rely on UMA
 static inline void update_vs_info_mat_model(struct gpu *gpu, size_t bb_ofs, matrix *model)
@@ -363,6 +363,7 @@ void create_color_renderpass(struct gpu *gpu, struct renderpass *rp);
 void create_shadow_renderpass(struct gpu *gpu, uint shadow_map_count, struct shadow_maps *shadow_maps, struct renderpass *rp);
 void begin_color_renderpass(VkCommandBuffer cmd, struct renderpass *rp, VkRect2D area);
 void begin_shadow_renderpass(VkCommandBuffer cmd, struct renderpass *rp, struct gpu *gpu, uint count);
+void free_shadow_maps(struct gpu *gpu, struct shadow_maps *maps);
 
 static inline void end_renderpass(VkCommandBuffer cmd) {vk_cmd_end_renderpass(cmd);}
 static inline void destroy_renderpass(struct gpu *gpu, struct renderpass *rp)
@@ -586,5 +587,16 @@ struct draw_box_rsc {
 void draw_box(VkCommandBuffer cmd, struct gpu *gpu, struct box *box, bool wireframe,
               VkRenderPass rp, uint subpass, struct draw_box_rsc *rsc, matrix *space);
 void draw_box_cleanup(struct gpu *gpu, struct draw_box_rsc *rsc);
+
+struct draw_floor_rsc {
+    VkShaderModule modules[2];
+    VkPipelineLayout layout;
+    VkPipeline pipeline;
+};
+
+void draw_floor(VkCommandBuffer cmd, struct gpu *gpu, VkRenderPass rp, uint subpass,
+                VkDescriptorSetLayout dsls[2], uint db_indices[2], size_t db_offsets[2],
+                struct draw_floor_rsc *rsc);
+void draw_floor_cleanup(struct gpu *gpu, struct draw_floor_rsc *rsc);
 
 #endif // include guard

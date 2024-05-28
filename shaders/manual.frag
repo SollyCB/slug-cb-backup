@@ -37,6 +37,8 @@ float in_shadow(uint i) {
     vec3 pc = fs_info.dir_lights[i].ls_frag_pos.xyz;
     pc = pc * 0.5 + 0.5;
     float d = texture(shadow_maps[i], pc.xy).r;
+    // if (d != 0)
+        // debugPrintfEXT("%f, %f\n", d, pc.z);
     return pc.z > d ? 1 : 0;
 }
 

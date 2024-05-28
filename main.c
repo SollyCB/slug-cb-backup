@@ -21,6 +21,7 @@
 #include "vulkan_errors.h"
 #include "timer.h"
 #include "shadows.h"
+#include "camera.h"
 
 #define DRAW_SUBPASS 0
 #define HTP_SUBPASS  1
@@ -52,7 +53,7 @@ typedef struct {
     allocator_info allocs;
     thread_pool threads;
     struct gpu gpu;
-    struct glfw glfw;
+    struct window glfw;
 } prog_resources;
 
 static void prog_init(prog_resources *pr)
@@ -116,8 +117,24 @@ int main() {
     gltf model = parse_gltf("models/cube-static/Cube.gltf", &pr.gpu.shader_dir,
                             &conf, &pr.allocs.temp, &pr.allocs.temp, &model_size);
 
+
+    struct camera cam;
+    {
+        cam.pos = vector3(0, 0, 7);
+        cam.dir = vector3(0, 0, 1);
+        cam.fov = FOV;
+        cam.sens = 0.001;
+        cam.speed = 1;
+
+        double r,u;
+        cursorpos(&pr.glfw, &r, &u);
+
+        cam.x = r;
+        cam.y = u;
+    }
+
     struct vs_info_descriptor vs_info_desc;
-    struct vs_info *vs_info = init_vs_info(&pr.gpu, &vs_info_desc);
+    struct vs_info *vs_info = init_vs_info(&pr.gpu, cam.pos, cam.dir, &vs_info_desc);
 
     VkCommandPool transfer_pool = create_transient_transfer_command_pool(&pr.gpu);
     VkCommandPool graphics_pool = create_transient_graphics_command_pool(&pr.gpu);
@@ -128,6 +145,7 @@ int main() {
     VkSemaphore sem_graphics_complete = create_binary_semaphore(&pr.gpu);
 
     struct draw_box_rsc draw_box_rsc;
+    struct draw_floor_rsc df_rsc;
 
     bool32 t_cleanup[2] = {0};
 
@@ -141,14 +159,19 @@ int main() {
 
     struct box scene_bb;
 
-    while(1) {
+    // for(uint frame_count=0; frame_count < 100; ++frame_count) {
+    for(;;) {
+        poll_glfw();
+
         allocator_reset_linear(&pr.allocs.temp);
         reset_gpu_buffers(&pr.gpu);
 
         {
+            update_camera(&cam, &pr.glfw);
+            // println_vector(cam.dir);
+
             matrix mat_view;
-            // view_matrix(get_vector(0, 0, 7), get_vector(sinf(t) / 2, 0, 1), &mat_view);
-            view_matrix(get_vector(0, 0, 7, 0), get_vector(0, 0, 1, 0), &mat_view);
+            view_matrix(cam.pos, cam.dir, &mat_view);
 
             dt = t;
             t = get_float_time_proc();
@@ -298,6 +321,8 @@ int main() {
 
             begin_color_renderpass(draw_cmd, &color_rp, pr.gpu.settings.scissor);
 
+            // draw_floor(draw_cmd, &pr.gpu, color_rp.rp, 0, lma.dsls, lma.db_indices, lma.db_offsets, &df_rsc);
+
             draw_model_color(draw_cmd, lmr.draw_info);
 
             #if 0
@@ -351,10 +376,11 @@ int main() {
         fence_wait_secs_and_reset(&pr.gpu, fence, 3);
         signal_thread_true(&t_cleanup[FRAME_I]);
 
-        draw_box_cleanup(&pr.gpu, &draw_box_rsc);
+        // draw_floor_cleanup(&pr.gpu, &df_rsc);
 
         destroy_renderpass(&pr.gpu, &color_rp);
         htp_free_resources(&pr.gpu, &htp_rsc);
+        free_shadow_maps(&pr.gpu, &shadow_maps);
 
         reset_command_pool(&pr.gpu, transfer_pool);
         reset_command_pool(&pr.gpu, graphics_pool);
@@ -364,6 +390,9 @@ int main() {
         while(ONE_FRAME)
             ;
     }
+
+    vk_destroy_command_pool(pr.gpu.device, transfer_pool, GAC);
+    vk_destroy_command_pool(pr.gpu.device, graphics_pool, GAC);
 
     store_shader_dir(&pr.gpu.shader_dir);
     prog_shutdown(&pr);
