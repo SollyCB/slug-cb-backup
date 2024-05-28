@@ -121,7 +121,7 @@ struct shadow_maps {
     VkImageView *views;
     VkSampler sampler;
     VkDescriptorSetLayout dsl;
-    size_t dsl_ofs;
+    size_t db_offset;
 };
 
 #define GPU_MAX_DESCRIPTOR_SIZE 128
@@ -242,6 +242,7 @@ struct vs_info_descriptor { // @BadName
 
 struct vs_info* init_vs_info(struct gpu *gpu, struct vs_info_descriptor *ret);
 
+// @Todo All these update functions rely on UMA
 static inline void update_vs_info_mat_model(struct gpu *gpu, size_t bb_ofs, matrix *model)
 {
     struct vs_info *vs = (struct vs_info*)(gpu->mem.bind_buffer.data + bb_ofs);
@@ -384,6 +385,23 @@ static inline void bind_descriptor_buffers(VkCommandBuffer cmd, struct gpu *gpu)
         .usage = gpu->mem.descriptor_buffer_sampler.usage,
     };
     vk_cmd_bind_descriptor_buffers_ext(cmd, 2, bi);
+}
+
+// copy into an array of combined image sampler descriptors at position i
+void ds_cis_arrcpy(struct gpu *gpu, uchar *arr_start, uint i, uint arr_len, uchar *desc)
+{
+    if (gpu->descriptors.props.combinedImageSamplerDescriptorSingleArray) {
+        memcpy(arr_start + i * gpu->descriptors.props.combinedImageSamplerDescriptorSize,
+               desc, gpu->descriptors.props.combinedImageSamplerDescriptorSize);
+    } else {
+        size_t ofs = arr_len * gpu->descriptors.props.sampledImageDescriptorSize +
+            i * gpu->descriptors.props.samplerDescriptorSize;
+
+        memcpy(arr_start + i * gpu->descriptors.props.sampledImageDescriptorSize,
+               desc, gpu->descriptors.props.sampledImageDescriptorSize);
+        memcpy(arr_start + ofs, desc + gpu->descriptors.props.sampledImageDescriptorSize,
+               gpu->descriptors.props.samplerDescriptorSize);
+    }
 }
 
 VkCommandPool create_commandpool(VkDevice device, uint queue_family_index, uint flags);
@@ -557,5 +575,16 @@ static inline void fence_wait_secs_and_reset(struct gpu *gpu, VkFence fence, uin
     vk_wait_for_fences(gpu->device, 1, &fence, 1, time * 1e9);
     vk_reset_fences(gpu->device, 1, &fence);
 }
+
+struct draw_box_rsc {
+    VkPipelineLayout layout;
+    VkPipeline pipeline;
+    VkShaderModule modules[2];
+};
+
+// @Todo Only works on UMA
+void draw_box(VkCommandBuffer cmd, struct gpu *gpu, struct box *box, bool wireframe,
+              VkRenderPass rp, uint subpass, struct draw_box_rsc *rsc, matrix *space);
+void draw_box_cleanup(struct gpu *gpu, struct draw_box_rsc *rsc);
 
 #endif // include guard

@@ -48,7 +48,7 @@ struct load_model_arg {
     uint                   animation_count;
     uint                   scene_count;
     uint                   subpass_mask;
-    uint                   subpasses[LOAD_MODEL_SUBPASS_COUNT];
+    uint                   color_subpass;
     uint                   depth_pass_count;
     gltf                  *model;
     struct gpu            *gpu;

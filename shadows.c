@@ -1,6 +1,6 @@
 #include "shadows.h"
 
-void scene_bounding_box(uint count, matrix *positions, gltf *models, struct bounding_box *bb)
+void scene_bounding_box(uint count, matrix *positions, gltf *models, struct box *bb)
 {
     memset(bb, 0, sizeof(*bb));
 
@@ -49,7 +49,6 @@ void get_frustum(float fov, float near, float far, struct frustum *ret)
 {
     float e = focal_length(fov);
     float a = fov / 2;
-    float b = atanf(a / e);
 
     float den_x = sqrtf(powf(e, 2) + 1);
     float den_y = sqrtf(powf(e, 2) + powf(a, 2));
@@ -58,12 +57,12 @@ void get_frustum(float fov, float near, float far, struct frustum *ret)
     float zx = -1 / den_x;
     float zy = -a / den_y;
 
-    vector pn = vector4( 0, 0, -1, -near);
-    vector pf = vector4( 0, 0,  1,  far);
-    vector pl = vector4( x, 0, zx,  0);
-    vector pr = vector4(-x, 0, zx,  0);
-    vector pb = vector4( y, 0, zy,  0);
-    vector pt = vector4(-y, 0, zy,  0); // @Note +y is up
+    vector pn = vector4( 0,  0, -1, -near);
+    vector pf = vector4( 0,  0,  1,  far);
+    vector pl = vector4( x,  0, zx,  0);
+    vector pr = vector4(-x,  0, zx,  0);
+    vector pb = vector4( 0,  y, zy,  0);
+    vector pt = vector4( 0, -y, zy,  0); // @Note +y is up
 
     ret->tl_near = intersect_three_planes(pn, pl, pt);
     ret->tr_near = intersect_three_planes(pn, pr, pt);
@@ -104,15 +103,26 @@ void minmax_frustum_points(struct frustum *f, matrix *space, struct minmax *minm
 }
 
 // min max x and y, scene bounding box (credit dx-sdk-samples for the implementation)
-struct minmax near_far(struct minmax x, struct minmax y, struct bounding_box *bb)
+struct minmax near_far(struct minmax x, struct minmax y, struct box *bb)
 {
-    uint indices[] = { // Idk if this is best statically initialized, but probably.
+    /* uint SDK_VERSION_indices[] = { // Idk if this is best statically initialized, but probably.
         0,1,2,  1,2,3,
         4,5,6,  5,6,7,
         0,2,4,  2,4,6,
         1,3,5,  3,5,7,
         0,1,4,  1,4,5,
         2,3,6,  3,6,7,
+    }; */
+
+    // @Note These indices differ from the order used in the SDK example. I do not know
+    // if theirs match my bounding box ordering. The SDK indices are above
+    uint indices[] = {
+        0,1,2,  2,3,0,
+        0,1,5,  0,5,4,
+        0,4,3,  3,7,4,
+        1,5,2,  2,6,5,
+        3,7,6,  6,2,3,
+        4,5,6,  6,7,4,
     };
 
     float edges[] = {x.min,x.max,

@@ -2,17 +2,19 @@
 
 #extension GL_EXT_debug_printf : enable
 
-layout(set = 2, binding = 0) uniform Material_Ubo {
+layout(set = 1, binding = 0) uniform sampler2D shadow_maps[1];
+
+layout(set = 3, binding = 0) uniform Material_Ubo {
     vec4 bbbb; // float base_color[4];
     vec4 mrno; // float metallic_factor; float roughness_factor; float normal_scale; float occlusion_strength;
     vec4 eeea; // float emissive_factor[3]; float alpha_cutoff;
 } material_ubo;
 
-layout(set = 3, binding = 0) uniform sampler2D material_textures[2];
+layout(set = 4, binding = 0) uniform sampler2D material_textures[2];
 
 layout(location = 0) out vec4 fc;
 
-flat struct Directional_Light {
+struct Directional_Light {
     vec3 color;
     vec3 ts_light_pos;
     vec3 ls_frag_pos;
@@ -30,6 +32,13 @@ layout(location = 1) in struct Fragment_Info {
 
     Directional_Light dir_lights[2];
 } fs_info;
+
+float in_shadow(uint i) {
+    vec3 pc = fs_info.dir_lights[i].ls_frag_pos.xyz;
+    pc = pc * 0.5 + 0.5;
+    float d = texture(shadow_maps[i], pc.xy).r;
+    return pc.z > d ? 1 : 0;
+}
 
 const float PI = 3.1415926;
 
@@ -98,6 +107,8 @@ void main() {
         vec3 diff = (vec3(1) - F) * (1 / PI) * vec3(0.3) * mix(base_color.rgb, vec3(0), metallic);
         vec3 spec = (F * D * G) / (4 * abs(dot(V, N)) * abs(dot(L, N)));
         vec3 matbrdf = diff + spec;
+
+        matbrdf *= 1 - in_shadow(i);
 
         light += vec3(fs_info.dir_lights[i].color.r * matbrdf.r,
                       fs_info.dir_lights[i].color.g * matbrdf.g,

@@ -39,6 +39,10 @@ typedef struct {
     float w;
 } vector cl_align(16);
 
+struct box {
+    vector p[8];
+};
+
 struct trs {
     vector t;
     vector r;
@@ -554,7 +558,7 @@ static inline void ortho_matrix(float l, float r, float t, float b,
     matrix4(vector4(2 / (r-l), 0, 0,  0),
             vector4(0, 2 / (t-b), 0,  0),
             vector4(0, 0, -2 / (f-n), 0),
-            vector4((r+l) / (r-l), (t+b) / (t-b), (f+n) / (f-n), 1),
+            vector4(-(r+l) / (r-l), -(t+b) / (t-b), -(f+n) / (f-n), 1),
             m);
 }
 
@@ -562,10 +566,12 @@ static inline void ortho_matrix(float l, float r, float t, float b,
 static inline vector intersect_three_planes(vector l1, vector l2, vector l3)
 {
     matrix m;
-    vector d = vector3(-l1.w, -l2.w, -l3.w);
     matrix3(vector3(l1.x, l2.x, l3.x), vector3(l1.y, l2.y, l3.y), vector3(l1.z, l2.z, l3.z), &m);
 
-    invert(&m, &m);
+    if (!invert(&m, &m))
+        log_print_error("matrix is not invertible");
+
+    vector d = vector3(-l1.w, -l2.w, -l3.w);
     return mul_matrix_vector(&m, d);
 }
 

@@ -127,6 +127,8 @@ int main() {
     VkSemaphore sem_transfer_complete = create_binary_semaphore(&pr.gpu);
     VkSemaphore sem_graphics_complete = create_binary_semaphore(&pr.gpu);
 
+    struct draw_box_rsc draw_box_rsc;
+
     bool32 t_cleanup[2] = {0};
 
     bool jumping = 0;
@@ -137,12 +139,11 @@ int main() {
     float t = 0;
     float dt = 0;
 
+    struct box scene_bb;
+
     while(1) {
         allocator_reset_linear(&pr.allocs.temp);
         reset_gpu_buffers(&pr.gpu);
-
-        struct bounding_box scene_bb;
-        scene_bounding_box(1, &IDENTITY_MATRIX, &model, &scene_bb);
 
         {
             matrix mat_view;
@@ -179,6 +180,8 @@ int main() {
 
             update_vs_info_mat_model(&pr.gpu, vs_info_desc.bb_offset, &mat_model);
             update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &mat_view);
+
+            scene_bounding_box(1, &mat_model, &model, &scene_bb);
         }
 
         pr.gpu.swapchain.i = next_swapchain_image(&pr.gpu, sem_have_swapchain_image, fence);
@@ -202,7 +205,7 @@ int main() {
         if (!htp_allocate_resources(&pr.gpu, &color_rp, HTP_SUBPASS, transfer_cmd, graphics_cmd, &htp_rsc))
             return -1;
 
-        struct shadow_maps shadow_maps = {1};
+        struct shadow_maps shadow_maps = {.count = 1};
         if (!create_shadow_maps(&pr.gpu, transfer_cmd, graphics_cmd, &shadow_maps))
             return -1;
 
@@ -213,11 +216,11 @@ int main() {
 
         struct load_model_arg lma = {
             .flags = 0x0,
-            .dsl_count = 1,
+            .dsl_count = 2,
             .animation_count = 0,
-            .scene_count = 1,
+            .scene_count = model.scene_count,
             .subpass_mask = LOAD_MODEL_SUBPASS_DRAW,
-            .subpasses[1] = DRAW_SUBPASS,
+            .color_subpass = 0,
             .depth_pass_count = shadow_maps.count,
             .model = &model,
             .gpu = &pr.gpu,
@@ -228,7 +231,7 @@ int main() {
             .db_offsets[0] = vs_info_desc.db_offset,
             .dsls[1] = shadow_maps.dsl,
             .db_indices[1] = DESCRIPTOR_BUFFER_SAMPLER_BIND_INDEX,
-            .db_offsets[1] = shadow_maps.dsl_ofs,
+            .db_offsets[1] = shadow_maps.db_offset,
             .color_renderpass = color_rp.rp,
             .depth_renderpass = depth_rp.rp,
             .viewport = pr.gpu.settings.viewport,
@@ -236,6 +239,7 @@ int main() {
         };
 
         signal_thread_false(&t_cleanup[FRAME_I]);
+
         struct load_model_ret lmr = {
             .cmd_graphics = graphics_cmd,
             .cmd_transfer = transfer_cmd,
@@ -258,26 +262,29 @@ int main() {
         {
             begin_shadow_renderpass(draw_cmd, &depth_rp, &pr.gpu, shadow_maps.count);
 
+            struct frustum f;
+            get_frustum(FOV, 0.1, 100, &f);
+
             for(uint i=0; i < shadow_maps.count; ++i) {
-                struct frustum f;
-                get_frustum(FOV, 0.1, 100, &f);
+                matrix v;
+                view_matrix(vs_info->dir_lights[i].position, vs_info->dir_lights[i].direction, &v);
 
                 struct minmax x,y;
-                minmax_frustum_points(&f, &vs_info->dir_lights[i].space, &x, &y);
+                minmax_frustum_points(&f, &v, &x, &y);
 
                 struct minmax nf = near_far(x, y, &scene_bb);
 
-                matrix m; // light projection
-                ortho_matrix(x.min, x.max, y.min, y.max, nf.min, nf.max, &m);
+                matrix o;
+                ortho_matrix(x.min, x.max, y.min, y.max, nf.min, nf.max, &o);
 
-                mul_matrix(&m, &vs_info->dir_lights[i].space, &m);
+                mul_matrix(&o, &v, &vs_info->dir_lights[i].space);
 
                 vk_cmd_push_constants(draw_cmd,
                                       lmr.draw_info->pipeline_layouts[lmr.draw_info->prim_count],
                                       VK_SHADER_STAGE_VERTEX_BIT,
                                       0,
                                       sizeof(matrix),
-                                      &m);
+                                      &vs_info->dir_lights[i].space);
 
                 draw_model_depth(draw_cmd, lmr.draw_info, i);
 
@@ -293,6 +300,13 @@ int main() {
 
             draw_model_color(draw_cmd, lmr.draw_info);
 
+            #if 0
+            matrix m;
+            mul_matrix(&vs_info->proj, &vs_info->view, &m);
+
+            draw_box(draw_cmd, &pr.gpu, &scene_bb, true, color_rp.rp, 0, &draw_box_rsc, &m);
+            #endif
+
             vk_cmd_next_subpass(draw_cmd, VK_SUBPASS_CONTENTS_INLINE);
 
             htp_commands(draw_cmd, &pr.gpu, &htp_rsc);
@@ -301,8 +315,7 @@ int main() {
 
             end_command_buffer(draw_cmd);
             end_command_buffer(graphics_cmd);
-        }
-        {
+        } {
             end_command_buffer(transfer_cmd);
 
             VkCommandBufferSubmitInfo cmdi;
@@ -315,8 +328,7 @@ int main() {
             queue_submit_info(1, &cmdi, 0, NULL, 1, &sem_s, &si);
 
             transfer_queue_submit(&pr.gpu, 1, &si, NULL);
-        }
-        {
+        } {
             VkCommandBufferSubmitInfo cmdi[2];
             command_buffer_submit_info(graphics_cmd, &cmdi[0]);
             command_buffer_submit_info(draw_cmd, &cmdi[1]);
@@ -338,6 +350,8 @@ int main() {
 
         fence_wait_secs_and_reset(&pr.gpu, fence, 3);
         signal_thread_true(&t_cleanup[FRAME_I]);
+
+        draw_box_cleanup(&pr.gpu, &draw_box_rsc);
 
         destroy_renderpass(&pr.gpu, &color_rp);
         htp_free_resources(&pr.gpu, &htp_rsc);

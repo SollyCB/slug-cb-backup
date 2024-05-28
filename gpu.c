@@ -279,6 +279,7 @@ static void gpu_create_device_and_queues(struct gpu *gpu)
 
     VkPhysicalDeviceFeatures vk1_features = {
         .samplerAnisotropy = VK_TRUE,
+        .fillModeNonSolid = VK_TRUE,
     };
     VkPhysicalDeviceVulkan11Features vk11_features = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
@@ -1097,8 +1098,6 @@ struct vs_info* init_vs_info(struct gpu *gpu, struct vs_info_descriptor *ret)
     vs->dir_lights[0].direction = get_vector(   0,           -1,  0,  0);
     vs->dir_lights[0].color     = get_vector(50.0,  50.0,  50.0,  0);
 
-    view_matrix(get_vector(0, 0, 3, 0), get_vector(0, 0, 1, 0), &vs->dir_lights[0].space);
-
     vs->ambient.x = 0.4;
     vs->ambient.y = 0.4;
     vs->ambient.z = 0.4;
@@ -1280,41 +1279,6 @@ void gpu_upload_descriptor_buffer(struct gpu *gpu, uint count, VkBufferCopy *reg
         dep.pMemoryBarriers = &barr;
 
         vk_cmd_pipeline_barrier2(graphics, &dep);
-    }
-}
-
-
-// copy into an array of combined image sampler descriptors at position i
-static inline void ds_cis_arrcpy(struct gpu *gpu, uchar *arr_start, uint i, uint arr_len, uchar *desc)
-{
-    if (gpu->descriptors.props.combinedImageSamplerDescriptorSingleArray) {
-        size_t ofs = arr_len * gpu->descriptors.props.sampledImageDescriptorSize +
-            i * gpu->descriptors.props.samplerDescriptorSize;
-
-        memcpy(arr_start + i * gpu->descriptors.props.sampledImageDescriptorSize,
-               desc, gpu->descriptors.props.sampledImageDescriptorSize);
-        memcpy(arr_start + ofs, desc + gpu->descriptors.props.sampledImageDescriptorSize,
-               gpu->descriptors.props.samplerDescriptorSize);
-    } else {
-        memcpy(arr_start + i * gpu->descriptors.props.combinedImageSamplerDescriptorSize,
-               desc, gpu->descriptors.props.combinedImageSamplerDescriptorSize);
-    }
-}
-
-// copy into an array of combined image sampler descriptors at position i if b
-static inline void ds_cis_arrcpy_if(struct gpu *gpu, uchar *arr_start, uint i, uint arr_len, uchar *desc, bool b)
-{
-    if (gpu->descriptors.props.combinedImageSamplerDescriptorSingleArray) {
-        size_t ofs = arr_len * gpu->descriptors.props.sampledImageDescriptorSize +
-            i * gpu->descriptors.props.samplerDescriptorSize;
-
-        memcpy_if(arr_start + i * gpu->descriptors.props.sampledImageDescriptorSize,
-                  desc, gpu->descriptors.props.sampledImageDescriptorSize, b);
-        memcpy_if(arr_start + ofs, desc + gpu->descriptors.props.sampledImageDescriptorSize,
-                  gpu->descriptors.props.samplerDescriptorSize, b);
-    } else {
-        memcpy_if(arr_start + i * gpu->descriptors.props.combinedImageSamplerDescriptorSize,
-                  desc, gpu->descriptors.props.combinedImageSamplerDescriptorSize, b);
     }
 }
 
@@ -1649,14 +1613,12 @@ void gpu_create_texture(struct gpu *gpu, struct image *image, struct gpu_texture
 
 bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommandBuffer graphics_cmd, struct shadow_maps *maps)
 {
-    VkMemoryRequirements *mr; // alignments
-    maps->images = allocate(gpu->alloc_temp,
-                           sizeof(*maps->images) * maps->count + // NOLINT sizeof(vulkan_handle)
-                           sizeof(*maps->views)  * maps->count + // NOLINT sizeof(vulkan_handle)
-                           sizeof(*mr)           * maps->count);
+    maps->images = allocate(gpu->alloc_heap,
+                            sizeof(*maps->images) * maps->count + // NOLINT sizeof(vulkan_handle)
+                            sizeof(*maps->views)  * maps->count); // NOLINT sizeof(vulkan_handle)
+    maps->views = (VkImageView*)(maps->images + maps->count);
 
-    maps->views =          (VkImageView*)(maps->images + maps->count);
-    mr          = (VkMemoryRequirements*)(maps->views  + maps->count);
+    VkMemoryRequirements *mr = sallocate(gpu->alloc_temp, *mr, maps->count);
 
     {
         VkImageCreateInfo ci = {
@@ -1707,12 +1669,18 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
         dsl_sz = align(dsl_sz, gpu->descriptors.props.descriptorBufferOffsetAlignment);
     }
 
-    maps->dsl_ofs = gpu_buffer_allocate(gpu, &gpu->mem.descriptor_buffer_sampler, dsl_sz);
-    if (maps->dsl_ofs == GPU_BUF_ALLOC_FAIL) {
+    size_t img_ofs = gpu_allocate_image_memory(gpu, img_sz);
+    if (img_ofs == GPU_BUF_ALLOC_FAIL) {
+        log_print_error("failed to allocate shadow map image memory");
+        return false;
+    }
+
+    maps->db_offset = gpu_buffer_allocate(gpu, &gpu->mem.descriptor_buffer_sampler, dsl_sz + gpu->descriptors.props.descriptorBufferOffsetAlignment);
+    if (maps->db_offset == GPU_BUF_ALLOC_FAIL) {
         log_print_error("failed to allocate shadow map descriptor memory");
         return false;
     } else {
-        maps->dsl_ofs = align(maps->dsl_ofs, gpu->descriptors.props.descriptorBufferOffsetAlignment);
+        maps->db_offset = align(maps->db_offset, gpu->descriptors.props.descriptorBufferOffsetAlignment);
     }
 
     uchar *dsl_data;
@@ -1726,22 +1694,16 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
 
         VkBufferCopy bc = {
             .srcOffset = ofs,
-            .dstOffset = maps->dsl_ofs,
+            .dstOffset = maps->db_offset,
             .size = dsl_sz,
         };
 
-        struct range r = {.offset = maps->dsl_ofs, .size = dsl_sz};
+        struct range r = {.offset = maps->db_offset, .size = dsl_sz};
         gpu_upload_descriptor_buffer_sampler(gpu, 1, &bc, &r, transfer_cmd, graphics_cmd);
 
         dsl_data = gpu->mem.transfer_buffer.data + ofs;
     } else {
-        dsl_data = gpu->mem.descriptor_buffer_sampler.data + maps->dsl_ofs;
-    }
-
-    size_t img_ofs = gpu_allocate_image_memory(gpu, img_sz);
-    if (img_ofs == GPU_BUF_ALLOC_FAIL) {
-        log_print_error("failed to allocate shadow map image memory");
-        return false;
+        dsl_data = gpu->mem.descriptor_buffer_sampler.data + maps->db_offset;
     }
 
     for(uint i=0; i < maps->count; ++i) {
@@ -1812,6 +1774,16 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
     }
 
     return true;
+}
+
+void free_shadow_maps(struct gpu *gpu, struct shadow_maps *maps)
+{
+    for(uint i=0; i < maps->count; ++i) {
+        vk_destroy_image(gpu->device, maps->images[i], GAC);
+        vk_destroy_image_view(gpu->device, maps->views[i], GAC);
+    }
+    vk_destroy_sampler(gpu->device, maps->sampler, GAC);
+    deallocate(gpu->alloc_heap, maps->images);
 }
 
 void gpu_destroy_image(struct gpu *gpu, struct gpu_texture *image)
@@ -1949,8 +1921,17 @@ void create_color_renderpass(struct gpu *gpu, struct renderpass *rp)
             .dstSubpass = 0,
             .srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
             .dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-            .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            .srcAccessMask = VK_ACCESS_NONE,
             .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
+        },
+        {
+            .srcSubpass = VK_SUBPASS_EXTERNAL,
+            .dstSubpass = 0,
+            .srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            .srcAccessMask = VK_ACCESS_NONE,
+            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
             .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
         },
         {
@@ -1958,7 +1939,7 @@ void create_color_renderpass(struct gpu *gpu, struct renderpass *rp)
             .dstSubpass = 0,
             .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .srcAccessMask = VK_ACCESS_NONE,
             .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
             .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
         },
@@ -2482,3 +2463,183 @@ void htp_commands(VkCommandBuffer cmd, struct gpu *gpu, struct htp_rsc *rsc)
     vk_cmd_draw(cmd, 6, 1, 0, 0);
 }
 
+static VkShaderModule create_shader_module(VkDevice d, const char *file_name, allocator *alloc);
+
+// @Todo Only works on UMA
+void draw_box(VkCommandBuffer cmd, struct gpu *gpu, struct box *box, bool wireframe,
+              VkRenderPass rp, uint subpass, struct draw_box_rsc *rsc, matrix *space)
+{
+    VkPipelineShaderStageCreateInfo stages[] = {
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_VERTEX_BIT,
+            .module = create_shader_module(gpu->device, "shaders/box.vert.spv", gpu->alloc_temp),
+            .pName = SHADER_ENTRY_POINT,
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .module = create_shader_module(gpu->device, "shaders/box.frag.spv", gpu->alloc_temp),
+            .pName = SHADER_ENTRY_POINT,
+        },
+    };
+    rsc->modules[0] = stages[0].module;
+    rsc->modules[1] = stages[1].module;
+
+    VkVertexInputBindingDescription bd = {
+        .binding = 0,
+        .stride  = 16,
+    };
+
+    VkVertexInputAttributeDescription ad = {
+        .location = 0,
+        .binding = 0,
+        .format = VK_FORMAT_R32G32B32_SFLOAT,
+    };
+
+    VkPipelineVertexInputStateCreateInfo vi = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+        .vertexBindingDescriptionCount = 1,
+        .vertexAttributeDescriptionCount = 1,
+        .pVertexBindingDescriptions = &bd,
+        .pVertexAttributeDescriptions = &ad,
+    };
+
+    VkPipelineInputAssemblyStateCreateInfo ia = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+    };
+
+    VkPipelineViewportStateCreateInfo vp = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        .viewportCount = 1,
+        .scissorCount = 1,
+        .pViewports = &gpu->settings.viewport,
+        .pScissors = &gpu->settings.scissor,
+    };
+
+    VkPipelineRasterizationStateCreateInfo ra = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+        .polygonMode = wireframe ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL,
+        .lineWidth = 1,
+    };
+
+    VkPipelineMultisampleStateCreateInfo mu = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+    };
+
+    VkPipelineDepthStencilStateCreateInfo ds = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .minDepthBounds = 0,
+        .maxDepthBounds = 1,
+    };
+
+    VkPipelineColorBlendStateCreateInfo cb = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+        .attachmentCount = 1,
+        .pAttachments = &COLOR_BLEND_NONE,
+        .blendConstants = {1,1,1,1},
+    };
+
+    VkPipelineDynamicStateCreateInfo dn = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+    };
+
+    VkPipelineLayout layout;
+    {
+        VkPushConstantRange pcr = {
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+            .offset = 0,
+            .size = sizeof(matrix),
+        };
+
+        VkPipelineLayoutCreateInfo ci = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .pushConstantRangeCount = 1,
+            .pPushConstantRanges = &pcr,
+        };
+
+        VkResult check = vk_create_pipeline_layout(gpu->device, &ci, GAC, &layout);
+        DEBUG_VK_OBJ_CREATION(vkCreatePipelineLayout, check);
+
+        rsc->layout = layout;
+    }
+
+    VkPipeline pl;
+    {
+        VkGraphicsPipelineCreateInfo ci = {
+            .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+            .flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+            .stageCount = 2,
+            .pStages = stages,
+            .pVertexInputState = &vi,
+            .pInputAssemblyState = &ia,
+            .pViewportState = &vp,
+            .pRasterizationState = &ra,
+            .pMultisampleState = &mu,
+            .pDepthStencilState = &ds,
+            .pColorBlendState = &cb,
+            .pDynamicState = &dn,
+            .layout = layout,
+            .renderPass = rp,
+            .subpass = subpass,
+        };
+
+        VkResult check = vk_create_graphics_pipelines(gpu->device, gpu->pipeline_cache, 1, &ci, GAC, &pl);
+        DEBUG_VK_OBJ_CREATION(vkCreateGraphicsPipelines, check);
+
+        rsc->pipeline = pl;
+    }
+
+    uint indices[] = { // Idk if this is best statically initialized, but probably.
+        0,1,2,  2,3,0,
+        0,1,5,  0,5,4,
+        0,4,3,  3,7,4,
+        1,5,2,  2,6,5,
+        3,7,6,  6,2,3,
+        4,5,6,  6,7,4,
+    };
+
+    uint sz = sizeof(indices) + sizeof(*box);
+    size_t ofs = gpu_buffer_allocate(gpu, &gpu->mem.bind_buffer, sz); // @Todo check return value
+
+    size_t index_offset = ofs;
+    size_t vert_offset = ofs + sizeof(indices);
+
+    memcpy(gpu->mem.bind_buffer.data + index_offset, indices, sizeof(indices));
+    memcpy(gpu->mem.bind_buffer.data + vert_offset,  box,     sizeof(*box));
+
+    vk_cmd_bind_pipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pl);
+
+    vk_cmd_push_constants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(matrix), space);
+
+    vk_cmd_bind_index_buffer(cmd, gpu->mem.bind_buffer.buf, index_offset, VK_INDEX_TYPE_UINT32);
+
+    vk_cmd_bind_vertex_buffers(cmd, 0, 1, &gpu->mem.bind_buffer.buf, &vert_offset);
+
+    vk_cmd_draw_indexed(cmd, 36, 1, 0, 0, 0);
+}
+
+void draw_box_cleanup(struct gpu *gpu, struct draw_box_rsc *rsc)
+{
+    for(uint i=0; i < carrlen(rsc->modules); ++i)
+        vk_destroy_shader_module(gpu->device, rsc->modules[i], GAC);
+    vk_destroy_pipeline_layout(gpu->device, rsc->layout, GAC);
+}
+
+static VkShaderModule create_shader_module(VkDevice d, const char *file_name, allocator *alloc)
+{
+    struct file f = file_read_bin_all(file_name, alloc);
+
+    VkShaderModuleCreateInfo ci = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = f.size,
+        .pCode = (const uint32*)f.data,
+    };
+
+    VkShaderModule mod;
+    vk_create_shader_module(d, &ci, GAC, &mod);
+
+    return mod;
+}

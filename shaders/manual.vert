@@ -38,7 +38,7 @@ layout(set = 0, binding = 0) uniform Vertex_Info {
     uvec4 dxxx; // dir light count, null, null, null
 } vs_info;
 
-layout(set = 1, binding = 0) uniform Transforms_Ubo {
+layout(set = 2, binding = 0) uniform Transforms_Ubo {
     mat4 node_trs;
     mat4 node_tbn;
 } transforms;

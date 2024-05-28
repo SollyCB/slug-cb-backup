@@ -741,29 +741,6 @@ get_model_texture_descriptors(
     return ret;
 }
 
-struct copy_to_array_of_image_samplers_info {
-    VkPhysicalDeviceDescriptorBufferPropertiesEXT *props;
-    void *to;
-    void *from;
-    uint  len;
-    uint  i;
-};
-
-inline static void copy_to_array_of_image_sampler_descriptors(
-        struct copy_to_array_of_image_samplers_info *info)
-{
-    if (info->props->combinedImageSamplerDescriptorSingleArray) {
-        uint combined = info->props->combinedImageSamplerDescriptorSize;
-        memcpy((uchar*)info->to + info->i*combined, info->from, combined);
-    } else {
-        uint sampler = info->props->samplerDescriptorSize;
-        uint image = info->props->sampledImageDescriptorSize;
-        memcpy((uchar*)info->to + info->i*image, info->from, image);
-        memcpy((uchar*)info->from + info->len*image + info->i*sampler,
-               (uchar*)info->from + image, sampler);
-    }
-}
-
 #if DEBUG
     #define GLTF_MATERIAL_TEXTURE_INFOS_HAVE_NOT_BEEN_REORDERED_CHECK() \
         { \
@@ -879,13 +856,8 @@ static struct model_material* material_descriptors_and_pipeline_info(
             uint tz = ctz(f);
             f &= ~(1<<tz);
 
-            struct copy_to_array_of_image_samplers_info copy_info;
-            copy_info.props = &gpu->descriptors.props;
-            copy_info.to = texture_dsl_data + offsets->material_textures_dsls[i];
-            copy_info.from = textures.data + textures.stride * texture_infos[tz].texture;
-            copy_info.len = pc;
-            copy_info.i = j;
-            copy_to_array_of_image_sampler_descriptors(&copy_info);
+            ds_cis_arrcpy(gpu, texture_dsl_data + offsets->material_textures_dsls[i], j, pc,
+                          textures.data + textures.stride * texture_infos[tz].texture);
 
             // no longer need the stage offset
             if (gpu->flags & GPU_DESCRIPTOR_BUFFER_NOT_HOST_VISIBLE_BIT)
@@ -1215,7 +1187,7 @@ model_pipelines_transform_descriptors_and_draw_info(
                 .pDynamicState       = &dyn,
                 .layout              = resources->pipeline_layouts[pc],
                 .renderPass          = arg->color_renderpass,
-                .subpass             = arg->subpasses[ctz(LOAD_MODEL_SUBPASS_DRAW)],
+                .subpass             = arg->color_subpass,
             };
             pc++;
         }
