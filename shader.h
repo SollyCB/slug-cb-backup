@@ -45,11 +45,11 @@ typedef struct vs_info {
 
     In_Directional_Light dir_lights[2];
 
-    uint dir_light_count;
+    uint dir_light_count; // dir light count, null, null, null
 
     uint pad[3];
 
-    // Optional
+    // Later
     #if 0
     uint point_light_count;
     In_Point_Light point_lights[1];
