@@ -56,7 +56,7 @@ typedef struct {
     struct window glfw;
 } prog_resources;
 
-static void prog_init(prog_resources *pr)
+static void prog_init(prog_resources *pr, struct camera *c)
 {
     init_allocators(&pr->allocs);
     #if MULTITHREADED
@@ -70,7 +70,7 @@ static void prog_init(prog_resources *pr)
         &pr->allocs.heap,
         &pr->allocs.temp
     };
-    init_glfw(&pr->glfw);
+    init_glfw(&pr->glfw, c);
     init_gpu(&pr->gpu, &gpu_args);
     #endif
 }
@@ -107,7 +107,25 @@ static void run_tests_thread(struct thread_work_arg *w);
 
 int main() {
     prog_resources pr;
-    prog_init(&pr);
+
+    struct camera cam = {0};
+    {
+        cam.pos = vector4(0, 0, 7, 1);
+        cam.fov = FOV;
+        cam.sens = 0.05;
+        cam.speed = 5;
+
+        cam.dir = vector3(0, 0, 1);
+
+        double r,u;
+        cursorpos(&pr.glfw, &r, &u);
+        cam.x = r;
+        cam.y = u;
+
+        cam.pitch = 0;
+        cam.yaw = 0;
+    }
+    prog_init(&pr, &cam);
 
     run_tests(&pr.allocs.heap);
 
@@ -117,21 +135,6 @@ int main() {
     gltf model = parse_gltf("models/cube-static/Cube.gltf", &pr.gpu.shader_dir,
                             &conf, &pr.allocs.temp, &pr.allocs.temp, &model_size);
 
-
-    struct camera cam;
-    {
-        cam.pos = vector3(0, 0, 7);
-        cam.dir = vector3(0, 0, 1);
-        cam.fov = FOV;
-        cam.sens = 0.001;
-        cam.speed = 1;
-
-        double r,u;
-        cursorpos(&pr.glfw, &r, &u);
-
-        cam.x = r;
-        cam.y = u;
-    }
 
     struct vs_info_descriptor vs_info_desc;
     struct vs_info *vs_info = init_vs_info(&pr.gpu, cam.pos, cam.dir, &vs_info_desc);
@@ -159,7 +162,7 @@ int main() {
 
     struct box scene_bb;
 
-    // for(uint frame_count=0; frame_count < 100; ++frame_count) {
+    // for(uint frame_count=0; frame_count < 50; ++frame_count) {
     for(;;) {
         poll_glfw();
 
@@ -167,15 +170,16 @@ int main() {
         reset_gpu_buffers(&pr.gpu);
 
         {
-            update_camera(&cam, &pr.glfw);
-            // println_vector(cam.dir);
-
-            matrix mat_view;
-            view_matrix(cam.pos, cam.dir, &mat_view);
-
             dt = t;
             t = get_float_time_proc();
             dt = t - dt;
+
+            update_camera(&cam, &pr.glfw, dt);
+
+            matrix mat_view;
+            view_matrix(cam.pos, cam.dir, vector3(0, 1, 0), &mat_view);
+
+            vs_info->view_pos = cam.pos;
 
             if (!jumping) {
                 jumping = true;
@@ -288,9 +292,10 @@ int main() {
             struct frustum f;
             get_frustum(FOV, 0.1, 100, &f);
 
+            #if 1
             for(uint i=0; i < shadow_maps.count; ++i) {
                 matrix v;
-                view_matrix(vs_info->dir_lights[i].position, vs_info->dir_lights[i].direction, &v);
+                view_matrix(vs_info->dir_lights[i].position, vs_info->dir_lights[i].direction, vector3(0, 0, 1), &v);
 
                 struct minmax x,y;
                 minmax_frustum_points(&f, &v, &x, &y);
@@ -314,6 +319,7 @@ int main() {
                 if (i < shadow_maps.count - 1)
                     vk_cmd_next_subpass(draw_cmd, VK_SUBPASS_CONTENTS_INLINE);
             }
+            #endif
 
             end_renderpass(draw_cmd);
 
@@ -379,6 +385,7 @@ int main() {
         // draw_floor_cleanup(&pr.gpu, &df_rsc);
 
         destroy_renderpass(&pr.gpu, &color_rp);
+        destroy_renderpass(&pr.gpu, &depth_rp);
         htp_free_resources(&pr.gpu, &htp_rsc);
         free_shadow_maps(&pr.gpu, &shadow_maps);
 

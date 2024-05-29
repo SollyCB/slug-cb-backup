@@ -1031,7 +1031,7 @@ model_pipelines_transform_descriptors_and_draw_info(
         (VkPipelineRasterizationStateCreateInfo) {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
             .polygonMode = VK_POLYGON_MODE_LINE & maxif(arg->flags & LOAD_MODEL_WIREFRAME_BIT),
-            .cullMode = VK_CULL_MODE_BACK_BIT,
+            .cullMode = VK_CULL_MODE_NONE, // VK_CULL_MODE_BACK_BIT,
             .lineWidth = 1.0f,
         },
     };
@@ -1039,7 +1039,7 @@ model_pipelines_transform_descriptors_and_draw_info(
     VkPipelineRasterizationStateCreateInfo depth_rasterization = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
             .polygonMode = VK_POLYGON_MODE_LINE & maxif(arg->flags & LOAD_MODEL_WIREFRAME_BIT),
-            .cullMode = VK_CULL_MODE_FRONT_BIT,
+            .cullMode = VK_CULL_MODE_NONE, // VK_CULL_MODE_FRONT_BIT,
             .lineWidth = 1.0f,
     };
 

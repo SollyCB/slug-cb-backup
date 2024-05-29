@@ -12,7 +12,8 @@ struct window {
     int width, height;
 };
 
-void init_glfw(struct window *glfw);
+struct camera;
+void init_glfw(struct window *glfw, struct camera *cam);
 
 void shutdown_glfw(struct window *glfw);
 

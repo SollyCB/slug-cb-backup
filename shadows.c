@@ -73,6 +73,16 @@ void get_frustum(float fov, float near, float far, struct frustum *ret)
     ret->tr_far = intersect_three_planes(pf, pr, pt);
     ret->bl_far = intersect_three_planes(pf, pl, pb);
     ret->br_far = intersect_three_planes(pf, pr, pb);
+
+    ret->tl_near.w = 1;
+    ret->tr_near.w = 1;
+    ret->bl_near.w = 1;
+    ret->br_near.w = 1;
+
+    ret->tl_far.w = 1;
+    ret->tr_far.w = 1;
+    ret->bl_far.w = 1;
+    ret->br_far.w = 1;
 }
 
 void minmax_frustum_points(struct frustum *f, matrix *space, struct minmax *minmax_x, struct minmax *minmax_y)

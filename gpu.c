@@ -1094,9 +1094,9 @@ struct vs_info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vs_
     Vertex_Info *vs = (Vertex_Info*)(gpu->mem.bind_buffer.data + bb_ofs);
 
     vs->dir_light_count = 1;
-    vs->dir_lights[0].position  = get_vector(   0,  10.0,     0,  0);
-    vs->dir_lights[0].direction = get_vector(   0,           -1,  0,  0);
-    vs->dir_lights[0].color     = get_vector(50.0,  50.0,  50.0,  0);
+    vs->dir_lights[0].position  = get_vector(   0, 10.0,    0,  1);
+    vs->dir_lights[0].direction = get_vector(   0,         -1,  0,  0);
+    vs->dir_lights[0].color     = get_vector(50.0, 50.0, 50.0,  0);
 
     vs->ambient.x = 0.4;
     vs->ambient.y = 0.4;
@@ -1105,16 +1105,10 @@ struct vs_info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vs_
     matrix model;
     identity_matrix(&model);
 
-    vs->view_pos = get_vector(pos.x, pos.y, pos.z, 1);
-
-    matrix view;
-    view_matrix(pos, fwd, &view);
-
     matrix proj;
     proj_matrix(FOV, ASPECT_RATIO, 0.1, 100, &proj);
 
     memcpy(&vs->model, &model, sizeof(model));
-    memcpy(&vs->view, &view, sizeof(view));
     memcpy(&vs->proj, &proj, sizeof(proj));
 
     return vs;
@@ -1780,6 +1774,7 @@ void free_shadow_maps(struct gpu *gpu, struct shadow_maps *maps)
         vk_destroy_image_view(gpu->device, maps->views[i], GAC);
     }
     vk_destroy_sampler(gpu->device, maps->sampler, GAC);
+    vk_destroy_descriptor_set_layout(gpu->device, maps->dsl, GAC);
     deallocate(gpu->alloc_heap, maps->images);
 }
 

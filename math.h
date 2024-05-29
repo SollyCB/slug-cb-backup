@@ -104,6 +104,11 @@ static inline void print_matrix(matrix *m)
     print("]\n");
 }
 
+static inline void print_vector(vector v)
+{
+    print("[%f, %f, %f, %f]", v.x, v.y, v.z, v.w);
+}
+
 static inline void println_vector(vector v)
 {
     print("[%f, %f, %f, %f]\n", v.x, v.y, v.z, v.w);
@@ -206,8 +211,7 @@ static inline float vector_len(vector v) {
 
 static inline vector normalize(vector v) {
     float f = vector_len(v);
-    vector r = scalar_div_vector(v, f);
-    return r;
+    return scalar_div_vector(v, f);
 }
 
 static inline vector lerp_vector(vector a, vector b, float c) {
@@ -344,6 +348,8 @@ static inline void rotation_matrix(vector r, matrix *m)
     m->m[2] = xz - wy;
     m->m[6] = yz + wx;
     m->m[10] = f[3] - f[0] - f[1] + f[2];
+
+    m->m[15] = 1;
 }
 
 static inline void mul_matrix(matrix *x, matrix *y, matrix *z)
@@ -507,23 +513,24 @@ static inline bool invert(matrix *x, matrix *y)
     return true;
 }
 
-static inline void view_matrix(vector pos, vector fwd, matrix *m)
+static inline void view_matrix(vector pos, vector dir, vector up, matrix *m)
 {
-    vector fo = vector3(0, 0, 1);
-    vector fn = normalize(fwd);
-    vector ax = cross(fo, fn);
-    normalize(ax);
+    vector w = normalize(up);
+    vector d = normalize(dir);
+    vector r = normalize(cross(d, w));
+    vector u = normalize(cross(r, d));
 
-    matrix mr;
-    float angle = acosf(dot(fo, fn));
-    vector rot = quaternion(angle, ax);
-    rotation_matrix(rot, &mr);
+    matrix rot;
+    matrix3(vector3(r.x, u.x, d.x),
+            vector3(r.y, u.y, d.y),
+            vector3(r.z, u.z, d.z), &rot);
 
-    matrix mt;
-    vector vt = get_vector(-pos.x, -pos.y, -pos.z, 0);
-    translation_matrix(vt, &mt);
+    rot.m[15] = 1;
 
-    mul_matrix(&mr, &mt, m);
+    matrix trn;
+    translation_matrix(scale_vector(pos, -1), &trn);
+
+    mul_matrix(&rot, &trn, m);
 }
 
 static inline float focal_length(float fov)

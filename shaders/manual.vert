@@ -64,8 +64,8 @@ layout(location = 1) out struct Fragment_Info {
 
 void main() {
     vec4 world_pos = vs_info.model * transforms.node_trs * vec4(in_position, 1);
-    vec4 pos = vs_info.proj * vs_info.view * world_pos;
-    gl_Position = pos;
+    vec4 pos = vs_info.view * world_pos;
+    gl_Position = vs_info.proj * pos;
 
     fs_info.texcoord = in_texcoord;
     fs_info.frag_pos = vec3(world_pos);

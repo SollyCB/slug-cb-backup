@@ -2,6 +2,8 @@
 #include "log.h"
 #include "defs.h"
 
+#include "camera.h"
+
 float POS_X = 0;
 float POS_Y = 0;
 
@@ -13,7 +15,6 @@ static void glfw_mouse_callback(GLFWwindow *window, double x, double y)
 
 static void glfw_cursor_enter_callback(GLFWwindow* window, int entered)
 {
-    // glfwSetCursorPos(window, (float)SCR_W / 2, (float)SCR_H / 2);
 }
 
 static void glfw_error_callback(int e, const char *desc)
@@ -21,7 +22,7 @@ static void glfw_error_callback(int e, const char *desc)
     log_print_error("glfw error code %u, %s", e, desc);
 }
 
-void init_glfw(struct window *glfw) {
+void init_glfw(struct window *glfw, struct camera *c) {
     if (!glfwInit())
         log_print_error("failed to init glfw");
 
@@ -32,8 +33,11 @@ void init_glfw(struct window *glfw) {
     glfw->window = glfwCreateWindow(glfw->width, glfw->height, "Glfw Window", NULL, NULL);
     log_print_error_if(!glfw->window, "failed to create glfw window");
 
-    glfwSetErrorCallback(glfw_error_callback);
+    glfwSetWindowUserPointer(glfw->window, c);
     glfwSetInputMode(glfw->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
+    glfwSetErrorCallback(glfw_error_callback);
+    glfwSetCursorEnterCallback(glfw->window, glfw_cursor_enter_callback);
 }
 
 void shutdown_glfw(struct window *glfw) {
