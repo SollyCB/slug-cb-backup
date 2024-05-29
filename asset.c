@@ -35,7 +35,7 @@ struct model_resources {
     void                  *free_me;
     allocator             *alloc;
     struct gpu            *gpu;
-    struct gpu_texture      *images;
+    struct gpu_texture    *images;
     VkSampler             *samplers;
     VkDescriptorSetLayout *texture_dsls;
     VkDescriptorSetLayout *transforms_ubo_dsls;
@@ -193,6 +193,9 @@ static void* model_cleanup_tf(struct thread_work_arg *arg)
 static void model_cleanup(struct model_resources *resources)
 {
     struct gpu *gpu = resources->gpu;
+
+    vk_destroy_shader_module(gpu->device, resources->depth_shader_vert, GAC);
+    vk_destroy_shader_module(gpu->device, resources->depth_shader_frag, GAC);
 
     // @TempShader
     vk_destroy_shader_module(gpu->device, resources->shader_modules[0], GAC);
@@ -415,7 +418,7 @@ static uint allocate_model_resources(
     for(uint i=0; i < arg->scene_count; ++i)
         for(uint j=0; j < model->scenes[arg->scenes[i]].node_count; ++j)
             gltf_count_mesh_instances(model->nodes,
-                                      model->scenes[arg->scenes[i]].node_count,
+                                      model->scenes[arg->scenes[i]].nodes[j],
                                       offsets->mesh_instance_counts);
 
     uint buffers_size = 0;
