@@ -383,17 +383,19 @@ int main() {
                     mul_matrix(&m, &lm, &lm);
                     draw_box(draw_cmd, &pr.gpu, &lbox, false, color_rp.rp, 0, &lpos_rsc, &lm);
 
-                }
-
                 #if DLF
-                {
+
                     matrix il;
                     invert(&v, &il);
                     il.m[15] = 1;
+                    convert_trs(&ltrs, &lm);
+                    mul_matrix(&lm, &il, &il);
                     mul_matrix(&m, &il, &il);
                     draw_box(draw_cmd, &pr.gpu, &lfb, true,  color_rp.rp, 0, &lf_rsc, &il);
-                }
+
                 #endif
+
+                }
 
             }
 
