@@ -48,15 +48,18 @@ static inline void camera_look(struct camera *c, float r, float u, float dt)
     c->y = u;
 }
 
-static inline void camera_move(struct camera *c, float f, float r, float dt)
+static inline void camera_move(struct camera *c, float f, float r, float u, float dt)
 {
     vector vf = normalize(vector3(c->dir.x, 0, c->dir.z));
     vector vr = normalize(cross(vf, vector3(0, 1, 0)));
+
     c->pos.x += vf.x * -f * c->speed * dt;
     c->pos.z += vf.z * -f * c->speed * dt;
 
     c->pos.x += vr.x *  r * c->speed * dt;
     c->pos.z += vr.z *  r * c->speed * dt;
+
+    c->pos.y += u * c->speed * dt;
 }
 
 static inline void center_camera_and_cursor(struct camera *c, struct window *w)
@@ -77,6 +80,7 @@ static inline void update_camera(struct camera *c, struct window *w, float dt)
 
     float fwd = 0;
     float right = 0;
+    float up = 0;
 
     if (glfwGetKey(w->window, GLFW_KEY_C) == GLFW_PRESS)
         center_camera_and_cursor(c, w);
@@ -89,8 +93,16 @@ static inline void update_camera(struct camera *c, struct window *w, float dt)
         fwd = -1;
     if (glfwGetKey(w->window, GLFW_KEY_D) == GLFW_PRESS)
         right = 1;
+    if (glfwGetKey(w->window, GLFW_KEY_SPACE) == GLFW_PRESS)
+        up = 1;
+    if (glfwGetKey(w->window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
+        up = -1;
+    if (glfwGetKey(w->window, GLFW_KEY_1) == GLFW_PRESS)
+        c->speed /= 2;
+    if (glfwGetKey(w->window, GLFW_KEY_2) == GLFW_PRESS)
+        c->speed *= 2;
 
-    camera_move(c, fwd, right, dt);
+    camera_move(c, fwd, right, up, dt);
 
     #if 1
     print("dir: ");

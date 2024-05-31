@@ -27,8 +27,8 @@
 #define HTP_SUBPASS  1
 
 int FRAME_I = 0;
-int SCR_W = 640;
-int SCR_H = 480;
+int SCR_W = 640 * 2;
+int SCR_H = 480 * 2;
 float FOV = PI / 4;
 
 #define MAIN_HEAP_ALLOCATOR_SIZE (48 * 1024 * 1024)
@@ -110,20 +110,20 @@ int main() {
 
     struct camera cam = {0};
     {
-        cam.pos = vector4(0, 0, 7, 1);
+        cam.pos = vector4(0, 20, -40, 1);
         cam.fov = FOV;
-        cam.sens = 0.05;
+        cam.sens = 0.03;
         cam.speed = 5;
 
-        cam.dir = vector3(0, 0, 1);
+        cam.dir = normalize(vector3(0, 0, -1));
 
         double r,u;
         cursorpos(&pr.glfw, &r, &u);
         cam.x = r;
         cam.y = u;
 
-        cam.pitch = 0;
-        cam.yaw = 0;
+        cam.pitch = 0.2;
+        cam.yaw = 2;
     }
     prog_init(&pr, &cam);
 
@@ -133,8 +133,7 @@ int main() {
 
     struct allocation model_size;
     gltf model = parse_gltf("models/cube-static/Cube.gltf", &pr.gpu.shader_dir,
-                            &conf, &pr.allocs.temp, &pr.allocs.temp, &model_size);
-
+                            &conf, &pr.allocs.temp, &pr.allocs.heap, &model_size);
 
     struct vs_info_descriptor vs_info_desc;
     struct vs_info *vs_info = init_vs_info(&pr.gpu, cam.pos, cam.dir, &vs_info_desc);
@@ -148,8 +147,26 @@ int main() {
     VkSemaphore sem_graphics_complete = create_binary_semaphore(&pr.gpu);
 
     struct draw_box_rsc vf_rsc; // view frustum resources
+    struct draw_box_rsc sb_rsc; // scene bb frustum resources
     struct draw_box_rsc lf_rsc; // light ortho frustum resources
+    struct draw_box_rsc lpos_rsc; // light position
     struct draw_floor_rsc df_rsc;
+
+    float lbox_min = -0.1;
+    float lbox_max =  0.1;
+    struct box lbox = {
+        .p = {
+            vector4(lbox_min, lbox_min, lbox_min, 1),
+            vector4(lbox_min, lbox_min, lbox_max, 1),
+            vector4(lbox_max, lbox_min, lbox_max, 1),
+            vector4(lbox_max, lbox_min, lbox_min, 1),
+
+            vector4(lbox_min, lbox_max, lbox_min, 1),
+            vector4(lbox_min, lbox_max, lbox_max, 1),
+            vector4(lbox_max, lbox_max, lbox_max, 1),
+            vector4(lbox_max, lbox_max, lbox_min, 1),
+        },
+    };
 
     bool32 t_cleanup[2] = {0};
 
@@ -196,11 +213,8 @@ int main() {
             matrix mat_model;
             struct trs model_trs;
             get_trs(
-                // get_vector(0, s, 0),
                 get_vector(0, 0, 0, 0),
-                // quaternion(t, get_vector(0, 1, 0)),
                 quaternion(PI/4, get_vector(1, 0, 0, 0)),
-                // scalar_mul_vector(get_vector(sinf(t) + 1.5, sinf(t) + 1.5, sinf(t) + 1.5), 0.5),
                 get_vector(1, 1, 1, 0),
                 &model_trs
             );
@@ -209,7 +223,7 @@ int main() {
             update_vs_info_mat_model(&pr.gpu, vs_info_desc.bb_offset, &mat_model);
             update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &mat_view);
 
-            scene_bounding_box(1, &mat_model, &model, &scene_bb);
+            scene_bounding_box(&scene_bb);
         }
 
         pr.gpu.swapchain.i = next_swapchain_image(&pr.gpu, sem_have_swapchain_image, fence);
@@ -294,7 +308,7 @@ int main() {
             mul_matrix(&vs_info->proj, &vs_info->view, &m);
 
             struct frustum f;
-            perspective_frustum(FOV, ASPECT_RATIO, 0.1, 100, &f);
+            perspective_frustum(FOV, ASPECT_RATIO, -0.1, -100, &f);
 
             matrix v;
             view_matrix(vs_info->dir_lights[0].position, vs_info->dir_lights[0].direction, vector3(0, 1, 0), &v);
@@ -333,23 +347,54 @@ int main() {
 
             draw_floor(draw_cmd, &pr.gpu, color_rp.rp, 0, lma.dsls, lma.db_indices, lma.db_offsets, &df_rsc);
 
-            draw_model_color(draw_cmd, lmr.draw_info);
+            // draw_model_color(draw_cmd, lmr.draw_info);
 
             {
+                #define DSB 1
+                #define DLF 1
+                #define DCF 1
+
                 struct box vfb;
                 frustum_to_box(&f, &vfb);
+
+                #if DCF
                 draw_box(draw_cmd, &pr.gpu, &vfb, true, color_rp.rp, 0, &vf_rsc, &m);
+                #endif
 
-                #define DRAW_LF 1
+                #if DSB
+                draw_box(draw_cmd, &pr.gpu, &scene_bb, true, color_rp.rp, 0, &sb_rsc, &m);
+                #endif
 
-                #if DRAW_LF
                 struct frustum lf;
                 struct box lfb;
                 ortho_frustum(x.min, x.max, y.min, y.max, nf.min, nf.max, &lf);
                 frustum_to_box(&lf, &lfb);
 
-                draw_box(draw_cmd, &pr.gpu, &lfb, true, color_rp.rp, 0, &lf_rsc, &m);
+                {
+                    matrix lm;
+                    struct trs ltrs;
+                    get_trs(
+                        vs_info->dir_lights[0].position,
+                        vector4(0, 0, 0, 1),
+                        vector3(1, 1, 1),
+                        &ltrs
+                    );
+                    convert_trs(&ltrs, &lm);
+                    mul_matrix(&m, &lm, &lm);
+                    draw_box(draw_cmd, &pr.gpu, &lbox, false, color_rp.rp, 0, &lpos_rsc, &lm);
+
+                }
+
+                #if DLF
+                {
+                    matrix il;
+                    invert(&v, &il);
+                    il.m[15] = 1;
+                    mul_matrix(&m, &il, &il);
+                    draw_box(draw_cmd, &pr.gpu, &lfb, true,  color_rp.rp, 0, &lf_rsc, &il);
+                }
                 #endif
+
             }
 
             #if 0
@@ -409,10 +454,17 @@ int main() {
         signal_thread_true(&t_cleanup[FRAME_I]);
 
         draw_floor_cleanup(&pr.gpu, &df_rsc);
+
+        #if DCF
         draw_box_cleanup(&pr.gpu, &vf_rsc);
+        #endif
 
+        #if DSB
+        draw_box_cleanup(&pr.gpu, &sb_rsc);
+        #endif
 
-        #if DRAW_LF
+        #if DLF
+        draw_box_cleanup(&pr.gpu, &lpos_rsc);
         draw_box_cleanup(&pr.gpu, &lf_rsc);
         #endif
 

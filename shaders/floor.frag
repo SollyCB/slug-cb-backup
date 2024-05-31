@@ -31,5 +31,5 @@ float in_shadow(uint i) {
 layout(location = 0) out vec4 col;
 
 void main() {
-    col = vec4(1, 1 - in_shadow(0), 1 - in_shadow(0), 1);
+    col = vec4(0.5, 0, 0.5, 1) + vec4(5, 0, 0, 0) * 1 - in_shadow(0);
 }

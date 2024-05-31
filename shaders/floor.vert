@@ -41,12 +41,12 @@ layout(location = 1) out struct Fragment_Info {
 } fs_info;
 
 vec3 points[] = {
-    vec3(-10, -3, -10),
-    vec3(-10, -3,  10),
-    vec3( 10, -3, -10),
-    vec3( 10, -3, -10),
-    vec3( 10, -3,  10),
-    vec3(-10, -3,  10),
+    vec3(-10, 0, -10),
+    vec3(-10, 0,  10),
+    vec3( 10, 0, -10),
+    vec3( 10, 0, -10),
+    vec3( 10, 0,  10),
+    vec3(-10, 0,  10),
 };
 
 void main() {

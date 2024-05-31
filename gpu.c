@@ -1094,9 +1094,9 @@ struct vs_info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vs_
     Vertex_Info *vs = (Vertex_Info*)(gpu->mem.bind_buffer.data + bb_ofs);
 
     vs->dir_light_count = 1;
-    vs->dir_lights[0].position  = get_vector(   5, 1.0,     0,  1);
+    vs->dir_lights[0].position  = get_vector(15, 15, 0,  1);
 
-    vs->dir_lights[0].direction = sub_vector(vs->dir_lights[0].position, vector3(0, 0, 0));
+    vs->dir_lights[0].direction = sub_vector(vector3(0, 0, 0), vs->dir_lights[0].position);
     vs->dir_lights[0].direction.w = 0;
     vs->dir_lights[0].direction = normalize(vs->dir_lights[0].direction);
 

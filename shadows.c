@@ -1,49 +1,5 @@
 #include "shadows.h"
 
-void scene_bounding_box(uint count, matrix *positions, gltf *models, struct box *bb)
-{
-    memset(bb, 0, sizeof(*bb));
-
-    vector cmin = vector3(0,0,0);
-    vector cmax = vector3(0,0,0);
-    float minlen = 0;
-    float maxlen = 0;
-
-    for(uint i=0; i < count; ++i) {
-        for(uint j=0; j < models[i].mesh_count; ++j)
-            for(uint k=0; k < models[i].meshes[j].primitive_count; ++k) {
-                gltf_accessor *a = &models[i].accessors[models[i].meshes[j].primitives[k].attributes[0].accessor];
-                log_print_error_if(feq(a->max_min.max[0], Max_f32) || feq(a->max_min.max[0], Max_f32),
-                                   "gltf mesh primitve position attribute has invalid max_min");
-
-                vector min = vector3(a->max_min.min[0], a->max_min.min[1], a->max_min.min[2]);
-                min = mul_matrix_vector(&positions[i], min);
-
-                if (vector_len(min) > minlen) {
-                    minlen = vector_len(min);
-                    cmin = min;
-                }
-
-                vector max = vector3(a->max_min.max[0], a->max_min.max[1], a->max_min.max[2]);
-                max = mul_matrix_vector(&positions[i], max);
-
-                if (vector_len(max) > maxlen) {
-                    maxlen = vector_len(max);
-                    cmax = max;
-                }
-            }
-    }
-
-    bb->p[0] = vector4(cmin.x, cmin.y, cmin.z, 1);
-    bb->p[1] = vector4(cmin.x, cmin.y, cmax.z, 1);
-    bb->p[2] = vector4(cmax.x, cmin.y, cmax.z, 1);
-    bb->p[3] = vector4(cmax.x, cmin.y, cmin.z, 1);
-    bb->p[4] = vector4(cmin.x, cmax.y, cmin.z, 1);
-    bb->p[5] = vector4(cmin.x, cmax.y, cmax.z, 1);
-    bb->p[6] = vector4(cmax.x, cmax.y, cmax.z, 1);
-    bb->p[7] = vector4(cmax.x, cmax.y, cmin.z, 1);
-}
-
 // The four corners of a frustum
 void perspective_frustum(float fov, float ar, float near, float far, struct frustum *ret)
 {
@@ -87,12 +43,12 @@ void perspective_frustum(float fov, float ar, float near, float far, struct frus
 
 void ortho_frustum(float l, float r, float b, float t, float n, float f, struct frustum *ret)
 {
-    vector pn = vector4( 0,  0, -1, dot(vector3( 0,  0,  1), vector3(0,  0, n)));
-    vector pf = vector4( 0,  0,  1, dot(vector3( 0,  0, -1), vector3(0,  0, f)));
-    vector pl = vector4( 1,  0,  0, dot(vector3(-1,  0,  0), vector3(l,  0, 0)));
-    vector pr = vector4(-1,  0,  0, dot(vector3( 1,  0,  0), vector3(r,  0, 0)));
-    vector pb = vector4( 0,  1,  0, dot(vector3( 0, -1,  0), vector3(0,  b, 0)));
-    vector pt = vector4( 0, -1,  0, dot(vector3( 0,  1,  0), vector3(0,  t, 0)));
+    vector pn = vector4( 0,  0, -1, dot(vector3( 0,  0,  1), vector3(0,  0, -n)));
+    vector pf = vector4( 0,  0,  1, dot(vector3( 0,  0, -1), vector3(0,  0,  f)));
+    vector pl = vector4( 1,  0,  0, dot(vector3(-1,  0,  0), vector3(l,  0,  0)));
+    vector pr = vector4(-1,  0,  0, dot(vector3( 1,  0,  0), vector3(r,  0,  0)));
+    vector pb = vector4( 0,  1,  0, dot(vector3( 0, -1,  0), vector3(0,  b,  0)));
+    vector pt = vector4( 0, -1,  0, dot(vector3( 0,  1,  0), vector3(0,  t,  0)));
 
     ret->tl_near = intersect_three_planes(pn, pl, pt);
     ret->tr_near = intersect_three_planes(pn, pr, pt);
