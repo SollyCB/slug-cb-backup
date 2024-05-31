@@ -114,20 +114,6 @@ static inline void println_vector(vector v)
     print("[%f, %f, %f, %f]\n", v.x, v.y, v.z, v.w);
 }
 
-static inline void set_vector_if(vector *x, vector *y, bool z)
-{
-    uint32 p = zeroif(z);
-    uint32 q =  maxif(z);
-    __m128i a = _mm_load_si128((__m128i*)x);
-    __m128i b = _mm_load_si128((__m128i*)y);
-    __m128i c = _mm_set1_epi32(p);
-    __m128i d = _mm_set1_epi32(q);
-    a = _mm_and_si128(a, c);
-    b = _mm_and_si128(b, d);
-    a = _mm_add_epi32(a, b);
-    _mm_store_si128((__m128i*)x, a);
-}
-
 static inline void array_to_vector(float *arr, vector v)
 {
     smemcpy(&v, arr, *arr, 4);
@@ -538,8 +524,8 @@ static inline float focal_length(float fov)
     return 1 / tanf(fov / 2);
 }
 
-// args: horizontal fov, 1 / aspect ratio, near plane, far plane
-static inline void proj_matrix(float fov, float a, float n, float f, matrix *m)
+// args: horizontal fov, aspect ratio, near plane, far plane
+static inline void perspective_matrix(float fov, float a, float n, float f, matrix *m)
 {
     float e = focal_length(fov);
 
@@ -558,7 +544,7 @@ static inline void proj_matrix(float fov, float a, float n, float f, matrix *m)
     m->m[14] = -(2 * n * f) / (f - n);
 }
 
-static inline void ortho_matrix(float l, float r, float t, float b,
+static inline void ortho_matrix(float l, float r, float b, float t,
                                 float n, float f, matrix *m)
 {
     matrix4(vector4(2 / (r-l), 0, 0,  0),
@@ -574,8 +560,10 @@ static inline vector intersect_three_planes(vector l1, vector l2, vector l3)
     matrix m;
     matrix3(vector3(l1.x, l2.x, l3.x), vector3(l1.y, l2.y, l3.y), vector3(l1.z, l2.z, l3.z), &m);
 
-    if (!invert(&m, &m))
+    if (!invert(&m, &m)) {
+        print_matrix(&m);
         log_print_error("matrix is not invertible");
+    }
 
     vector d = vector3(-l1.w, -l2.w, -l3.w);
     return mul_matrix_vector(&m, d);

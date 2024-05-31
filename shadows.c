@@ -34,21 +34,21 @@ void scene_bounding_box(uint count, matrix *positions, gltf *models, struct box 
             }
     }
 
-    bb->p[0] = vector3(cmin.x, cmin.y, cmin.z);
-    bb->p[1] = vector3(cmin.x, cmin.y, cmax.z);
-    bb->p[2] = vector3(cmax.x, cmin.y, cmax.z);
-    bb->p[3] = vector3(cmax.x, cmin.y, cmin.z);
-    bb->p[4] = vector3(cmin.x, cmax.y, cmin.z);
-    bb->p[5] = vector3(cmin.x, cmax.y, cmax.z);
-    bb->p[6] = vector3(cmax.x, cmax.y, cmax.z);
-    bb->p[7] = vector3(cmax.x, cmax.y, cmin.z);
+    bb->p[0] = vector4(cmin.x, cmin.y, cmin.z, 1);
+    bb->p[1] = vector4(cmin.x, cmin.y, cmax.z, 1);
+    bb->p[2] = vector4(cmax.x, cmin.y, cmax.z, 1);
+    bb->p[3] = vector4(cmax.x, cmin.y, cmin.z, 1);
+    bb->p[4] = vector4(cmin.x, cmax.y, cmin.z, 1);
+    bb->p[5] = vector4(cmin.x, cmax.y, cmax.z, 1);
+    bb->p[6] = vector4(cmax.x, cmax.y, cmax.z, 1);
+    bb->p[7] = vector4(cmax.x, cmax.y, cmin.z, 1);
 }
 
 // The four corners of a frustum
-void get_frustum(float fov, float near, float far, struct frustum *ret)
+void perspective_frustum(float fov, float ar, float near, float far, struct frustum *ret)
 {
     float e = focal_length(fov);
-    float a = fov / 2;
+    float a = ar;
 
     float den_x = sqrtf(powf(e, 2) + 1);
     float den_y = sqrtf(powf(e, 2) + powf(a, 2));
@@ -63,6 +63,36 @@ void get_frustum(float fov, float near, float far, struct frustum *ret)
     vector pr = vector4(-x,  0, zx,  0);
     vector pb = vector4( 0,  y, zy,  0);
     vector pt = vector4( 0, -y, zy,  0); // @Note +y is up
+
+    ret->tl_near = intersect_three_planes(pn, pl, pt);
+    ret->tr_near = intersect_three_planes(pn, pr, pt);
+    ret->bl_near = intersect_three_planes(pn, pl, pb);
+    ret->br_near = intersect_three_planes(pn, pr, pb);
+
+    ret->tl_far = intersect_three_planes(pf, pl, pt);
+    ret->tr_far = intersect_three_planes(pf, pr, pt);
+    ret->bl_far = intersect_three_planes(pf, pl, pb);
+    ret->br_far = intersect_three_planes(pf, pr, pb);
+
+    ret->tl_near.w = 1;
+    ret->tr_near.w = 1;
+    ret->bl_near.w = 1;
+    ret->br_near.w = 1;
+
+    ret->tl_far.w = 1;
+    ret->tr_far.w = 1;
+    ret->bl_far.w = 1;
+    ret->br_far.w = 1;
+}
+
+void ortho_frustum(float l, float r, float b, float t, float n, float f, struct frustum *ret)
+{
+    vector pn = vector4( 0,  0, -1, dot(vector3( 0,  0,  1), vector3(0,  0, n)));
+    vector pf = vector4( 0,  0,  1, dot(vector3( 0,  0, -1), vector3(0,  0, f)));
+    vector pl = vector4( 1,  0,  0, dot(vector3(-1,  0,  0), vector3(l,  0, 0)));
+    vector pr = vector4(-1,  0,  0, dot(vector3( 1,  0,  0), vector3(r,  0, 0)));
+    vector pb = vector4( 0,  1,  0, dot(vector3( 0, -1,  0), vector3(0,  b, 0)));
+    vector pt = vector4( 0, -1,  0, dot(vector3( 0,  1,  0), vector3(0,  t, 0)));
 
     ret->tl_near = intersect_three_planes(pn, pl, pt);
     ret->tr_near = intersect_three_planes(pn, pr, pt);
@@ -138,14 +168,12 @@ struct minmax near_far(struct minmax x, struct minmax y, struct box *bb)
     float edges[] = {x.min,x.max,
                      y.min,y.max};
 
-    float near = Max_f32;
+    float near =  Max_f32;
     float far  = -Max_f32;
 
     struct {
         vector p[3];
     } triangles[16];
-
-    #define cull(t, tc) do {t.p[0].w = 1;t = triangles[tc-1]; tc--;} while(0)
 
     // @DebugOnly Just for asserts
     #define uncull(t)   (t.p[0].w = 0)
@@ -159,6 +187,9 @@ struct minmax near_far(struct minmax x, struct minmax y, struct box *bb)
 
         uint tc = 1; // triangle count
 
+        // Using a variable external to the macro (tc) but that is fine here.
+        #define cull(t) do {t.p[0].w = 1;t = triangles[tc-1]; tc--;} while(0)
+
         for(uint j=0; j < 4; ++j) {
             for(uint k=0; k < tc; ++k) {
                 assert(!isculled(triangles[k]));
@@ -167,6 +198,7 @@ struct minmax near_far(struct minmax x, struct minmax y, struct box *bb)
                 {
                     uint8 passes[3];
                     memset(passes, 0, sizeof(passes));
+
                     for(uint l=0; l < 3; ++l) {
                         // while j < 2, check x, else check y; if j % 2 check max, else check min
                         passes[l] += vector_i(triangles[k].p[l], (j >> 1)) > edges[j] && !(j & 1);
@@ -174,6 +206,7 @@ struct minmax near_far(struct minmax x, struct minmax y, struct box *bb)
                         assert(passes[l] < 2);
                         pc += passes[l];
                     }
+                    assert(pc <= 3);
 
                     struct pair_uint shfl[] = {
                         {0, 1},
@@ -183,23 +216,22 @@ struct minmax near_far(struct minmax x, struct minmax y, struct box *bb)
                     for(uint l=0; l < 3; ++l) {
                         vector tmp = triangles[k].p[shfl[l].a];
 
-                        set_vector_if(&triangles[k].p[shfl[l].a], &triangles[k].p[shfl[l].b],
-                                      !passes[shfl[l].a] && passes[shfl[l].b]);
-                        set_vector_if(&triangles[k].p[shfl[l].b], &tmp,
-                                      !passes[shfl[l].a] && passes[shfl[l].b]);
+                        if (!passes[shfl[l].a] && passes[shfl[l].b]) {
+                            triangles[k].p[shfl[l].a] = triangles[k].p[shfl[l].b];
+                            triangles[k].p[shfl[l].b] = tmp;
+                        }
 
                         passes[shfl[l].a] = true;
                         passes[shfl[l].b] = false;
                     }
                 }
 
-                enum {
-                    ALL_OUT, ONE_IN, TWO_IN, ALL_IN
-                };
+                enum { ALL_OUT, ONE_IN, TWO_IN, ALL_IN };
+
                 switch(pc) {
                 case ALL_OUT:
                 {
-                    cull(triangles[k], tc);
+                    cull(triangles[k]);
                     break;
                 }
                 case ONE_IN:
@@ -213,8 +245,8 @@ struct minmax near_far(struct minmax x, struct minmax y, struct box *bb)
                     q = add_vector(p, scale_vector(q, s / vector_i(q, j >> 1)));
                     r = add_vector(p, scale_vector(r, s / vector_i(r, j >> 1)));
 
-                    triangles[k].p[1] = q;
-                    triangles[k].p[2] = r;
+                    triangles[k].p[1] = r;
+                    triangles[k].p[2] = q;
                     uncull(triangles[k]);
 
                     break;
@@ -222,7 +254,6 @@ struct minmax near_far(struct minmax x, struct minmax y, struct box *bb)
                 case TWO_IN:
                 {
                     triangles[tc] = triangles[k+1];
-                    memcpy(&triangles[k+1], &triangles[k], sizeof(*triangles));
 
                     vector p,q,r;
                     r = triangles[k].p[2];
@@ -231,16 +262,14 @@ struct minmax near_far(struct minmax x, struct minmax y, struct box *bb)
 
                     float s = edges[j] - vector_i(r, j >> 1);
                     {
-                        float scale = s / vector_i(p, j >> 1);
-                        p = add_vector(p, scale_vector(p, scale));
+                        p = add_vector(p, scale_vector(p, s / vector_i(p, j >> 1)));
 
                         triangles[k+1].p[0] = triangles[k].p[0];
                         triangles[k+1].p[1] = triangles[k].p[1];
                         triangles[k+1].p[2] = p;
                     }
                     {
-                        float scale = s / vector_i(q, j >> 1);
-                        q = add_vector(q, scale_vector(q, scale));
+                        q = add_vector(q, scale_vector(q, s / vector_i(q, j >> 1)));
 
                         // note the different point indices
                         triangles[k].p[0] = triangles[k+1].p[1];

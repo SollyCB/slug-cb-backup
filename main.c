@@ -147,7 +147,8 @@ int main() {
     VkSemaphore sem_transfer_complete = create_binary_semaphore(&pr.gpu);
     VkSemaphore sem_graphics_complete = create_binary_semaphore(&pr.gpu);
 
-    struct draw_box_rsc draw_box_rsc;
+    struct draw_box_rsc vf_rsc; // view frustum resources
+    struct draw_box_rsc lf_rsc; // light ortho frustum resources
     struct draw_floor_rsc df_rsc;
 
     bool32 t_cleanup[2] = {0};
@@ -289,37 +290,40 @@ int main() {
         {
             begin_shadow_renderpass(draw_cmd, &depth_rp, &pr.gpu, shadow_maps.count);
 
+            matrix m;
+            mul_matrix(&vs_info->proj, &vs_info->view, &m);
+
             struct frustum f;
-            get_frustum(FOV, 0.1, 100, &f);
+            perspective_frustum(FOV, ASPECT_RATIO, 0.1, 100, &f);
 
-            #if 1
-            for(uint i=0; i < shadow_maps.count; ++i) {
-                matrix v;
-                view_matrix(vs_info->dir_lights[i].position, vs_info->dir_lights[i].direction, vector3(0, 0, 1), &v);
+            matrix v;
+            view_matrix(vs_info->dir_lights[0].position, vs_info->dir_lights[0].direction, vector3(0, 1, 0), &v);
 
-                struct minmax x,y;
-                minmax_frustum_points(&f, &v, &x, &y);
+            struct minmax x,y;
+            minmax_frustum_points(&f, &v, &x, &y);
 
-                struct minmax nf = near_far(x, y, &scene_bb);
+            struct box ls_bb;
+            for(uint i=0; i < carrlen(ls_bb.p); ++i)
+                ls_bb.p[i] = mul_matrix_vector(&v, scene_bb.p[i]);
 
-                matrix o;
-                ortho_matrix(x.min, x.max, y.min, y.max, nf.min, nf.max, &o);
+            struct minmax nf = near_far(x, y, &ls_bb);
 
-                mul_matrix(&o, &v, &vs_info->dir_lights[i].space);
+            matrix o;
+            ortho_matrix(x.min, x.max, y.min, y.max, nf.min, nf.max, &o);
 
-                vk_cmd_push_constants(draw_cmd,
-                                      lmr.draw_info->pipeline_layouts[lmr.draw_info->prim_count],
-                                      VK_SHADER_STAGE_VERTEX_BIT,
-                                      0,
-                                      sizeof(matrix),
-                                      &vs_info->dir_lights[i].space);
+            mul_matrix(&o, &v, &vs_info->dir_lights[0].space);
 
-                draw_model_depth(draw_cmd, lmr.draw_info, i);
+            vk_cmd_push_constants(draw_cmd,
+                                  lmr.draw_info->pipeline_layouts[lmr.draw_info->prim_count],
+                                  VK_SHADER_STAGE_VERTEX_BIT,
+                                  0,
+                                  sizeof(matrix),
+                                  &vs_info->dir_lights[0].space);
 
-                if (i < shadow_maps.count - 1)
-                    vk_cmd_next_subpass(draw_cmd, VK_SUBPASS_CONTENTS_INLINE);
-            }
-            #endif
+            draw_model_depth(draw_cmd, lmr.draw_info, 0);
+
+            // if (i < shadow_maps.count - 1)
+            //     vk_cmd_next_subpass(draw_cmd, VK_SUBPASS_CONTENTS_INLINE);
 
             end_renderpass(draw_cmd);
 
@@ -327,15 +331,37 @@ int main() {
 
             begin_color_renderpass(draw_cmd, &color_rp, pr.gpu.settings.scissor);
 
-            // draw_floor(draw_cmd, &pr.gpu, color_rp.rp, 0, lma.dsls, lma.db_indices, lma.db_offsets, &df_rsc);
+            draw_floor(draw_cmd, &pr.gpu, color_rp.rp, 0, lma.dsls, lma.db_indices, lma.db_offsets, &df_rsc);
 
             draw_model_color(draw_cmd, lmr.draw_info);
 
-            #if 0
-            matrix m;
-            mul_matrix(&vs_info->proj, &vs_info->view, &m);
+            {
+                struct box vfb;
+                frustum_to_box(&f, &vfb);
+                draw_box(draw_cmd, &pr.gpu, &vfb, true, color_rp.rp, 0, &vf_rsc, &m);
 
-            draw_box(draw_cmd, &pr.gpu, &scene_bb, true, color_rp.rp, 0, &draw_box_rsc, &m);
+                #define DRAW_LF 1
+
+                #if DRAW_LF
+                struct frustum lf;
+                struct box lfb;
+                ortho_frustum(x.min, x.max, y.min, y.max, nf.min, nf.max, &lf);
+                frustum_to_box(&lf, &lfb);
+
+                draw_box(draw_cmd, &pr.gpu, &lfb, true, color_rp.rp, 0, &lf_rsc, &m);
+                #endif
+            }
+
+            #if 0
+            {
+                matrix m;
+                mul_matrix(&vs_info->proj, &vs_info->view, &m);
+
+                // struct box b = (struct box) {
+                // };
+
+                // draw_box(draw_cmd, &pr.gpu, &scene_bb, true, color_rp.rp, 0, &draw_box_rsc, &m);
+            }
             #endif
 
             vk_cmd_next_subpass(draw_cmd, VK_SUBPASS_CONTENTS_INLINE);
@@ -382,7 +408,13 @@ int main() {
         fence_wait_secs_and_reset(&pr.gpu, fence, 3);
         signal_thread_true(&t_cleanup[FRAME_I]);
 
-        // draw_floor_cleanup(&pr.gpu, &df_rsc);
+        draw_floor_cleanup(&pr.gpu, &df_rsc);
+        draw_box_cleanup(&pr.gpu, &vf_rsc);
+
+
+        #if DRAW_LF
+        draw_box_cleanup(&pr.gpu, &lf_rsc);
+        #endif
 
         destroy_renderpass(&pr.gpu, &color_rp);
         destroy_renderpass(&pr.gpu, &depth_rp);

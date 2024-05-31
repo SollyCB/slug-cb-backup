@@ -21,15 +21,40 @@ layout(set = 0, binding = 0) uniform Vertex_Info {
     uvec4 dxxx; // dir light count, null, null, null
 } vs_info;
 
+struct Directional_Light {
+    vec3 color;
+    vec3 ts_light_pos;
+    vec3 ls_frag_pos;
+};
+
+layout(location = 0) out uint dir_light_count;
+
+layout(location = 1) out struct Fragment_Info {
+    vec2 texcoord;
+    vec3 frag_pos;
+    vec3 tang_normal;
+    vec3 tang_frag_pos;
+    vec3 tang_view_pos;
+    vec3 ambient;
+
+    Directional_Light dir_lights[2];
+} fs_info;
+
 vec3 points[] = {
-    vec3(-100, -3, -100),
-    vec3(-100, -3,  100),
-    vec3( 100, -3, -100),
-    vec3( 100, -3, -100),
-    vec3( 100, -3,  100),
-    vec3(-100, -3, -100),
+    vec3(-10, -3, -10),
+    vec3(-10, -3,  10),
+    vec3( 10, -3, -10),
+    vec3( 10, -3, -10),
+    vec3( 10, -3,  10),
+    vec3(-10, -3,  10),
 };
 
 void main() {
-    gl_Position = vs_info.proj * vs_info.view * vec4(points[gl_VertexIndex], 1);
+    vec3 in_position = points[gl_VertexIndex];
+
+    vec4 world_pos = vec4(in_position, 1);
+    vec4 pos = vs_info.view * world_pos;
+    gl_Position = vs_info.proj * pos;
+
+    fs_info.dir_lights[0].ls_frag_pos = vec3(vs_info.dir_lights[0].space * world_pos);
 }
