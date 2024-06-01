@@ -104,7 +104,7 @@ static inline void update_camera(struct camera *c, struct window *w, float dt)
 
     camera_move(c, fwd, right, up, dt);
 
-    #if 1
+    #if 0
     print("dir: ");
     print_vector(c->dir);
     print(", pos: ");

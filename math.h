@@ -39,9 +39,19 @@ typedef struct {
     float w;
 } vector cl_align(16);
 
+// should be constructed as:
+//     bottom left near, bottom left far, bottom right far, bottom right near,
+//     top left near, top left far, top right far, top right near,
 struct box {
     vector p[8];
 };
+
+static inline void get_box(vector bln, vector blf, vector brf, vector brn,
+                           vector tln, vector tlf, vector trf, vector trn, struct box *b)
+{
+    b->p[0] = bln; b->p[1] = blf; b->p[2] = brf; b->p[3] = brn;
+    b->p[4] = tln; b->p[5] = tlf; b->p[6] = trf; b->p[7] = trn;
+}
 
 struct trs {
     vector t;
@@ -552,6 +562,29 @@ static inline void ortho_matrix(float l, float r, float b, float t,
             vector4(0, 0, -2 / (f-n), 0),
             vector4(-(r+l) / (r-l), -(t+b) / (t-b), -(f+n) / (f-n), 1),
             m);
+}
+
+enum { INTERSECT, LIES_IN, PARALLEL, };
+static inline uint intersect_line_plane(vector p, vector s, vector v, vector *ret)
+{
+    {
+        vector n = normalize(vector3(p.x, p.y, p.z));
+        if (feq(dot(n, v), 0)) {
+            if (feq(dot(n, s) + p.w, 0))
+                return LIES_IN;
+            else
+                return PARALLEL;
+        }
+    }
+
+    s.w = 1;
+    v.w = 0;
+    float t = -dot(p, s) / dot(p, v);
+
+    s.w = 0;
+    *ret = add_vector(s, scale_vector(v, t));
+
+    return INTERSECT;
 }
 
 // point of intersection of three planes, does not check det == 0

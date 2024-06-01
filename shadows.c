@@ -43,7 +43,7 @@ void perspective_frustum(float fov, float ar, float near, float far, struct frus
 
 void ortho_frustum(float l, float r, float b, float t, float n, float f, struct frustum *ret)
 {
-    vector pn = vector4( 0,  0, -1, dot(vector3( 0,  0,  1), vector3(0,  0, -n)));
+    vector pn = vector4( 0,  0, -1, dot(vector3( 0,  0,  1), vector3(0,  0,  n)));
     vector pf = vector4( 0,  0,  1, dot(vector3( 0,  0, -1), vector3(0,  0,  f)));
     vector pl = vector4( 1,  0,  0, dot(vector3(-1,  0,  0), vector3(l,  0,  0)));
     vector pr = vector4(-1,  0,  0, dot(vector3( 1,  0,  0), vector3(r,  0,  0)));
@@ -93,11 +93,50 @@ void minmax_frustum_points(struct frustum *f, matrix *space, struct minmax *minm
     }
     assert(x.min < Max_f32 && x.max > -Max_f32 &&
            y.min < Max_f32 && y.max > -Max_f32);
+    assert(!feq(x.min, x.max));
 
     *minmax_x = x;
     *minmax_y = y;
 }
 
+struct minmax near_far(struct minmax x, struct minmax y, struct box *b)
+{
+    vector pl = vector4( 1, 0, 0, dot(vector3(-1, 0, 0), vector3(x.min,     0, 0)));
+    vector pr = vector4(-1, 0, 0, dot(vector3( 1, 0, 0), vector3(x.max,     0, 0)));
+    vector pb = vector4( 0, 1, 0, dot(vector3( 0,-1, 0), vector3(    0, y.min, 0)));
+    vector pt = vector4( 0,-1, 0, dot(vector3( 0, 1, 0), vector3(    0, y.max, 0)));
+
+    vector pts[12];
+    bool     c[12];
+
+    struct pair_uint idx[] = {
+        {0,1}, {1,2}, {2,3}, {3,0},
+        {4,5}, {5,6}, {6,7}, {7,4},
+        {0,4}, {1,5}, {2,6}, {3,7},
+    };
+
+    struct minmax nf = {Max_f32, -Max_f32};
+
+    for(uint i=0; i < carrlen(idx); ++i) {
+        vector s = b->p[idx[i].a];
+        vector v = normalize(sub_vector(b->p[idx[i].b], b->p[idx[i].a]));
+
+        c[i] = intersect_line_plane(pl, s, v, &pts[i]) == INTERSECT;
+
+        for(uint j=0; j < carrlen(idx); ++j) {
+            if (!c[i])
+                continue;
+
+            if (pts[i].z < nf.min)
+                nf.min = pts[i].z;
+            if (pts[i].z > nf.max)
+                nf.max = pts[i].z;
+        }
+    }
+    return nf;
+}
+
+#if 0
 // min max x and y, scene bounding box (credit dx-sdk-samples for the implementation)
 struct minmax near_far(struct minmax x, struct minmax y, struct box *bb)
 {
@@ -262,4 +301,5 @@ struct minmax near_far(struct minmax x, struct minmax y, struct box *bb)
     }
     return (struct minmax) {near, far};
 }
+#endif
 

@@ -358,11 +358,11 @@ int main() {
                 frustum_to_box(&f, &vfb);
 
                 #if DCF
-                draw_box(draw_cmd, &pr.gpu, &vfb, true, color_rp.rp, 0, &vf_rsc, &m);
+                draw_box(draw_cmd, &pr.gpu, &vfb, true, color_rp.rp, 0, &vf_rsc, &m, vector4(1, 0, 0, 1));
                 #endif
 
                 #if DSB
-                draw_box(draw_cmd, &pr.gpu, &scene_bb, true, color_rp.rp, 0, &sb_rsc, &m);
+                draw_box(draw_cmd, &pr.gpu, &scene_bb, true, color_rp.rp, 0, &sb_rsc, &m, vector4(0, 0, 1, 1));
                 #endif
 
                 struct frustum lf;
@@ -381,17 +381,17 @@ int main() {
                     );
                     convert_trs(&ltrs, &lm);
                     mul_matrix(&m, &lm, &lm);
-                    draw_box(draw_cmd, &pr.gpu, &lbox, false, color_rp.rp, 0, &lpos_rsc, &lm);
+                    draw_box(draw_cmd, &pr.gpu, &lbox, false, color_rp.rp, 0, &lpos_rsc, &lm, vector4(1, 1, 1, 1));
 
                 #if DLF
 
                     matrix il;
                     invert(&v, &il);
                     il.m[15] = 1;
-                    convert_trs(&ltrs, &lm);
+                    translation_matrix(vs_info->dir_lights[0].position, &lm);
                     mul_matrix(&lm, &il, &il);
                     mul_matrix(&m, &il, &il);
-                    draw_box(draw_cmd, &pr.gpu, &lfb, true,  color_rp.rp, 0, &lf_rsc, &il);
+                    draw_box(draw_cmd, &pr.gpu, &lfb, true,  color_rp.rp, 0, &lf_rsc, &il, vector4(1, 1, 0, 1));
 
                 #endif
 

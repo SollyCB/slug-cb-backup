@@ -1110,7 +1110,7 @@ struct vs_info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vs_
     identity_matrix(&model);
 
     matrix proj;
-    perspective_matrix(FOV, ASPECT_RATIO, 0.1, 100, &proj);
+    perspective_matrix(FOV, ASPECT_RATIO, 0.1, 200, &proj);
 
     memcpy(&vs->model, &model, sizeof(model));
     memcpy(&vs->proj, &proj, sizeof(proj));
@@ -2463,7 +2463,7 @@ static VkShaderModule create_shader_module(VkDevice d, const char *file_name, al
 
 // @Todo Only works on UMA
 void draw_box(VkCommandBuffer cmd, struct gpu *gpu, struct box *box, bool wireframe,
-              VkRenderPass rp, uint subpass, struct draw_box_rsc *rsc, matrix *space)
+              VkRenderPass rp, uint subpass, struct draw_box_rsc *rsc, matrix *space, vector color)
 {
     VkPipelineShaderStageCreateInfo stages[] = {
         {
@@ -2542,12 +2542,17 @@ void draw_box(VkCommandBuffer cmd, struct gpu *gpu, struct box *box, bool wirefr
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
     };
 
+    struct {
+        matrix m;
+        vector c;
+    } pc;
+
     VkPipelineLayout layout;
     {
         VkPushConstantRange pcr = {
             .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
             .offset = 0,
-            .size = sizeof(matrix),
+            .size = sizeof(pc),
         };
 
         VkPipelineLayoutCreateInfo ci = {
@@ -2608,7 +2613,10 @@ void draw_box(VkCommandBuffer cmd, struct gpu *gpu, struct box *box, bool wirefr
 
     vk_cmd_bind_pipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pl);
 
-    vk_cmd_push_constants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(matrix), space);
+    pc.m = *space;
+    pc.c =  color;
+
+    vk_cmd_push_constants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
 
     vk_cmd_bind_index_buffer(cmd, gpu->mem.bind_buffer.buf, index_offset, VK_INDEX_TYPE_UINT32);
 

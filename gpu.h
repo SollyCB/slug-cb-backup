@@ -585,7 +585,7 @@ struct draw_box_rsc {
 
 // @Todo Only works on UMA
 void draw_box(VkCommandBuffer cmd, struct gpu *gpu, struct box *box, bool wireframe,
-              VkRenderPass rp, uint subpass, struct draw_box_rsc *rsc, matrix *space);
+              VkRenderPass rp, uint subpass, struct draw_box_rsc *rsc, matrix *space, vector color);
 void draw_box_cleanup(struct gpu *gpu, struct draw_box_rsc *rsc);
 
 struct draw_floor_rsc {
