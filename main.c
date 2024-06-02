@@ -27,8 +27,8 @@
 #define HTP_SUBPASS  1
 
 int FRAME_I = 0;
-int SCR_W = 640 * 2;
-int SCR_H = 480 * 2;
+int SCR_W = 640;
+int SCR_H = 480;
 float FOV = PI / 4;
 
 #define MAIN_HEAP_ALLOCATOR_SIZE (48 * 1024 * 1024)
@@ -199,25 +199,7 @@ int main() {
             matrix mat_view;
             view_matrix(cam.pos, cam.dir, vector3(0, 1, 0), &mat_view);
 
-            {
-                cam.dir = normalize(cam.dir);
-
-                vector f = vector3(0, 0, -1);
-                float a = acosf(dot(cam.dir, f));
-                vector lol = normalize(cross(f, cam.dir));
-
-                static float timmy = 0;
-
-                timmy += dt;
-
-                if (timmy > 1) {
-                    timmy = 0;
-                    print("angle %f, axis ");
-                    println_vector(lol);
-                }
-            }
-
-            vs_info->view_pos = cam.pos;
+            vs_info->view_pos = vector3(0, 0, 0); // cam.pos;
 
             if (!jumping) {
                 jumping = true;
@@ -241,7 +223,7 @@ int main() {
             convert_trs(&model_trs, &mat_model);
 
             update_vs_info_mat_model(&pr.gpu, vs_info_desc.bb_offset, &mat_model);
-            update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &mat_view);
+            update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &IDENTITY_MATRIX);
 
             scene_bounding_box(&scene_bb);
         }

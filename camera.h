@@ -96,7 +96,18 @@ static inline vector turn(vector dir, float x, float y)
     n_axis = rotate_passive(n_axis, o_quat);
     vector n_quat = quaternion(n_angle, n_axis);
 
-    return normalize(rotate_passive(dir, n_quat));
+    dir = normalize(rotate_passive(dir, n_quat));
+
+    #if 1
+    print("o_angle: %f, n_angle: %f, o_axis ", o_angle, n_angle);
+    print_vector(o_axis);
+    print(", n_axis");
+    print_vector(n_axis);
+    print(", dir: ");
+    println_vector(dir);
+    #endif
+
+    return dir;
 }
 
 static inline void update_camera(struct camera *c, struct window *w, float dt)
@@ -107,7 +118,14 @@ static inline void update_camera(struct camera *c, struct window *w, float dt)
     // camera_look(c, x, y, dt);
 
     if (c->mode == CAMERA_MODE_FLY) {
-        c->dir = turn(c->dir, (x - c->x) * c->sens * dt, (y - c->y) * c->sens * dt);
+        static float time = 0;
+        time += dt;
+
+        if (time > 1) {
+            time = 0;
+            c->dir = turn(c->dir, (x - c->x) * c->sens * dt, (y - c->y) * c->sens * dt);
+        }
+
         c->x = x;
         c->y = y;
     }
@@ -151,13 +169,6 @@ static inline void update_camera(struct camera *c, struct window *w, float dt)
     }
 
     camera_move(c, fwd, right, up, dt);
-
-    #if 0
-    print("dir: ");
-    print_vector(c->dir);
-    print(", pos: ");
-    println_vector(c->pos);
-    #endif
 }
 
 #endif // include guard
