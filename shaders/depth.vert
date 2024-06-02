@@ -15,10 +15,11 @@ void pmat(mat4 m) {
     m[3][0], m[3][1], m[3][2], m[3][3]);
 }
 
-void pvec4(vec4 v) {
+void pv4(vec4 v) {
     debugPrintfEXT("[%f, %f, %f, %f,]\n", v.x, v.y, v.z, v.w);
 }
 
 void main() {
     gl_Position = mvp * vec4(pos, 1);
+    // pv4(gl_Position);
 }

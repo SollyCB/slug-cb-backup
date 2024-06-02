@@ -233,15 +233,72 @@ static inline vector quaternion(float angle, vector v)
     return r;
 }
 
-// equivalent to applying rotation q2, followed by rotation q1
-static inline vector hamilton_product(vector *q2, vector *q1)
+static inline vector invert_quaternion(vector q)
 {
+    return vector4(-q.x, -q.y, -q.z, q.w);
+}
+
+// equivalent to applying rotation q2, followed by rotation q1
+static inline vector hamilton_product(vector q1, vector q2)
+{
+    #if 0
     return (vector) {
-        .w = q1->w * q2->w - q1->x * q2->x - q1->y * q2->y - q1->z * q2->z,
-        .x = q1->w * q2->x + q1->x * q2->w + q1->y * q2->z - q1->z * q2->y,
-        .y = q1->w * q2->y - q1->x * q2->z + q1->y * q2->w + q1->z * q2->x,
-        .z = q1->w * q2->z + q1->x * q2->y - q1->y * q2->x + q1->z * q2->w,
+        .x = q1.w * q2.x + q1.x * q2.w + q1.y * q2.z - q1.z * q2.y,
+        .y = q1.w * q2.y - q1.x * q2.z + q1.y * q2.w + q1.z * q2.x,
+        .z = q1.w * q2.z + q1.x * q2.y - q1.y * q2.x + q1.z * q2.w,
+        .w = q1.w * q2.w - q1.x * q2.x - q1.y * q2.y - q1.z * q2.z,
     };
+    #endif
+
+    __m128 a,b,c,d,e;
+
+    a = _mm_load_ps(&q2.x);
+
+    b = _mm_set_ps1(q1.w);
+    c = _mm_set_ps1(q1.x);
+    d = _mm_set_ps1(q1.y);
+    e = _mm_set_ps1(q1.z);
+
+    b = _mm_mul_ps(a,b);
+    c = _mm_mul_ps(a,c);
+    d = _mm_mul_ps(a,d);
+    e = _mm_mul_ps(a,e);
+
+    vector x,y,z,w;
+    _mm_store_ps(&w.x, b);
+    _mm_store_ps(&x.x, c);
+    _mm_store_ps(&y.x, d);
+    _mm_store_ps(&z.x, e);
+
+    return (vector) { // @Optimise This could likely be done better, idk.
+        .x = w.x + x.w + y.z - z.y,
+        .y = w.y - x.z + y.w + z.x,
+        .z = w.z + x.y - y.x + z.w,
+        .w = w.w - x.x - y.y - z.z,
+    };
+}
+#define mul_quaternion(p, q) hamilton_product(p, q)
+
+// rotate like the inverse of a rotation matrix (like a view matrix)
+static inline vector rotate_active(vector p, vector q)
+{
+    vector v = hamilton_product(hamilton_product(invert_quaternion(q), p), q);
+    return vector3(v.x, v.y, v.z);
+}
+
+// rotate like a rotation matrix
+static inline vector rotate_passive(vector p, vector q)
+{
+    vector v = hamilton_product(hamilton_product(q, p), invert_quaternion(q));
+    return vector3(v.x, v.y, v.z);
+}
+
+// rotate axis of rotation of p by q
+static inline vector rotate_quaternion_axis(vector p, vector q)
+{
+    vector v = vector3(p.x, p.y, p.z);
+    v = rotate_passive(p, q);
+    return vector4(v.x, v.y, v.z, p.w);
 }
 
 static inline void copy_matrix(matrix *to, matrix *from)
@@ -511,6 +568,23 @@ static inline bool invert(matrix *x, matrix *y)
 
 static inline void view_matrix(vector pos, vector dir, vector up, matrix *m)
 {
+    #if 0
+    dir = normalize(dir);
+
+    matrix t;
+    translation_matrix(scale_vector(pos, -1), &t);
+
+    vector f = vector3(0, 0, -1);
+    float a = acosf(dot(dir, f));
+    vector q = quaternion(a, feq(a, 0) ? f : normalize(cross(f, dir)));
+
+    matrix r;
+    rotation_matrix(q, &r);
+
+    mul_matrix(&t, &r, m);
+
+    #else
+
     vector w = normalize(up);
     vector d = normalize(dir);
     vector r = normalize(cross(d, w));
@@ -527,6 +601,7 @@ static inline void view_matrix(vector pos, vector dir, vector up, matrix *m)
     translation_matrix(scale_vector(pos, -1), &trn);
 
     mul_matrix(&rot, &trn, m);
+    #endif
 }
 
 static inline float focal_length(float fov)

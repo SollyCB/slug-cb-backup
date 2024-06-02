@@ -2,6 +2,10 @@
 
 #extension GL_EXT_debug_printf : enable
 
+void pv3(vec3 v) {
+    debugPrintfEXT("[%f, %f, %f]\n", v.x, v.y, v.z);
+}
+
 struct In_Directional_Light {
     vec4 position;
     vec4 direction;
@@ -53,8 +57,8 @@ void main() {
     vec3 in_position = points[gl_VertexIndex];
 
     vec4 world_pos = vec4(in_position, 1);
-    vec4 pos = vs_info.view * world_pos;
-    gl_Position = vs_info.proj * pos;
+    gl_Position = vs_info.proj * vs_info.view * world_pos;
 
     fs_info.dir_lights[0].ls_frag_pos = vec3(vs_info.dir_lights[0].space * world_pos);
+    // pv3(fs_info.dir_lights[0].ls_frag_pos);
 }

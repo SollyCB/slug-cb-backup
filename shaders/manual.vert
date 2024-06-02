@@ -14,6 +14,10 @@ void pv3(vec3 v) {
     debugPrintfEXT("%f, %f, %f\n", v.x, v.y, v.z);
 }
 
+void pv4(vec4 v) {
+    debugPrintfEXT("%f, %f, %f, %f\n", v.x, v.y, v.z, v.w);
+}
+
 layout(location = 0) in vec3 in_position;
 layout(location = 1) in vec3 in_normal;
 layout(location = 2) in vec4 in_tangent;
@@ -64,8 +68,7 @@ layout(location = 1) out struct Fragment_Info {
 
 void main() {
     vec4 world_pos = vs_info.model * transforms.node_trs * vec4(in_position, 1);
-    vec4 pos = vs_info.view * world_pos;
-    gl_Position = vs_info.proj * pos;
+    gl_Position = vs_info.proj * vs_info.view * world_pos;
 
     fs_info.texcoord = in_texcoord;
     fs_info.frag_pos = vec3(world_pos);
@@ -85,6 +88,5 @@ void main() {
         fs_info.dir_lights[i].color = vec3(vs_info.dir_lights[i].color);
         fs_info.dir_lights[i].ts_light_pos = tbn * vec3(vs_info.dir_lights[i].position);
         fs_info.dir_lights[i].ls_frag_pos = vec3(vs_info.dir_lights[i].space * world_pos);
-        // debugPrintfEXT("%f, %f\n", fs_info.dir_lights[i].ls_frag_pos.x * 0.5 + 0.5, fs_info.dir_lights[i].ls_frag_pos.y * 0.5 + 0.5);
     }
 }

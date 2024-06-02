@@ -10,10 +10,16 @@ enum {
     CAMERA_ACTIVE = 0x02,
 };
 
+enum {
+    CAMERA_MODE_FLY,
+    CAMERA_MODE_NORMAL,
+};
+
 struct camera {
     vector pos;
     vector dir;
     uint flags;
+    uint mode;
     float fov;
     float sens,speed;
     float pitch,yaw;
@@ -22,6 +28,7 @@ struct camera {
 
 static inline void camera_look(struct camera *c, float r, float u, float dt)
 {
+
     if (!flag_check(c->flags, CAMERA_MOVED)) {
         c->flags |= CAMERA_MOVED;
         c->x = r;
@@ -32,15 +39,15 @@ static inline void camera_look(struct camera *c, float r, float u, float dt)
     float x = (r - c->x) * c->sens * dt;
     float y = (u - c->y) * c->sens * dt;
 
-    c->yaw += x;
-    c->pitch += y;
-    c->pitch = clamp(c->pitch, -0.9, 0.9);
+    c->yaw   += x;
+    c->pitch -= y;
+    c->pitch  = clamp(c->pitch, -0.9, 0.9);
 
     float pot = PI / 2;
 
-    c->dir.x = sinf(c->yaw * pot) * cosf(c->pitch * pot);
+    c->dir.x = cosf(c->yaw   * pot) * cosf(c->pitch * pot);
     c->dir.y = sinf(c->pitch * pot);
-    c->dir.z = cosf(c->yaw * pot) * cosf(c->pitch * pot);
+    c->dir.z = sinf(c->yaw   * pot) * cosf(c->pitch * pot);
 
     c->dir = normalize(c->dir);
 
@@ -72,11 +79,43 @@ static inline void center_camera_and_cursor(struct camera *c, struct window *w)
     c->y = y;
 }
 
+static inline vector turn(vector dir, float x, float y)
+{
+    vector fwd = vector3(0, 0, -1);
+
+    vector n_turn  = normalize(vector3(x, y, -1));
+    vector n_axis  = normalize(cross(fwd, n_turn));
+    float  n_angle = acosf(dot(fwd, n_turn));
+
+    if (feq(n_angle, 0)) return dir;
+
+    float  o_angle = acosf(dot(fwd, dir));
+    vector o_axis  = normalize(cross(fwd, dir));
+    vector o_quat  = feq(o_angle, 0) ? vector4(0, 0, 0, 1) : quaternion(o_angle, o_axis);
+
+    n_axis = rotate_passive(n_axis, o_quat);
+    vector n_quat = quaternion(n_angle, n_axis);
+
+    return normalize(rotate_passive(dir, n_quat));
+}
+
 static inline void update_camera(struct camera *c, struct window *w, float dt)
 {
     double x,y;
     glfwGetCursorPos(w->window, &x, &y);
-    camera_look(c, x, y, dt);
+    y = -y;
+    // camera_look(c, x, y, dt);
+
+    if (c->mode == CAMERA_MODE_FLY) {
+        c->dir = turn(c->dir, (x - c->x) * c->sens * dt, (y - c->y) * c->sens * dt);
+        c->x = x;
+        c->y = y;
+    }
+
+    if (!feq(x,0) || !feq(y, 0)) {
+        // println("x = %f, y = %f", (x - c->x) * c->sens * dt, (y - c->y) * c->sens * dt);
+        // println_vector(c->dir);
+    }
 
     float fwd = 0;
     float right = 0;
@@ -93,14 +132,23 @@ static inline void update_camera(struct camera *c, struct window *w, float dt)
         fwd = -1;
     if (glfwGetKey(w->window, GLFW_KEY_D) == GLFW_PRESS)
         right = 1;
-    if (glfwGetKey(w->window, GLFW_KEY_SPACE) == GLFW_PRESS)
+    if (glfwGetKey(w->window, GLFW_KEY_SPACE) == GLFW_PRESS) {
         up = 1;
+        c->mode = CAMERA_MODE_FLY;
+        glfwSetInputMode(w->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    }
     if (glfwGetKey(w->window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
         up = -1;
     if (glfwGetKey(w->window, GLFW_KEY_1) == GLFW_PRESS)
         c->speed /= 2;
     if (glfwGetKey(w->window, GLFW_KEY_2) == GLFW_PRESS)
         c->speed *= 2;
+
+    if (glfwGetKey(w->window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+        up = 1;
+        c->mode = CAMERA_MODE_NORMAL;
+        glfwSetInputMode(w->window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+    }
 
     camera_move(c, fwd, right, up, dt);
 

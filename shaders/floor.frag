@@ -1,5 +1,7 @@
 #version 450
 
+#extension GL_EXT_debug_printf : enable
+
 layout(set = 1, binding = 0) uniform sampler2D shadow_maps[1];
 
 struct Directional_Light {
@@ -25,12 +27,14 @@ float in_shadow(uint i) {
     vec3 pc = fs_info.dir_lights[i].ls_frag_pos.xyz;
     pc = pc * 0.5 + 0.5;
     float d = texture(shadow_maps[i], pc.xy).r;
+    // if (d != 0)
+        // debugPrintfEXT("d: %f, p: %f\n", d, pc.z);
     return pc.z > d ? 1 : 0;
 }
 
 layout(location = 0) out vec4 col;
 
 void main() {
-    col = vec4(0.5, 0, 0.5, 1) + vec4(5, 0, 0, 0) * 1 - in_shadow(0);
+    col = vec4(1, 1, 1, 0) * (1 - in_shadow(0));
     col.a = 1;
 }

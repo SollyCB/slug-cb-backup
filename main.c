@@ -110,20 +110,22 @@ int main() {
 
     struct camera cam = {0};
     {
-        cam.pos = vector4(0, 20, -40, 1);
+        cam.pos = vector4(0, 0, 0, 1);
         cam.fov = FOV;
         cam.sens = 0.03;
         cam.speed = 5;
+
+        cam.mode = CAMERA_MODE_FLY;
 
         cam.dir = normalize(vector3(0, 0, -1));
 
         double r,u;
         cursorpos(&pr.glfw, &r, &u);
         cam.x = r;
-        cam.y = u;
+        cam.y = -u;
 
-        cam.pitch = 0.2;
-        cam.yaw = 2;
+        cam.pitch = 0.0;
+        cam.yaw = 1;
     }
     prog_init(&pr, &cam);
 
@@ -197,6 +199,24 @@ int main() {
             matrix mat_view;
             view_matrix(cam.pos, cam.dir, vector3(0, 1, 0), &mat_view);
 
+            {
+                cam.dir = normalize(cam.dir);
+
+                vector f = vector3(0, 0, -1);
+                float a = acosf(dot(cam.dir, f));
+                vector lol = normalize(cross(f, cam.dir));
+
+                static float timmy = 0;
+
+                timmy += dt;
+
+                if (timmy > 1) {
+                    timmy = 0;
+                    print("angle %f, axis ");
+                    println_vector(lol);
+                }
+            }
+
             vs_info->view_pos = cam.pos;
 
             if (!jumping) {
@@ -213,9 +233,9 @@ int main() {
             matrix mat_model;
             struct trs model_trs;
             get_trs(
-                get_vector(0, 0, 0, 0),
-                quaternion(PI/4, get_vector(1, 0, 0, 0)),
-                get_vector(1, 1, 1, 0),
+                vector3(0, 2, -3),
+                quaternion(-PI/6, get_vector(1, 0, 0, 0)),
+                vector3(1, 1, 1),
                 &model_trs
             );
             convert_trs(&model_trs, &mat_model);
@@ -308,10 +328,19 @@ int main() {
             mul_matrix(&vs_info->proj, &vs_info->view, &m);
 
             struct frustum f;
-            perspective_frustum(FOV, ASPECT_RATIO, -0.1, -100, &f);
+            perspective_frustum(FOV, ASPECT_RATIO, 0.1, 100, &f);
 
             matrix v;
-            view_matrix(vs_info->dir_lights[0].position, vs_info->dir_lights[0].direction, vector3(0, 1, 0), &v);
+            view_matrix(vs_info->dir_lights[0].position, vs_info->dir_lights[0].direction, vector3(0, 0, -1), &v);
+
+            matrix fm;
+            {
+                matrix il,lm;
+                invert(&vs_info->view, &il);
+                il.m[15] = 1;
+                translation_matrix(vs_info->view_pos, &lm);
+                mul_matrix(&lm, &il, &fm);
+            }
 
             struct minmax x,y;
             minmax_frustum_points(&f, &v, &x, &y);
@@ -324,7 +353,6 @@ int main() {
 
             matrix o;
             ortho_matrix(x.min, x.max, y.min, y.max, nf.min, nf.max, &o);
-
             mul_matrix(&o, &v, &vs_info->dir_lights[0].space);
 
             vk_cmd_push_constants(draw_cmd,
@@ -347,12 +375,12 @@ int main() {
 
             draw_floor(draw_cmd, &pr.gpu, color_rp.rp, 0, lma.dsls, lma.db_indices, lma.db_offsets, &df_rsc);
 
-            // draw_model_color(draw_cmd, lmr.draw_info);
+            draw_model_color(draw_cmd, lmr.draw_info);
 
             {
-                #define DSB 1
-                #define DLF 1
-                #define DCF 1
+                #define DSB 0
+                #define DLF 0
+                #define DCF 0
 
                 struct box vfb;
                 frustum_to_box(&f, &vfb);
@@ -391,7 +419,7 @@ int main() {
                     translation_matrix(vs_info->dir_lights[0].position, &lm);
                     mul_matrix(&lm, &il, &il);
                     mul_matrix(&m, &il, &il);
-                    draw_box(draw_cmd, &pr.gpu, &lfb, true,  color_rp.rp, 0, &lf_rsc, &il, vector4(1, 1, 0, 1));
+                    draw_box(draw_cmd, &pr.gpu, &lfb, true, color_rp.rp, 0, &lf_rsc, &il, vector4(0, 1, 0, 1));
 
                 #endif
 

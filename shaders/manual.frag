@@ -2,6 +2,14 @@
 
 #extension GL_EXT_debug_printf : enable
 
+void pv4(vec4 v) {
+    debugPrintfEXT("%f, %f, %f, %f\n", v.x, v.y, v.z, v.w);
+}
+
+void pv3(vec3 v) {
+    debugPrintfEXT("%f, %f, %f\n", v.x, v.y, v.z);
+}
+
 layout(set = 1, binding = 0) uniform sampler2D shadow_maps[1];
 
 layout(set = 3, binding = 0) uniform Material_Ubo {
@@ -34,10 +42,8 @@ layout(location = 1) in struct Fragment_Info {
 } fs_info;
 
 float in_shadow(uint i) {
-    vec3 pc = fs_info.dir_lights[i].ls_frag_pos.xyz;
-    pc = pc * 0.5 + 0.5;
-    float d = texture(shadow_maps[i], pc.xy).r;
-    return pc.z > d ? 1 : 0;
+    vec3 pc = fs_info.dir_lights[i].ls_frag_pos.xyz * 0.5 + 0.5;
+    return pc.z > texture(shadow_maps[i], pc.xy).r ? 1 : 0;
 }
 
 const float PI = 3.1415926;
@@ -59,14 +65,6 @@ void pmatubo() {
             material_ubo.bbbb.x, material_ubo.bbbb.y, material_ubo.bbbb.z, material_ubo.bbbb.w,
             material_ubo.mrno.x, material_ubo.mrno.y, material_ubo.mrno.z, material_ubo.mrno.w,
             material_ubo.eeea.x, material_ubo.eeea.y, material_ubo.eeea.z, material_ubo.eeea.w);
-}
-
-void pv4(vec4 v) {
-    debugPrintfEXT("%f, %f, %f, %f\n", v.x, v.y, v.z, v.w);
-}
-
-void pv3(vec3 v) {
-    debugPrintfEXT("%f, %f, %f\n", v.x, v.y, v.z);
 }
 
 void main() {
@@ -108,7 +106,7 @@ void main() {
         vec3 spec = (F * D * G) / (4 * abs(dot(V, N)) * abs(dot(L, N)));
         vec3 matbrdf = diff + spec;
 
-        matbrdf *= 1 - in_shadow(i);
+        matbrdf *= 1; // - in_shadow(i);
 
         light += vec3(fs_info.dir_lights[i].color.r * matbrdf.r,
                       fs_info.dir_lights[i].color.g * matbrdf.g,

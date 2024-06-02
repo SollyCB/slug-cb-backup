@@ -1094,7 +1094,7 @@ struct vs_info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vs_
     Vertex_Info *vs = (Vertex_Info*)(gpu->mem.bind_buffer.data + bb_ofs);
 
     vs->dir_light_count = 1;
-    vs->dir_lights[0].position  = get_vector(15, 15, 0,  1);
+    vs->dir_lights[0].position  = get_vector(0, 10, 0,  1);
 
     vs->dir_lights[0].direction = sub_vector(vector3(0, 0, 0), vs->dir_lights[0].position);
     vs->dir_lights[0].direction.w = 0;
@@ -2629,6 +2629,7 @@ void draw_box_cleanup(struct gpu *gpu, struct draw_box_rsc *rsc)
 {
     for(uint i=0; i < carrlen(rsc->modules); ++i)
         vk_destroy_shader_module(gpu->device, rsc->modules[i], GAC);
+    vk_destroy_pipeline(gpu->device, rsc->pipeline, GAC);
     vk_destroy_pipeline_layout(gpu->device, rsc->layout, GAC);
 }
 
