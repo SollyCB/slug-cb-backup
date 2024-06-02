@@ -569,19 +569,22 @@ static inline bool invert(matrix *x, matrix *y)
 static inline void view_matrix(vector pos, vector dir, vector up, matrix *m)
 {
     #if 0
-    dir = normalize(dir);
 
-    matrix t;
-    translation_matrix(scale_vector(pos, -1), &t);
+    vector fo = get_vector(0, 0, -1, 0);
+    vector fn = normalize(dir);
+    vector ax = cross(fo, fn);
+    normalize(ax);
 
-    vector f = vector3(0, 0, -1);
-    float a = acosf(dot(dir, f));
-    vector q = quaternion(a, feq(a, 0) ? f : normalize(cross(f, dir)));
+    matrix mr;
+    float angle = acosf(dot(fo, fn));
+    vector rot = quaternion(angle, ax);
+    rotation_matrix(rot, &mr);
 
-    matrix r;
-    rotation_matrix(q, &r);
+    matrix mt;
+    vector vt = get_vector(-pos.x, -pos.y, -pos.z, 0);
+    translation_matrix(vt, &mt);
 
-    mul_matrix(&t, &r, m);
+    mul_matrix(&mr, &mt, m);
 
     #else
 

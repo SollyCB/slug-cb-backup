@@ -223,7 +223,8 @@ int main() {
             convert_trs(&model_trs, &mat_model);
 
             update_vs_info_mat_model(&pr.gpu, vs_info_desc.bb_offset, &mat_model);
-            update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &IDENTITY_MATRIX);
+            update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &mat_view);
+            // update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &IDENTITY_MATRIX);
 
             scene_bounding_box(&scene_bb);
         }
