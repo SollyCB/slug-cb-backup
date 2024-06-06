@@ -7,7 +7,7 @@ extern int SCR_W;
 extern float ASPECT_RATIO;
 extern float FOV;
 
-#define PERSPECTIVE 0
+#define PERSPECTIVE 1
 
 #define ASPECT_RATIO ((float)SCR_H / SCR_W)
 

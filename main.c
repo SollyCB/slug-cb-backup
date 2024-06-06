@@ -202,7 +202,7 @@ int main() {
         reset_gpu_buffers(&pr.gpu);
 
         matrix light_view_mat;
-        view_matrix(vs_info->dir_lights[0].position,
+        view_matrix(vector4(0, 0, 0, 1), // vs_info->dir_lights[0].position,
                     sub_vector(vector4(0, 0, 0, 1), vs_info->dir_lights[0].position),
                     vector3(0, 0, -1), &light_view_mat);
 
