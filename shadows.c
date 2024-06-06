@@ -107,7 +107,6 @@ struct minmax near_far(struct minmax x, struct minmax y, struct box *b)
     vector pt = vector4( 0,-1, 0, dot(vector3( 0, 1, 0), vector3(    0, y.max, 0)));
 
     vector pts[12];
-    bool     c[12];
 
     struct pair_uint idx[] = {
         {0,1}, {1,2}, {2,3}, {3,0},
@@ -121,12 +120,7 @@ struct minmax near_far(struct minmax x, struct minmax y, struct box *b)
         vector s = b->p[idx[i].a];
         vector v = normalize(sub_vector(b->p[idx[i].b], b->p[idx[i].a]));
 
-        c[i] = intersect_line_plane(pl, s, v, &pts[i]) == INTERSECT;
-
-        for(uint j=0; j < carrlen(idx); ++j) {
-            if (!c[i])
-                continue;
-
+        if (intersect_line_plane(pl, s, v, &pts[i]) == INTERSECT) {
             if (pts[i].z < nf.min)
                 nf.min = pts[i].z;
             if (pts[i].z > nf.max)

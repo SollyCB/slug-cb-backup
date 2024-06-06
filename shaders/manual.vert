@@ -68,7 +68,8 @@ void main() {
     vec4 world_pos = vs_info.model * transforms.node_trs * vec4(in_position, 1);
     gl_Position = vs_info.proj * vs_info.view * world_pos;
 
-    // pmat(vs_info.view);
+    // pv4(vs_info.view * vs_info.model * transforms.node_trs * vec4(in_position, 1));
+    // pmat(vs_info.view * vs_info.model);
     // pv4(vs_info.view * vs_info.model * transforms.node_trs * vec4(in_position, 1));
 
     fs_info.texcoord = in_texcoord;

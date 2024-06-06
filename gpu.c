@@ -1094,7 +1094,7 @@ struct vs_info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vs_
     Vertex_Info *vs = (Vertex_Info*)(gpu->mem.bind_buffer.data + bb_ofs);
 
     vs->dir_light_count = 1;
-    vs->dir_lights[0].position = get_vector(0, 10, 0,  1);
+    vs->dir_lights[0].position = get_vector(2, 10, -4,  1);
     vs->dir_lights[0].color    = get_vector(50.0, 50.0, 50.0,  0);
 
     vs->ambient.x = 0.4;

@@ -54,7 +54,7 @@ static inline void camera_look(struct camera *c, float r, float u, float dt)
     c->x = r;
     c->y = u;
 
-    #if 1
+    #if 0
     static float time = 0;
     time += dt;
     if (time > 1) {

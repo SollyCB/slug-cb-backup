@@ -113,7 +113,8 @@ int main() {
         #if PERSPECTIVE
         cam.pos = vector4(0, 4, 7, 1);
         #else
-        cam.pos = vector4(0, 10, 0, 1);
+        // cam.pos = vector4(0, 10, 0, 1);
+        cam.pos = vector4(0, 0, 0, 1);
         #endif
 
         cam.fov = FOV;
@@ -194,6 +195,8 @@ int main() {
     struct minmax minmax_frustum_x,minmax_frustum_y, light_nearfar_planes;
     struct frustum camera_frustum;
 
+    uint frame_count = 0;
+
     // for(uint frame_count=0; frame_count < 50; ++frame_count) {
     for(;;) {
         poll_glfw();
@@ -263,7 +266,11 @@ int main() {
             for(uint i=0; i < carrlen(ls_bb.p); ++i)
                 ls_bb.p[i] = mul_matrix_vector(&light_view_mat, scene_bb.p[i]);
 
+            println("%f, %f, %f, %f", minmax_frustum_x.min, minmax_frustum_x.max,
+                     minmax_frustum_y.min, minmax_frustum_y.max);
+
             light_nearfar_planes = near_far(minmax_frustum_x, minmax_frustum_y, &ls_bb);
+            println("%f, %f", light_nearfar_planes.min, light_nearfar_planes.max);
 
             ortho_matrix(minmax_frustum_x.min, minmax_frustum_x.max, minmax_frustum_y.min,
                          minmax_frustum_y.max, light_nearfar_planes.min, light_nearfar_planes.max, &light_ortho);
@@ -412,6 +419,7 @@ int main() {
                               minmax_frustum_y.min, minmax_frustum_y.max,
                               light_nearfar_planes.min, light_nearfar_planes.max, &lf);
                 frustum_to_box(&lf, &lfb);
+                // print_box(&lfb);
 
                 {
                     matrix lm;
@@ -522,6 +530,8 @@ int main() {
         reset_command_pool(&pr.gpu, graphics_pool);
 
         FRAME_I = (FRAME_I + 1) & 1;
+
+        frame_count++;
 
         while(ONE_FRAME)
             ;

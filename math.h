@@ -126,8 +126,13 @@ static inline void println_vector(vector v)
 
 static inline void print_box(struct box *b)
 {
-    println("[ %f, %f, %f, %f",   b->p[0], b->p[1], b->p[2], b->p[3]);
-    println("  %f, %f, %f, %f ]", b->p[4], b->p[5], b->p[6], b->p[7]);
+    for(uint i=0; i < carrlen(b->p) / 2; ++i) {
+        if (i == 0) {
+            print_vector(b->p[i]); print(" | box %uh", b);
+        } else {
+            println_vector(b->p[i]);
+        }
+    }
 }
 
 static inline void array_to_vector(float *arr, vector v)

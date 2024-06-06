@@ -23,8 +23,8 @@ void pv4(vec4 v) {
 }
 
 void main() {
-    gl_Position = p * m * v * vec4(pos, 1);
-    // pmat(v);
+    gl_Position = p * v * m * vec4(pos, 1);
+    // pmat(m);
     // pv4(gl_Position);
-    // pv4(mv * vec4(pos, 1));
+    // pv4(m * v * vec4(pos, 1));
 }
