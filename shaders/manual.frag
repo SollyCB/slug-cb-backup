@@ -32,7 +32,6 @@ layout(location = 0) flat in uint dir_light_count;
 
 layout(location = 1) in struct Fragment_Info {
     vec2 texcoord;
-    vec3 frag_pos;
     vec3 tang_normal;
     vec3 tang_frag_pos;
     vec3 tang_view_pos;
@@ -42,8 +41,11 @@ layout(location = 1) in struct Fragment_Info {
 } fs_info;
 
 float in_shadow(uint i) {
-    vec3 pc = fs_info.dir_lights[i].ls_frag_pos.xyz * 0.5 + 0.5;
-    return pc.z > texture(shadow_maps[i], pc.xy).r ? 1 : 0;
+    vec2 pc = fs_info.dir_lights[i].ls_frag_pos.xy * 0.5 + 0.5;
+    // debugPrintfEXT("[%f,%f]\n", pc.x, pc.y);
+    // debugPrintfEXT("[%f]\n", fs_info.dir_lights[i].ls_frag_pos.z);
+    // pv4(texture(shadow_maps[i], pc.xy));
+    return (fs_info.dir_lights[i].ls_frag_pos.z) > texture(shadow_maps[i], pc.xy).r ? 1 : 0;
 }
 
 const float PI = 3.1415926;
@@ -106,7 +108,7 @@ void main() {
         vec3 spec = (F * D * G) / (4 * abs(dot(V, N)) * abs(dot(L, N)));
         vec3 matbrdf = diff + spec;
 
-        matbrdf *= 1; // - in_shadow(i);
+        matbrdf *= 1 - in_shadow(i);
 
         light += vec3(fs_info.dir_lights[i].color.r * matbrdf.r,
                       fs_info.dir_lights[i].color.g * matbrdf.g,

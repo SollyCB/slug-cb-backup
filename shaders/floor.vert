@@ -8,7 +8,6 @@ void pv3(vec3 v) {
 
 struct In_Directional_Light {
     vec4 position;
-    vec4 direction;
     vec4 color;
     mat4 space;
 };

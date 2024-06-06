@@ -1094,13 +1094,8 @@ struct vs_info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vs_
     Vertex_Info *vs = (Vertex_Info*)(gpu->mem.bind_buffer.data + bb_ofs);
 
     vs->dir_light_count = 1;
-    vs->dir_lights[0].position  = get_vector(0, 10, 0,  1);
-
-    vs->dir_lights[0].direction = sub_vector(vector3(0, 0, 0), vs->dir_lights[0].position);
-    vs->dir_lights[0].direction.w = 0;
-    vs->dir_lights[0].direction = normalize(vs->dir_lights[0].direction);
-
-    vs->dir_lights[0].color     = get_vector(50.0, 50.0, 50.0,  0);
+    vs->dir_lights[0].position = get_vector(0, 10, 0,  1);
+    vs->dir_lights[0].color    = get_vector(50.0, 50.0, 50.0,  0);
 
     vs->ambient.x = 0.4;
     vs->ambient.y = 0.4;
@@ -1110,7 +1105,11 @@ struct vs_info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vs_
     identity_matrix(&model);
 
     matrix proj;
+    #if PERSPECTIVE
     perspective_matrix(FOV, ASPECT_RATIO, 0.1, 200, &proj);
+    #else
+    ortho_matrix(-41.4213562, 41.4213562, 0.1, 100.0, -10.0, 0.0, &proj);
+    #endif
 
     memcpy(&vs->model, &model, sizeof(model));
     memcpy(&vs->proj, &proj, sizeof(proj));
@@ -1739,6 +1738,7 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
             .minLod = 0,
             .maxLod = VK_LOD_CLAMP_NONE,
             .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+            // .borderColor = VK_BORDER_COLOR_INT_OPAQUE_WHITE,
             .anisotropyEnable = flag_check(gpu->flags, GPU_SAMPLER_ANISOTROPY_ENABLE_BIT),
             .maxAnisotropy = gpu->defaults.sampler_anisotropy,
             .compareEnable = 0, // This I especially do not know its function.

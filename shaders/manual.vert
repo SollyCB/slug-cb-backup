@@ -3,11 +3,11 @@
 #extension GL_EXT_debug_printf : enable
 
 void pmat(mat4 m) {
-    debugPrintfEXT("%f, %f, %f, %f,\n%f, %f, %f, %f,\n%f, %f, %f, %f,\n%f, %f, %f, %f\n",
-    m[0][0], m[0][1], m[0][2], m[0][3],
-    m[1][0], m[1][1], m[1][2], m[1][3],
-    m[2][0], m[2][1], m[2][2], m[2][3],
-    m[3][0], m[3][1], m[3][2], m[3][3]);
+    debugPrintfEXT("[ %f, %f, %f, %f,\n  %f, %f, %f, %f,\n  %f, %f, %f, %f,\n  %f, %f, %f, %f]\n",
+    m[0][0], m[1][0], m[2][0], m[3][0],
+    m[0][1], m[1][1], m[2][1], m[3][1],
+    m[0][2], m[1][2], m[2][2], m[3][2],
+    m[0][3], m[1][3], m[2][3], m[3][3]);
 }
 
 void pv3(vec3 v) {
@@ -25,7 +25,6 @@ layout(location = 3) in vec2 in_texcoord;
 
 struct In_Directional_Light {
     vec4 position;
-    vec4 direction;
     vec4 color;
     mat4 space;
 };
@@ -57,7 +56,6 @@ layout(location = 0) out uint dir_light_count;
 
 layout(location = 1) out struct Fragment_Info {
     vec2 texcoord;
-    vec3 frag_pos;
     vec3 tang_normal;
     vec3 tang_frag_pos;
     vec3 tang_view_pos;
@@ -70,8 +68,10 @@ void main() {
     vec4 world_pos = vs_info.model * transforms.node_trs * vec4(in_position, 1);
     gl_Position = vs_info.proj * vs_info.view * world_pos;
 
+    // pmat(vs_info.view);
+    // pv4(vs_info.view * vs_info.model * transforms.node_trs * vec4(in_position, 1));
+
     fs_info.texcoord = in_texcoord;
-    fs_info.frag_pos = vec3(world_pos);
 
     vec3 normal = vec3(vs_info.model * transforms.node_trs * vec4(in_normal, 1));
     vec3 tangent = vec3(vs_info.model * transforms.node_trs * in_tangent);
@@ -88,5 +88,10 @@ void main() {
         fs_info.dir_lights[i].color = vec3(vs_info.dir_lights[i].color);
         fs_info.dir_lights[i].ts_light_pos = tbn * vec3(vs_info.dir_lights[i].position);
         fs_info.dir_lights[i].ls_frag_pos = vec3(vs_info.dir_lights[i].space * world_pos);
+        // pmat(vs_info.dir_lights[i].space);
+        // debugPrintfEXT("%f, %f, %f, %f | %f, %f, %f\n", world_pos.x, world_pos.y, world_pos.z, world_pos.w,
+        //                fs_info.dir_lights[i].ls_frag_pos.x,
+        //                fs_info.dir_lights[i].ls_frag_pos.y,
+        //                fs_info.dir_lights[i].ls_frag_pos.z);
     }
 }

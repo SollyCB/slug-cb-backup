@@ -23,7 +23,6 @@ typedef enum {
 
 typedef struct directional_light {
     vector position;
-    vector direction;
     vector color;
     matrix space;
 } In_Directional_Light;

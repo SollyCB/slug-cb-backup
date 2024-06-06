@@ -26,10 +26,8 @@ layout(location = 1) in struct Fragment_Info {
 float in_shadow(uint i) {
     vec3 pc = fs_info.dir_lights[i].ls_frag_pos.xyz;
     pc = pc * 0.5 + 0.5;
-    float d = texture(shadow_maps[i], pc.xy).r;
-    // if (d != 0)
-        // debugPrintfEXT("d: %f, p: %f\n", d, pc.z);
-    return pc.z > d ? 1 : 0;
+    float d = texture(shadow_maps[i], pc.xy).r; // @RemoveMe
+    return pc.z > texture(shadow_maps[i], pc.xy).r ? 1 : 0;
 }
 
 layout(location = 0) out vec4 col;

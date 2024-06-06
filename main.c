@@ -110,7 +110,12 @@ int main() {
 
     struct camera cam = {0};
     {
-        cam.pos = vector4(0, 0, 0, 1);
+        #if PERSPECTIVE
+        cam.pos = vector4(0, 4, 7, 1);
+        #else
+        cam.pos = vector4(0, 10, 0, 1);
+        #endif
+
         cam.fov = FOV;
         cam.sens = 0.03;
         cam.speed = 5;
@@ -124,8 +129,13 @@ int main() {
         cam.x = r;
         cam.y = -u;
 
-        cam.pitch = 0.0;
-        cam.yaw = 1;
+        cam.yaw = -1;
+
+        #if PERSPECTIVE
+        cam.pitch = -0.1;
+        #else
+        cam.pitch = -1.0;
+        #endif
     }
     prog_init(&pr, &cam);
 
@@ -181,6 +191,8 @@ int main() {
     float dt = 0;
 
     struct box scene_bb;
+    struct minmax minmax_frustum_x,minmax_frustum_y, light_nearfar_planes;
+    struct frustum camera_frustum;
 
     // for(uint frame_count=0; frame_count < 50; ++frame_count) {
     for(;;) {
@@ -189,6 +201,14 @@ int main() {
         allocator_reset_linear(&pr.allocs.temp);
         reset_gpu_buffers(&pr.gpu);
 
+        matrix light_view_mat;
+        view_matrix(vs_info->dir_lights[0].position,
+                    sub_vector(vector4(0, 0, 0, 1), vs_info->dir_lights[0].position),
+                    vector3(0, 0, -1), &light_view_mat);
+
+        matrix lmvp;
+        matrix light_ortho;
+        matrix mat_model;
         {
             dt = t;
             t = get_float_time_proc();
@@ -199,7 +219,7 @@ int main() {
             matrix mat_view;
             view_matrix(cam.pos, cam.dir, vector3(0, 1, 0), &mat_view);
 
-            vs_info->view_pos = vector3(0, 0, 0); // cam.pos;
+            vs_info->view_pos = cam.pos;
 
             if (!jumping) {
                 jumping = true;
@@ -212,11 +232,10 @@ int main() {
                 clamp(s, 0, INFINITY);
             }
 
-            matrix mat_model;
             struct trs model_trs;
             get_trs(
-                vector3(0, 2, -3),
-                quaternion(-PI/6, get_vector(1, 0, 0, 0)),
+                vector3(0, 2, -4),
+                quaternion(-PI/6, vector3(1, 0, 0)),
                 vector3(1, 1, 1),
                 &model_trs
             );
@@ -224,9 +243,33 @@ int main() {
 
             update_vs_info_mat_model(&pr.gpu, vs_info_desc.bb_offset, &mat_model);
             update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &mat_view);
-            // update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &IDENTITY_MATRIX);
 
             scene_bounding_box(&scene_bb);
+
+            perspective_frustum(FOV, ASPECT_RATIO, 0.1, 100, &camera_frustum);
+
+            matrix fm;
+            {
+                matrix il,lm;
+                invert(&vs_info->view, &il);
+                il.m[15] = 1;
+                translation_matrix(vs_info->view_pos, &lm);
+                mul_matrix(&lm, &il, &fm);
+            }
+
+            minmax_frustum_points(&camera_frustum, &light_view_mat, &minmax_frustum_x, &minmax_frustum_y);
+
+            struct box ls_bb;
+            for(uint i=0; i < carrlen(ls_bb.p); ++i)
+                ls_bb.p[i] = mul_matrix_vector(&light_view_mat, scene_bb.p[i]);
+
+            light_nearfar_planes = near_far(minmax_frustum_x, minmax_frustum_y, &ls_bb);
+
+            ortho_matrix(minmax_frustum_x.min, minmax_frustum_x.max, minmax_frustum_y.min,
+                         minmax_frustum_y.max, light_nearfar_planes.min, light_nearfar_planes.max, &light_ortho);
+
+            mul_matrix(&light_view_mat, &mat_model, &lmvp);
+            mul_matrix(&light_ortho, &lmvp, &vs_info->dir_lights[0].space);
         }
 
         pr.gpu.swapchain.i = next_swapchain_image(&pr.gpu, sem_have_swapchain_image, fence);
@@ -307,43 +350,27 @@ int main() {
         {
             begin_shadow_renderpass(draw_cmd, &depth_rp, &pr.gpu, shadow_maps.count);
 
-            matrix m;
-            mul_matrix(&vs_info->proj, &vs_info->view, &m);
-
-            struct frustum f;
-            perspective_frustum(FOV, ASPECT_RATIO, 0.1, 100, &f);
-
-            matrix v;
-            view_matrix(vs_info->dir_lights[0].position, vs_info->dir_lights[0].direction, vector3(0, 0, -1), &v);
-
-            matrix fm;
-            {
-                matrix il,lm;
-                invert(&vs_info->view, &il);
-                il.m[15] = 1;
-                translation_matrix(vs_info->view_pos, &lm);
-                mul_matrix(&lm, &il, &fm);
-            }
-
-            struct minmax x,y;
-            minmax_frustum_points(&f, &v, &x, &y);
-
-            struct box ls_bb;
-            for(uint i=0; i < carrlen(ls_bb.p); ++i)
-                ls_bb.p[i] = mul_matrix_vector(&v, scene_bb.p[i]);
-
-            struct minmax nf = near_far(x, y, &ls_bb);
-
-            matrix o;
-            ortho_matrix(x.min, x.max, y.min, y.max, nf.min, nf.max, &o);
-            mul_matrix(&o, &v, &vs_info->dir_lights[0].space);
-
             vk_cmd_push_constants(draw_cmd,
                                   lmr.draw_info->pipeline_layouts[lmr.draw_info->prim_count],
                                   VK_SHADER_STAGE_VERTEX_BIT,
                                   0,
                                   sizeof(matrix),
-                                  &vs_info->dir_lights[0].space);
+                                  &mat_model);
+
+            vk_cmd_push_constants(draw_cmd,
+                                  lmr.draw_info->pipeline_layouts[lmr.draw_info->prim_count],
+                                  VK_SHADER_STAGE_VERTEX_BIT,
+                                  sizeof(matrix),
+                                  sizeof(matrix),
+                                  &light_view_mat);
+
+            vk_cmd_push_constants(draw_cmd,
+                                  lmr.draw_info->pipeline_layouts[lmr.draw_info->prim_count],
+                                  VK_SHADER_STAGE_VERTEX_BIT,
+                                  sizeof(matrix) * 2,
+                                  sizeof(matrix),
+                                  &light_ortho);
+                                  // &vs_info->dir_lights[0].space);
 
             draw_model_depth(draw_cmd, lmr.draw_info, 0);
 
@@ -361,12 +388,15 @@ int main() {
             draw_model_color(draw_cmd, lmr.draw_info);
 
             {
-                #define DSB 0
-                #define DLF 0
-                #define DCF 0
+                #define DSB 1
+                #define DLF 1
+                #define DCF 1
 
                 struct box vfb;
-                frustum_to_box(&f, &vfb);
+                frustum_to_box(&camera_frustum, &vfb);
+
+                matrix m;
+                mul_matrix(&vs_info->proj, &vs_info->view, &m);
 
                 #if DCF
                 draw_box(draw_cmd, &pr.gpu, &vfb, true, color_rp.rp, 0, &vf_rsc, &m, vector4(1, 0, 0, 1));
@@ -378,7 +408,9 @@ int main() {
 
                 struct frustum lf;
                 struct box lfb;
-                ortho_frustum(x.min, x.max, y.min, y.max, nf.min, nf.max, &lf);
+                ortho_frustum(minmax_frustum_x.min, minmax_frustum_x.max,
+                              minmax_frustum_y.min, minmax_frustum_y.max,
+                              light_nearfar_planes.min, light_nearfar_planes.max, &lf);
                 frustum_to_box(&lf, &lfb);
 
                 {
@@ -392,12 +424,12 @@ int main() {
                     );
                     convert_trs(&ltrs, &lm);
                     mul_matrix(&m, &lm, &lm);
-                    draw_box(draw_cmd, &pr.gpu, &lbox, false, color_rp.rp, 0, &lpos_rsc, &lm, vector4(1, 1, 1, 1));
 
                 #if DLF
+                    draw_box(draw_cmd, &pr.gpu, &lbox, false, color_rp.rp, 0, &lpos_rsc, &lm, vector4(50, 50, 50, 1));
 
                     matrix il;
-                    invert(&v, &il);
+                    invert(&light_view_mat, &il);
                     il.m[15] = 1;
                     translation_matrix(vs_info->dir_lights[0].position, &lm);
                     mul_matrix(&lm, &il, &il);

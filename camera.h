@@ -53,6 +53,18 @@ static inline void camera_look(struct camera *c, float r, float u, float dt)
 
     c->x = r;
     c->y = u;
+
+    #if 1
+    static float time = 0;
+    time += dt;
+    if (time > 1) {
+        time = 0;
+        print("dir: ");
+        print_vector(c->dir);
+        print(", pos: ");
+        println_vector(c->pos);
+    }
+    #endif
 }
 
 static inline void camera_move(struct camera *c, float f, float r, float u, float dt)
@@ -60,11 +72,11 @@ static inline void camera_move(struct camera *c, float f, float r, float u, floa
     vector vf = normalize(vector3(c->dir.x, 0, c->dir.z));
     vector vr = normalize(cross(vf, vector3(0, 1, 0)));
 
-    c->pos.x += vf.x * -f * c->speed * dt;
-    c->pos.z += vf.z * -f * c->speed * dt;
+    c->pos.x += vf.x * f * c->speed * dt;
+    c->pos.z += vf.z * f * c->speed * dt;
 
-    c->pos.x += vr.x *  r * c->speed * dt;
-    c->pos.z += vr.z *  r * c->speed * dt;
+    c->pos.x += vr.x * r * c->speed * dt;
+    c->pos.z += vr.z * r * c->speed * dt;
 
     c->pos.y += u * c->speed * dt;
 }
@@ -79,60 +91,22 @@ static inline void center_camera_and_cursor(struct camera *c, struct window *w)
     c->y = y;
 }
 
-static inline vector turn(vector dir, float x, float y)
-{
-    vector fwd = vector3(0, 0, -1);
-
-    vector n_turn  = normalize(vector3(x, y, -1));
-    vector n_axis  = normalize(cross(fwd, n_turn));
-    float  n_angle = acosf(dot(fwd, n_turn));
-
-    if (feq(n_angle, 0)) return dir;
-
-    float  o_angle = acosf(dot(fwd, dir));
-    vector o_axis  = normalize(cross(fwd, dir));
-    vector o_quat  = feq(o_angle, 0) ? vector4(0, 0, 0, 1) : quaternion(o_angle, o_axis);
-
-    n_axis = rotate_passive(n_axis, o_quat);
-    vector n_quat = quaternion(n_angle, n_axis);
-
-    dir = normalize(rotate_passive(dir, n_quat));
-
-    #if 1
-    print("o_angle: %f, n_angle: %f, o_axis ", o_angle, n_angle);
-    print_vector(o_axis);
-    print(", n_axis");
-    print_vector(n_axis);
-    print(", dir: ");
-    println_vector(dir);
-    #endif
-
-    return dir;
-}
-
 static inline void update_camera(struct camera *c, struct window *w, float dt)
 {
-    double x,y;
-    glfwGetCursorPos(w->window, &x, &y);
-    y = -y;
-    // camera_look(c, x, y, dt);
-
     if (c->mode == CAMERA_MODE_FLY) {
+        double x,y;
+        glfwGetCursorPos(w->window, &x, &y);
+        camera_look(c, x, y, dt);
+
         static float time = 0;
         time += dt;
 
         if (time > 1) {
             time = 0;
-            c->dir = turn(c->dir, (x - c->x) * c->sens * dt, (y - c->y) * c->sens * dt);
         }
 
         c->x = x;
         c->y = y;
-    }
-
-    if (!feq(x,0) || !feq(y, 0)) {
-        // println("x = %f, y = %f", (x - c->x) * c->sens * dt, (y - c->y) * c->sens * dt);
-        // println_vector(c->dir);
     }
 
     float fwd = 0;

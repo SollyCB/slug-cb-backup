@@ -1031,7 +1031,7 @@ model_pipelines_transform_descriptors_and_draw_info(
         (VkPipelineRasterizationStateCreateInfo) {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
             .polygonMode = VK_POLYGON_MODE_LINE & maxif(arg->flags & LOAD_MODEL_WIREFRAME_BIT),
-            .cullMode = VK_CULL_MODE_BACK_BIT,
+            .cullMode = 0x0, // VK_CULL_MODE_BACK_BIT,
             .lineWidth = 1.0f,
         },
     };
@@ -1039,7 +1039,7 @@ model_pipelines_transform_descriptors_and_draw_info(
     VkPipelineRasterizationStateCreateInfo depth_rasterization = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
             .polygonMode = VK_POLYGON_MODE_LINE & maxif(arg->flags & LOAD_MODEL_WIREFRAME_BIT),
-            .cullMode = VK_CULL_MODE_FRONT_BIT,
+            .cullMode = 0x0, // VK_CULL_MODE_FRONT_BIT,
             .lineWidth = 1.0f,
     };
 
@@ -1130,6 +1130,7 @@ model_pipelines_transform_descriptors_and_draw_info(
     }
 
     {
+        #if 0 // @RemoveMe
         VkPushConstantRange pcr = {
             .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
             .offset = 0,
@@ -1142,6 +1143,20 @@ model_pipelines_transform_descriptors_and_draw_info(
         };
         VkResult check = vk_create_pipeline_layout(gpu->device, &ci, GAC, &resources->pipeline_layouts[pc]);
         DEBUG_VK_OBJ_CREATION(vkCreatePipelineLayout, check);
+        #else
+        VkPushConstantRange pcr = {
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+            .offset = 0,
+            .size = sizeof(matrix) * 3,
+        };
+        VkPipelineLayoutCreateInfo ci = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .pushConstantRangeCount = 1,
+            .pPushConstantRanges = &pcr,
+        };
+        VkResult check = vk_create_pipeline_layout(gpu->device, &ci, GAC, &resources->pipeline_layouts[pc]);
+        DEBUG_VK_OBJ_CREATION(vkCreatePipelineLayout, check);
+        #endif
     }
 
     VkDescriptorSetLayout dsl_buf[SHADER_MAX_DESCRIPTOR_SET_COUNT];

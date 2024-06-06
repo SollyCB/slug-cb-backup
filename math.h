@@ -124,6 +124,12 @@ static inline void println_vector(vector v)
     print("[%f, %f, %f, %f]\n", v.x, v.y, v.z, v.w);
 }
 
+static inline void print_box(struct box *b)
+{
+    println("[ %f, %f, %f, %f",   b->p[0], b->p[1], b->p[2], b->p[3]);
+    println("  %f, %f, %f, %f ]", b->p[4], b->p[5], b->p[6], b->p[7]);
+}
+
 static inline void array_to_vector(float *arr, vector v)
 {
     smemcpy(&v, arr, *arr, 4);
@@ -568,35 +574,15 @@ static inline bool invert(matrix *x, matrix *y)
 
 static inline void view_matrix(vector pos, vector dir, vector up, matrix *m)
 {
-    #if 0
-
-    vector fo = get_vector(0, 0, -1, 0);
-    vector fn = normalize(dir);
-    vector ax = cross(fo, fn);
-    normalize(ax);
-
-    matrix mr;
-    float angle = acosf(dot(fo, fn));
-    vector rot = quaternion(angle, ax);
-    rotation_matrix(rot, &mr);
-
-    matrix mt;
-    vector vt = get_vector(-pos.x, -pos.y, -pos.z, 0);
-    translation_matrix(vt, &mt);
-
-    mul_matrix(&mr, &mt, m);
-
-    #else
-
     vector w = normalize(up);
     vector d = normalize(dir);
     vector r = normalize(cross(d, w));
     vector u = normalize(cross(r, d));
 
     matrix rot;
-    matrix3(vector3(r.x, u.x, d.x),
-            vector3(r.y, u.y, d.y),
-            vector3(r.z, u.z, d.z), &rot);
+    matrix3(vector3(r.x, u.x, -d.x),
+            vector3(r.y, u.y, -d.y),
+            vector3(r.z, u.z, -d.z), &rot);
 
     rot.m[15] = 1;
 
@@ -604,7 +590,6 @@ static inline void view_matrix(vector pos, vector dir, vector up, matrix *m)
     translation_matrix(scale_vector(pos, -1), &trn);
 
     mul_matrix(&rot, &trn, m);
-    #endif
 }
 
 static inline float focal_length(float fov)
@@ -627,9 +612,9 @@ static inline void perspective_matrix(float fov, float a, float n, float f, matr
     m->m[5] = -(2 * n) / (t - b); // negate because Vulkan - or not?
     m->m[8] = (r + l) / (r - l);
     m->m[9] = (t + b) / (t - b);
-    m->m[10] = -(f + n) / (f - n);
+    m->m[10] = -f / (f - n);
     m->m[11] = -1;
-    m->m[14] = -(2 * n * f) / (f - n);
+    m->m[14] = -(n * f) / (f - n);
 }
 
 static inline void ortho_matrix(float l, float r, float b, float t,
@@ -637,8 +622,8 @@ static inline void ortho_matrix(float l, float r, float b, float t,
 {
     matrix4(vector4(2 / (r-l), 0, 0,  0),
             vector4(0, 2 / (t-b), 0,  0),
-            vector4(0, 0, -2 / (f-n), 0),
-            vector4(-(r+l) / (r-l), -(t+b) / (t-b), -(f+n) / (f-n), 1),
+            vector4(0, 0, -1 / (f-n), 0),
+            vector4(-(r+l) / (r-l), -(t+b) / (t-b), -(f+n) / (2 * (f-n)) + 0.5, 1),
             m);
 }
 
