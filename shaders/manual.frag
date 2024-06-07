@@ -1,6 +1,9 @@
 #version 450
 
 #extension GL_EXT_debug_printf : enable
+#extension GL_GOOGLE_include_directive : enable
+
+#include "pbr.glsl"
 
 void pv4(vec4 v) {
     debugPrintfEXT("%f, %f, %f, %f\n", v.x, v.y, v.z, v.w);
@@ -41,25 +44,13 @@ layout(location = 1) in struct Fragment_Info {
 } fs_info;
 
 float in_shadow(uint i) {
-    vec2 pc = fs_info.dir_lights[i].ls_frag_pos.xy * 0.5 + 0.5;
-    // debugPrintfEXT("[%f,%f]\n", pc.x, pc.y);
-    // debugPrintfEXT("[%f]\n", fs_info.dir_lights[i].ls_frag_pos.z);
-    // pv4(texture(shadow_maps[i], pc.xy));
-    return (fs_info.dir_lights[i].ls_frag_pos.z) > texture(shadow_maps[i], pc.xy).r ? 1 : 0;
+    // vec2 pc = fs_info.dir_lights[i].ls_frag_pos.xy * 0.5 + 0.5;
+    // return (fs_info.dir_lights[i].ls_frag_pos.z) > texture(shadow_maps[i], pc.xy).r ? 1 : 0;
+    return 0;
 }
-
-const float PI = 3.1415926;
 
 void pa(float a[4]) {
     debugPrintfEXT("%f, %f, %f, %f\n", a[0], a[1], a[2], a[3]);
-}
-
-float heaviside(float x) {
-    return x > 0 ? 1 : 0;
-}
-
-float sq(float x) {
-    return x * x;
 }
 
 void pmatubo() {
@@ -80,7 +71,7 @@ void main() {
      * L is the normalized vector from the shading location to the light
      * N is the surface normal in the same space as the above values
      * H is the half vector, where H = normalize(L + V) */
-    vec3 light = vec3(base_color.x * fs_info.ambient.x, base_color.y * fs_info.ambient.y, base_color.z * fs_info.ambient.z);
+    vec3 light = base_color.xyz * fs_info.ambient;
 
     vec3 V = normalize(fs_info.tang_view_pos.xyz - fs_info.tang_frag_pos);
     vec3 N = normalize(fs_info.tang_normal);
@@ -90,6 +81,9 @@ void main() {
     for(uint i=0; i < dir_light_count; ++i) {
         vec3 L = normalize(fs_info.dir_lights[i].ts_light_pos - fs_info.tang_frag_pos);
         vec3 H = normalize(L + V);
+
+        // The below function seems to give brighter diffuse. Not sure why.
+        // vec3 matbrdf = material_brdf(base_color.xyz, metallic, roughness, V, L, H, N);
 
         float Dtop = sq(a) * heaviside(dot(N, H));
         float Dbot = PI * sq(sq(dot(N, H)) * (sq(a) - 1) + 1);
@@ -104,15 +98,14 @@ void main() {
         vec3 f0 = mix(vec3(0.04), base_color.rgb, metallic);
         vec3 F = f0 + (vec3(1) - f0) * pow(1 - abs(dot(V, H)), 5);
 
-        vec3 diff = (vec3(1) - F) * (1 / PI) * vec3(0.3) * mix(base_color.rgb, vec3(0), metallic);
+        vec3 diff = (vec3(1) - F) * (1 / PI) * mix(base_color.rgb, vec3(0), metallic);
         vec3 spec = (F * D * G) / (4 * abs(dot(V, N)) * abs(dot(L, N)));
-        vec3 matbrdf = diff + spec;
+
+        vec3 matbrdf = spec + diff;
 
         matbrdf *= 1 - in_shadow(i);
 
-        light += vec3(fs_info.dir_lights[i].color.r * matbrdf.r,
-                      fs_info.dir_lights[i].color.g * matbrdf.g,
-                      fs_info.dir_lights[i].color.b * matbrdf.b);
+        light += fs_info.dir_lights[i].color * matbrdf * max(dot(N, L), 0);
     }
 
     fc = vec4(light, 1);

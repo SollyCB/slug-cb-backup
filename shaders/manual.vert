@@ -68,14 +68,10 @@ void main() {
     vec4 world_pos = vs_info.model * transforms.node_trs * vec4(in_position, 1);
     gl_Position = vs_info.proj * vs_info.view * world_pos;
 
-    // pv4(vs_info.view * vs_info.model * transforms.node_trs * vec4(in_position, 1));
-    // pmat(vs_info.view * vs_info.model);
-    // pv4(vs_info.view * vs_info.model * transforms.node_trs * vec4(in_position, 1));
-
     fs_info.texcoord = in_texcoord;
 
-    vec3 normal = vec3(vs_info.model * transforms.node_trs * vec4(in_normal, 1));
-    vec3 tangent = vec3(vs_info.model * transforms.node_trs * in_tangent);
+    vec3 normal = vec3(vs_info.model * transforms.node_trs * vec4(in_normal, 0));
+    vec3 tangent = vec3(vs_info.model * transforms.node_trs * vec4(in_tangent.xyz, 0));
 
     mat3 tbn = transpose(mat3(tangent, cross(normal, vec3(tangent)), normal));
     fs_info.tang_frag_pos = tbn * vec3(world_pos);
@@ -89,10 +85,5 @@ void main() {
         fs_info.dir_lights[i].color = vec3(vs_info.dir_lights[i].color);
         fs_info.dir_lights[i].ts_light_pos = tbn * vec3(vs_info.dir_lights[i].position);
         fs_info.dir_lights[i].ls_frag_pos = vec3(vs_info.dir_lights[i].space * world_pos);
-        // pmat(vs_info.dir_lights[i].space);
-        // debugPrintfEXT("%f, %f, %f, %f | %f, %f, %f\n", world_pos.x, world_pos.y, world_pos.z, world_pos.w,
-        //                fs_info.dir_lights[i].ls_frag_pos.x,
-        //                fs_info.dir_lights[i].ls_frag_pos.y,
-        //                fs_info.dir_lights[i].ls_frag_pos.z);
     }
 }

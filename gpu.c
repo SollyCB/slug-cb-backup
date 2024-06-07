@@ -1094,12 +1094,12 @@ struct vs_info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vs_
     Vertex_Info *vs = (Vertex_Info*)(gpu->mem.bind_buffer.data + bb_ofs);
 
     vs->dir_light_count = 1;
-    vs->dir_lights[0].position = get_vector(2, 10, -4,  1);
-    vs->dir_lights[0].color    = get_vector(50.0, 50.0, 50.0,  0);
+    vs->dir_lights[0].position = vector4(0, 15, 4,  1);
+    vs->dir_lights[0].color    = vector4(15.0, 15.0, 15.0, 0);
 
-    vs->ambient.x = 0.4;
-    vs->ambient.y = 0.4;
-    vs->ambient.z = 0.4;
+    vs->ambient.x = 2.5;
+    vs->ambient.y = 2.5;
+    vs->ambient.z = 2.5;
 
     matrix model;
     identity_matrix(&model);
@@ -2527,6 +2527,9 @@ void draw_box(VkCommandBuffer cmd, struct gpu *gpu, struct box *box, bool wirefr
 
     VkPipelineDepthStencilStateCreateInfo ds = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .depthTestEnable = !wireframe,
+        .depthWriteEnable = !wireframe,
+        .depthCompareOp = VK_COMPARE_OP_LESS,
         .minDepthBounds = 0,
         .maxDepthBounds = 1,
     };

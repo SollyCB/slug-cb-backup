@@ -1019,6 +1019,9 @@ model_pipelines_transform_descriptors_and_draw_info(
         .pScissors = &dsci,
     };
 
+    #define CULL_C 1
+    #define CULL_D 1
+
     // @Todo This is supposed to be an 'over' operator blend. I am assuming
     // that that is the same as the vulkan VK_BLEND_OVER.
     VkPipelineRasterizationStateCreateInfo color_rasterization[2] = {
@@ -1031,7 +1034,11 @@ model_pipelines_transform_descriptors_and_draw_info(
         (VkPipelineRasterizationStateCreateInfo) {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
             .polygonMode = VK_POLYGON_MODE_LINE & maxif(arg->flags & LOAD_MODEL_WIREFRAME_BIT),
-            .cullMode = 0x0, // VK_CULL_MODE_BACK_BIT,
+            #if CULL_C
+            .cullMode = VK_CULL_MODE_BACK_BIT,
+            #else
+            .cullMode = VK_CULL_MODE_NONE,
+            #endif
             .lineWidth = 1.0f,
         },
     };
@@ -1039,7 +1046,11 @@ model_pipelines_transform_descriptors_and_draw_info(
     VkPipelineRasterizationStateCreateInfo depth_rasterization = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
             .polygonMode = VK_POLYGON_MODE_LINE & maxif(arg->flags & LOAD_MODEL_WIREFRAME_BIT),
-            .cullMode = 0x0, // VK_CULL_MODE_FRONT_BIT,
+            #if CULL_D
+            .cullMode = VK_CULL_MODE_FRONT_BIT,
+            #else
+            .cullMode = VK_CULL_MODE_NONE,
+            #endif
             .lineWidth = 1.0f,
     };
 
@@ -1372,6 +1383,7 @@ static uint model_vertex_state_and_draw_info(
             .binding = ac,
             .stride = buffer_view->byte_stride ? buffer_view->byte_stride : accessor->byte_stride, // Why can this not be zero...? Why bother with the format??
         };
+
         attrs[ac] = (VkVertexInputAttributeDescription) {
             .location = ac,
             .binding = ac,

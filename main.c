@@ -27,8 +27,8 @@
 #define HTP_SUBPASS  1
 
 int FRAME_I = 0;
-int SCR_W = 640;
-int SCR_H = 480;
+int SCR_W = 640 * 2;
+int SCR_H = 480 * 2;
 float FOV = PI / 4;
 
 #define MAIN_HEAP_ALLOCATOR_SIZE (48 * 1024 * 1024)
@@ -237,8 +237,8 @@ int main() {
 
             struct trs model_trs;
             get_trs(
-                vector3(0, 2, -4),
-                quaternion(-PI/6, vector3(1, 0, 0)),
+                vector3(0, 2, 0),
+                quaternion(0, vector3(1, 0, 0)),
                 vector3(1, 1, 1),
                 &model_trs
             );
@@ -249,7 +249,13 @@ int main() {
 
             scene_bounding_box(&scene_bb);
 
+            struct trs cf_trs = {
+                .t = vector3(0,0,7),
+                .r = quaternion(0, vector3(0, 1, 0)),
+                .s = vector3(1,1,1),
+            };
             perspective_frustum(FOV, ASPECT_RATIO, 0.1, 100, &camera_frustum);
+            transform_frustum(&camera_frustum, &cf_trs);
 
             matrix fm;
             {
@@ -266,11 +272,11 @@ int main() {
             for(uint i=0; i < carrlen(ls_bb.p); ++i)
                 ls_bb.p[i] = mul_matrix_vector(&light_view_mat, scene_bb.p[i]);
 
-            println("%f, %f, %f, %f", minmax_frustum_x.min, minmax_frustum_x.max,
-                     minmax_frustum_y.min, minmax_frustum_y.max);
+            // println("%f, %f, %f, %f", minmax_frustum_x.min, minmax_frustum_x.max,
+            //          minmax_frustum_y.min, minmax_frustum_y.max);
 
             light_nearfar_planes = near_far(minmax_frustum_x, minmax_frustum_y, &ls_bb);
-            println("%f, %f", light_nearfar_planes.min, light_nearfar_planes.max);
+            // println("%f, %f", light_nearfar_planes.min, light_nearfar_planes.max);
 
             ortho_matrix(minmax_frustum_x.min, minmax_frustum_x.max, minmax_frustum_y.min,
                          minmax_frustum_y.max, light_nearfar_planes.min, light_nearfar_planes.max, &light_ortho);
@@ -439,8 +445,9 @@ int main() {
                     matrix il;
                     invert(&light_view_mat, &il);
                     il.m[15] = 1;
-                    translation_matrix(vs_info->dir_lights[0].position, &lm);
-                    mul_matrix(&lm, &il, &il);
+                    // translation_matrix(vs_info->dir_lights[0].position, &lm);
+                    // translation_matrix(vector3(0, 0, 0), &lm);
+                    // mul_matrix(&lm, &il, &il);
                     mul_matrix(&m, &il, &il);
                     draw_box(draw_cmd, &pr.gpu, &lfb, true, color_rp.rp, 0, &lf_rsc, &il, vector4(0, 1, 0, 1));
 
