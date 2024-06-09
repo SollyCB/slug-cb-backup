@@ -614,7 +614,7 @@ static inline void perspective_matrix(float fov, float a, float n, float f, matr
 
     memset(m, 0, sizeof(*m));
     m->m[0] = (2 * n) / (r - l);
-    m->m[5] = -(2 * n) / (t - b); // negate because Vulkan - or not?
+    m->m[5] = -(2 * n) / (t - b); // negate because Vulkan
     m->m[8] = (r + l) / (r - l);
     m->m[9] = (t + b) / (t - b);
     m->m[10] = -f / (f - n);
@@ -622,11 +622,12 @@ static inline void perspective_matrix(float fov, float a, float n, float f, matr
     m->m[14] = -(n * f) / (f - n);
 }
 
+// t should be y min and b y max because vulkan screen orientation
 static inline void ortho_matrix(float l, float r, float b, float t,
                                 float n, float f, matrix *m)
 {
     matrix4(vector4(2 / (r-l), 0, 0,  0),
-            vector4(0, -2 / (t-b), 0,  0),
+            vector4(0, 2 / (t-b), 0,  0), // do not flip, values are passed in flipped
             vector4(0, 0, -1 / (f-n), 0),
             vector4(-(r+l) / (r-l), -(t+b) / (t-b), -(f+n) / (2 * (f-n)) + 0.5, 1),
             m);

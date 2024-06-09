@@ -204,9 +204,10 @@ int main() {
         allocator_reset_linear(&pr.allocs.temp);
         reset_gpu_buffers(&pr.gpu);
 
+        vector light_tgt = vector4(0, 0, 0, 1);
         matrix light_view_mat;
         view_matrix(vector4(0, 0, 0, 1),
-                    sub_vector(vector4(0, 0, 0, 1), vs_info->dir_lights[0].position),
+                    normalize(sub_vector(light_tgt, vs_info->dir_lights[0].position)),
                     vector3(0, 1, 0), &light_view_mat);
 
         matrix lmvp;
@@ -237,7 +238,7 @@ int main() {
 
             struct trs model_trs;
             get_trs(
-                vector3(0, 1, 0),
+                vector3(0, 4, 0),
                 quaternion(0, vector3(1, 0, 0)),
                 vector3(1, 1, 1),
                 &model_trs
@@ -278,13 +279,14 @@ int main() {
             light_nearfar_planes = near_far(minmax_frustum_x, minmax_frustum_y, &ls_bb);
             // println("%f, %f", light_nearfar_planes.min, light_nearfar_planes.max);
 
-            ortho_matrix(minmax_frustum_x.min, minmax_frustum_x.max, minmax_frustum_y.min,
-                         minmax_frustum_y.max, light_nearfar_planes.min, light_nearfar_planes.max, &light_ortho);
+            ortho_matrix(minmax_frustum_x.min, minmax_frustum_x.max, minmax_frustum_y.max,
+                         minmax_frustum_y.min, light_nearfar_planes.min, light_nearfar_planes.max, &light_ortho);
 
             mul_matrix(&light_view_mat, &mat_model, &lmvp);
             mul_matrix(&light_ortho, &lmvp, &vs_info->dir_lights[0].space);
 
-            #if 0
+            #if 1
+            // println_vector(mul_matrix_vector(&light_ortho, vector4(0, 0, 0, 1)));
             {
                 update_vs_info_mat_model(&pr.gpu, vs_info_desc.bb_offset, &mat_model);
                 // update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &mat_view);
@@ -454,6 +456,8 @@ int main() {
                     matrix il;
                     invert(&light_view_mat, &il);
                     il.m[15] = 1;
+
+                    // memcpy(&il, &light_view_mat, sizeof(il));
 
                     // translation_matrix(vs_info->dir_lights[0].position, &lm);
                     // translation_matrix(vector3(0, 0, 0), &lm);
