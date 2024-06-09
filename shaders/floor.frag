@@ -24,14 +24,25 @@ layout(location = 1) in struct Fragment_Info {
 } fs_info;
 
 float in_shadow(uint i) {
-    vec3 pc = fs_info.dir_lights[i].ls_frag_pos.xyz;
-    pc = pc * 0.5 + 0.5;
-    float d = texture(shadow_maps[i], pc.xy).r; // @RemoveMe
-    return pc.z > texture(shadow_maps[i], pc.xy).r ? 1 : 0;
-    // vec2 pc = fs_info.dir_lights[i].ls_frag_pos.xy;
+    // vec3 pc = fs_info.dir_lights[i].ls_frag_pos.xyz;
     // pc = pc * 0.5 + 0.5;
-    // float d = texture(shadow_maps[i], pc.xy).r; // @RemoveMe
-    // return fs_info.dir_lights[i].ls_frag_pos.z > texture(shadow_maps[i], pc).r ? 1 : 0;
+
+    // if (fs_info.dir_lights[i].ls_frag_pos.z > 0 || texture(shadow_maps[i], pc.xy).r > 0)
+    //     debugPrintfEXT("pc depth: %f, map depth: %f\n",
+    //                    fs_info.dir_lights[i].ls_frag_pos.z,
+    //                    texture(shadow_maps[i], pc.xy).r);
+
+    // return (pc.z > texture(shadow_maps[i], pc.xy).r) ? 1 : 0;
+
+    vec2 pc = fs_info.dir_lights[i].ls_frag_pos.xy;
+    pc = pc * 0.5 + 0.5;
+
+    // if (fs_info.dir_lights[i].ls_frag_pos.z > 0 || texture(shadow_maps[i], pc.xy).r > 0)
+    //     debugPrintfEXT("pc depth: %f, map depth: %f\n",
+    //                    fs_info.dir_lights[i].ls_frag_pos.z,
+    //                    texture(shadow_maps[i], pc.xy).r);
+
+    return (fs_info.dir_lights[i].ls_frag_pos.z > texture(shadow_maps[i], pc).r) ? 1 : 0;
 }
 
 layout(location = 0) out vec4 col;

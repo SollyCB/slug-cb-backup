@@ -205,9 +205,9 @@ int main() {
         reset_gpu_buffers(&pr.gpu);
 
         matrix light_view_mat;
-        view_matrix(vector4(0, 0, 0, 1), // vs_info->dir_lights[0].position,
+        view_matrix(vector4(0, 0, 0, 1),
                     sub_vector(vector4(0, 0, 0, 1), vs_info->dir_lights[0].position),
-                    vector3(0, 0, -1), &light_view_mat);
+                    vector3(0, 1, 0), &light_view_mat);
 
         matrix lmvp;
         matrix light_ortho;
@@ -237,7 +237,7 @@ int main() {
 
             struct trs model_trs;
             get_trs(
-                vector3(0, 2, 0),
+                vector3(0, 1, 0),
                 quaternion(0, vector3(1, 0, 0)),
                 vector3(1, 1, 1),
                 &model_trs
@@ -283,6 +283,15 @@ int main() {
 
             mul_matrix(&light_view_mat, &mat_model, &lmvp);
             mul_matrix(&light_ortho, &lmvp, &vs_info->dir_lights[0].space);
+
+            #if 0
+            {
+                update_vs_info_mat_model(&pr.gpu, vs_info_desc.bb_offset, &mat_model);
+                // update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &mat_view);
+                update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &light_view_mat);
+                memcpy(&vs_info->proj, &light_ortho, sizeof(light_ortho));
+            }
+            #endif
         }
 
         pr.gpu.swapchain.i = next_swapchain_image(&pr.gpu, sem_have_swapchain_image, fence);
@@ -445,9 +454,11 @@ int main() {
                     matrix il;
                     invert(&light_view_mat, &il);
                     il.m[15] = 1;
+
                     // translation_matrix(vs_info->dir_lights[0].position, &lm);
                     // translation_matrix(vector3(0, 0, 0), &lm);
                     // mul_matrix(&lm, &il, &il);
+
                     mul_matrix(&m, &il, &il);
                     draw_box(draw_cmd, &pr.gpu, &lfb, true, color_rp.rp, 0, &lf_rsc, &il, vector4(0, 1, 0, 1));
 

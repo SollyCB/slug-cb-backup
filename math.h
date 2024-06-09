@@ -626,7 +626,7 @@ static inline void ortho_matrix(float l, float r, float b, float t,
                                 float n, float f, matrix *m)
 {
     matrix4(vector4(2 / (r-l), 0, 0,  0),
-            vector4(0, 2 / (t-b), 0,  0),
+            vector4(0, -2 / (t-b), 0,  0),
             vector4(0, 0, -1 / (f-n), 0),
             vector4(-(r+l) / (r-l), -(t+b) / (t-b), -(f+n) / (2 * (f-n)) + 0.5, 1),
             m);

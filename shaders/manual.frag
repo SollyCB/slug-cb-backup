@@ -44,8 +44,11 @@ layout(location = 1) in struct Fragment_Info {
 } fs_info;
 
 float in_shadow(uint i) {
-    // vec2 pc = fs_info.dir_lights[i].ls_frag_pos.xy * 0.5 + 0.5;
-    // return (fs_info.dir_lights[i].ls_frag_pos.z) > texture(shadow_maps[i], pc.xy).r ? 1 : 0;
+    vec2 pc = fs_info.dir_lights[i].ls_frag_pos.xy * 0.5 + 0.5;
+    vec3 N = fs_info.tang_normal;
+    vec3 L = normalize(fs_info.dir_lights[i].ts_light_pos - fs_info.tang_frag_pos);
+    float bias = max(0.05 * (1.0 - dot(N, L)), 0.005);
+    return (fs_info.dir_lights[i].ls_frag_pos.z - bias) > texture(shadow_maps[i], pc.xy).r ? 1 : 0;
     return 0;
 }
 
@@ -74,7 +77,7 @@ void main() {
     vec3 light = base_color.xyz * fs_info.ambient;
 
     vec3 V = normalize(fs_info.tang_view_pos.xyz - fs_info.tang_frag_pos);
-    vec3 N = normalize(fs_info.tang_normal);
+    vec3 N = fs_info.tang_normal;
 
     float a = sq(roughness);
 

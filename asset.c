@@ -1024,6 +1024,10 @@ model_pipelines_transform_descriptors_and_draw_info(
 
     // @Todo This is supposed to be an 'over' operator blend. I am assuming
     // that that is the same as the vulkan VK_BLEND_OVER.
+    //
+    // @Todo depth biasing. I did some brief testing as I could see shadow
+    // acne, but it did not seem to do anything. Idk how it is supposed to
+    // interact with sampling in the shader calculations.
     VkPipelineRasterizationStateCreateInfo color_rasterization[2] = {
         (VkPipelineRasterizationStateCreateInfo) {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
@@ -1141,7 +1145,7 @@ model_pipelines_transform_descriptors_and_draw_info(
     }
 
     {
-        #if 0 // @RemoveMe
+        #if 0 // @RemoveMe Broke up push constants for testing the matrices in the shadow/depth shaders.
         VkPushConstantRange pcr = {
             .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
             .offset = 0,

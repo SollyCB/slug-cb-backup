@@ -76,7 +76,7 @@ void main() {
     mat3 tbn = transpose(mat3(tangent, cross(normal, vec3(tangent)), normal));
     fs_info.tang_frag_pos = tbn * vec3(world_pos);
     fs_info.tang_view_pos = tbn * vec3(vs_info.view_pos);
-    fs_info.tang_normal = tbn * normal;
+    fs_info.tang_normal = normalize(tbn * normal);
 
     fs_info.ambient = vec3(vs_info.ambient);
     dir_light_count = vs_info.dxxx.x;
