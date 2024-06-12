@@ -37,21 +37,21 @@ static inline void scene_bounding_box(struct box *bb)
 {
     float max_x =  10;
     float max_y =  10;
-    float max_z =  10;
+    float max_z = -10;
 
     float min_x = -10;
     float min_y =   0;
-    float min_z = -10;
+    float min_z =  10;
 
-    bb->p[0] = vector4(min_x, min_y, min_z, 1);
-    bb->p[1] = vector4(min_x, min_y, max_z, 1);
-    bb->p[2] = vector4(max_x, min_y, max_z, 1);
-    bb->p[3] = vector4(max_x, min_y, min_z, 1);
+    bb->p[0] = vector4(min_x, min_y, max_z, 1);
+    bb->p[1] = vector4(min_x, min_y, min_z, 1);
+    bb->p[2] = vector4(max_x, min_y, min_z, 1);
+    bb->p[3] = vector4(max_x, min_y, max_z, 1);
 
-    bb->p[4] = vector4(min_x, max_y, min_z, 1);
-    bb->p[5] = vector4(min_x, max_y, max_z, 1);
-    bb->p[6] = vector4(max_x, max_y, max_z, 1);
-    bb->p[7] = vector4(max_x, max_y, min_z, 1);
+    bb->p[4] = vector4(min_x, max_y, max_z, 1);
+    bb->p[5] = vector4(min_x, max_y, min_z, 1);
+    bb->p[6] = vector4(max_x, max_y, min_z, 1);
+    bb->p[7] = vector4(max_x, max_y, max_z, 1);
 }
 
 struct minmax near_far(struct minmax x, struct minmax y, struct box *bb);

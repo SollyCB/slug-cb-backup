@@ -238,7 +238,7 @@ int main() {
 
             struct trs model_trs;
             get_trs(
-                vector3(0, 4, 0),
+                vector3(3, 3, -4),
                 quaternion(0, vector3(1, 0, 0)),
                 vector3(1, 1, 1),
                 &model_trs
@@ -285,7 +285,7 @@ int main() {
             mul_matrix(&light_view_mat, &mat_model, &lmvp);
             mul_matrix(&light_ortho, &lmvp, &vs_info->dir_lights[0].space);
 
-            #if 1
+            #if 0
             // println_vector(mul_matrix_vector(&light_ortho, vector4(0, 0, 0, 1)));
             {
                 update_vs_info_mat_model(&pr.gpu, vs_info_desc.bb_offset, &mat_model);
@@ -436,7 +436,6 @@ int main() {
                               minmax_frustum_y.min, minmax_frustum_y.max,
                               light_nearfar_planes.min, light_nearfar_planes.max, &lf);
                 frustum_to_box(&lf, &lfb);
-                // print_box(&lfb);
 
                 {
                     matrix lm;

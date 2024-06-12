@@ -91,6 +91,12 @@ static inline float vector_i(vector v, uint i)
     return ((float*)&v)[i];
 }
 
+static inline vector vector3_w(vector v, float w)
+{
+    v.w = w;
+    return v;
+}
+
 static inline void get_trs(vector t, vector r, vector s, struct trs *trs)
 {
     *trs = (struct trs) {
@@ -171,6 +177,12 @@ static inline vector mul_vector(vector v1, vector v2)
     return r;
 }
 
+static inline float sq_vector(vector v)
+{
+    v = mul_vector(v, v);
+    return v.x + v.y + v.z + v.w;
+}
+
 static inline float dot(vector v1, vector v2)
 {
     vector v3 = mul_vector(v1, v2);
@@ -215,6 +227,7 @@ static inline float vector_len(vector v) {
     float *f = (float*)&a;
     return sqrtf(f[0] + f[1] + f[2]);
 }
+#define magnitude_vector(v) vector_len(v)
 
 static inline vector normalize(vector v) {
     float f = vector_len(v);
@@ -633,6 +646,24 @@ static inline void ortho_matrix(float l, float r, float b, float t,
             m);
 }
 
+static inline float dist_point_line(vector p, vector s, vector v)
+{
+    float q = sq_vector(sub_vector(p, s));
+    float r = pow(dot(sub_vector(p, s), v), 2);
+    float d = powf(magnitude_vector(v), 2);
+
+    // the sqrtf will nan if this is true because float error gives a negative
+    if (feq(q - r / d, 0))
+        return 0;
+
+    return sqrtf(q - r / d);
+}
+
+static inline bool point_on_line(vector p, vector s, vector v)
+{
+    return feq(dist_point_line(p, s, v), 0);
+}
+
 enum { INTERSECT, LIES_IN, PARALLEL, };
 static inline uint intersect_line_plane(vector p, vector s, vector v, vector *ret)
 {
@@ -685,7 +716,11 @@ static inline vector intersect_two_planes_point(vector l1, vector l2, vector q1,
     d = vector3(-d1, -d2, 0);
     matrix3(vector3(l1.x, l2.x, v.x), vector3(l1.y, l2.y, v.y), vector3(l1.z, l2.z, v.z), &m);
 
-    invert(&m, &m);
+    if (!invert(&m, &m)) {
+        print_matrix(&m);
+        log_print_error("matrix is not invertible");
+    }
+
     q = mul_matrix_vector(&m, d);
 
     return add_vector(q, scale_vector(v, -dot(v, q) / dot(v, v)));

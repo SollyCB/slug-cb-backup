@@ -64,7 +64,14 @@ layout(location = 1) out struct Fragment_Info {
     Directional_Light dir_lights[2];
 } fs_info;
 
+layout(location = 20) out struct Dbg {
+    vec3 norm;
+} dbg;
+
 void main() {
+
+    dbg.norm = normalize(in_normal) * 0.5 + 0.5;
+    
     vec4 world_pos = vs_info.model * transforms.node_trs * vec4(in_position, 1);
     gl_Position = vs_info.proj * vs_info.view * world_pos;
 

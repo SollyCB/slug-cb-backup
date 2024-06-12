@@ -63,6 +63,10 @@ void pmatubo() {
             material_ubo.eeea.x, material_ubo.eeea.y, material_ubo.eeea.z, material_ubo.eeea.w);
 }
 
+layout(location = 20) in struct Dbg {
+    vec3 norm;
+} dbg;
+
 void main() {
     vec4 base_color = texture(material_textures[0], fs_info.texcoord) * material_ubo.bbbb;
 
@@ -111,5 +115,6 @@ void main() {
         light += fs_info.dir_lights[i].color * matbrdf * max(dot(N, L), 0);
     }
 
-    fc = vec4(light, 1);
+    // fc = vec4(light, 1);
+    fc = vec4(dbg.norm, 1);
 }

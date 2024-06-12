@@ -14,7 +14,6 @@ layout(location = 0) flat in uint dir_light_count;
 
 layout(location = 1) in struct Fragment_Info {
     vec2 texcoord;
-    vec3 frag_pos;
     vec3 tang_normal;
     vec3 tang_frag_pos;
     vec3 tang_view_pos;

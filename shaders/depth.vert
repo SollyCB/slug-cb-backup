@@ -24,5 +24,4 @@ void pv4(vec4 v) {
 
 void main() {
     gl_Position = p * v * m * vec4(pos, 1);
-    // pv4(gl_Position);
 }

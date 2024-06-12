@@ -1,4 +1,5 @@
 #include "shadows.h"
+#include "math.h"
 
 // The four corners of a frustum
 void perspective_frustum(float fov, float ar, float near, float far, struct frustum *ret)
@@ -99,14 +100,15 @@ void minmax_frustum_points(struct frustum *f, matrix *space, struct minmax *minm
     *minmax_y = y;
 }
 
+#if 1
 struct minmax near_far(struct minmax x, struct minmax y, struct box *b)
 {
-    vector pl = vector4( 1, 0, 0, dot(vector3(-1, 0, 0), vector3(x.min,     0, 0)));
-    vector pr = vector4(-1, 0, 0, dot(vector3( 1, 0, 0), vector3(x.max,     0, 0)));
-    vector pb = vector4( 0, 1, 0, dot(vector3( 0,-1, 0), vector3(    0, y.min, 0)));
-    vector pt = vector4( 0,-1, 0, dot(vector3( 0, 1, 0), vector3(    0, y.max, 0)));
-
-    vector pts[12];
+    vector planes[] = {
+        vector4( 1, 0, 0, dot(vector3(-1, 0, 0), vector3(x.min,     0, 0))),
+        vector4(-1, 0, 0, dot(vector3( 1, 0, 0), vector3(x.max,     0, 0))),
+        vector4( 0, 1, 0, dot(vector3( 0,-1, 0), vector3(    0, y.min, 0))),
+        vector4( 0,-1, 0, dot(vector3( 0, 1, 0), vector3(    0, y.max, 0))),
+    };
 
     struct pair_uint idx[] = {
         {0,1}, {1,2}, {2,3}, {3,0},
@@ -116,19 +118,88 @@ struct minmax near_far(struct minmax x, struct minmax y, struct box *b)
 
     struct minmax nf = {Max_f32, -Max_f32};
 
+    vector p;
     for(uint i=0; i < carrlen(idx); ++i) {
         vector s = b->p[idx[i].a];
         vector v = normalize(sub_vector(b->p[idx[i].b], b->p[idx[i].a]));
 
-        if (intersect_line_plane(pl, s, v, &pts[i]) == INTERSECT) {
-            if (pts[i].z < nf.min)
-                nf.min = pts[i].z;
-            if (pts[i].z > nf.max)
-                nf.max = pts[i].z;
+        s.w = 1;
+        v.w = 0;
+
+        for(uint j=0; j < carrlen(planes); ++j) {
+            if (intersect_line_plane(planes[j], s, v, &p) == INTERSECT) {
+                if (b->p[idx[i].a].z < nf.min)
+                    nf.min = b->p[idx[i].a].z;
+                if (b->p[idx[i].a].z > nf.max)
+                    nf.max = b->p[idx[i].a].z;
+                if (b->p[idx[i].b].z < nf.min)
+                    nf.min = b->p[idx[i].b].z;
+                if (b->p[idx[i].b].z > nf.max)
+                    nf.max = b->p[idx[i].b].z;
+            }
         }
     }
+    assert(nf.max > -Max_f32 && nf.min < Max_f32);
     return nf;
 }
+#else
+struct minmax near_far(struct minmax x, struct minmax y, struct box *b)
+{
+    struct { vector l,q; } f_planes[] = {
+        {.l = vector4( 1, 0, 0, dot(vector3(-1, 0, 0), vector3(x.min,     0, 0))), .q = vector3(x.min,     0, 0)},
+        {.l = vector4(-1, 0, 0, dot(vector3( 1, 0, 0), vector3(x.max,     0, 0))), .q = vector3(x.max,     0, 0)},
+        {.l = vector4( 0, 1, 0, dot(vector3( 0,-1, 0), vector3(    0, y.min, 0))), .q = vector3(    0, y.min, 0)},
+        {.l = vector4( 0,-1, 0, dot(vector3( 0, 1, 0), vector3(    0, y.max, 0))), .q = vector3(    0, y.max, 0)},
+    };
+
+    struct { vector l,q; } b_planes[] = {
+        {
+            .l = vector3_w(    normalize(cross(normalize(sub_vector(b->p[1], b->p[0])), sub_vector(b->p[4], b->p[0]))),
+                           dot(normalize(cross(normalize(sub_vector(b->p[1], b->p[0])), sub_vector(b->p[4], b->p[0]))), b->p[0])),
+            .q = b->p[0],
+        }, // left
+        { 
+            .l = vector3_w(    normalize(cross(normalize(sub_vector(b->p[4], b->p[0])), sub_vector(b->p[3], b->p[0]))),
+                           dot(normalize(cross(normalize(sub_vector(b->p[4], b->p[0])), sub_vector(b->p[3], b->p[0]))), b->p[0])),
+            .q = b->p[0], }, // near
+        {
+            .l = vector3_w(    normalize(cross(normalize(sub_vector(b->p[3], b->p[0])), sub_vector(b->p[1], b->p[0]))),
+                           dot(normalize(cross(normalize(sub_vector(b->p[3], b->p[0])), sub_vector(b->p[1], b->p[0]))), b->p[0])),
+            .q = b->p[0],
+        }, // bottom
+        {
+            .l = vector3_w(    normalize(cross(normalize(sub_vector(b->p[7], b->p[6])), sub_vector(b->p[5], b->p[6]))),
+                           dot(normalize(cross(normalize(sub_vector(b->p[7], b->p[6])), sub_vector(b->p[5], b->p[6]))), b->p[6])),
+            .q = b->p[6],
+        }, // top
+        {
+            .l = vector3_w(    normalize(cross(normalize(sub_vector(b->p[2], b->p[6])), sub_vector(b->p[7], b->p[6]))),
+                           dot(normalize(cross(normalize(sub_vector(b->p[2], b->p[6])), sub_vector(b->p[7], b->p[6]))), b->p[6])),
+            .q = b->p[6],
+        }, // right
+        {
+            .l = vector3_w(    normalize(cross(normalize(sub_vector(b->p[5], b->p[6])), sub_vector(b->p[2], b->p[6]))),
+                           dot(normalize(cross(normalize(sub_vector(b->p[5], b->p[6])), sub_vector(b->p[2], b->p[6]))), b->p[6])),
+            .q = b->p[6], 
+        }, // far
+    };
+
+    struct minmax nf = {Max_f32, -Max_f32};
+
+    for(uint i=0; i < carrlen(f_planes); ++i) {
+        for(uint j=0; j < carrlen(b_planes); ++j) {
+            vector p = intersect_two_planes_point(f_planes[i].l, b_planes[i].l, f_planes[i].q, b_planes[i].q);
+            if (p.z < nf.min)
+                nf.min = p.z;
+            if (p.z > nf.max)
+                nf.max = p.z;
+        }
+    }
+
+    assert(nf.max > -Max_f32 && nf.min < Max_f32);
+    return nf;
+}
+#endif
 
 #if 0
 // min max x and y, scene bounding box (credit dx-sdk-samples for the implementation)
