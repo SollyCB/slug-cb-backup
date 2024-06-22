@@ -49,7 +49,7 @@ layout(set = 2, binding = 0) uniform Transforms_Ubo {
 struct Directional_Light {
     vec3 color;
     vec3 ts_light_pos;
-    vec3 ls_frag_pos;
+    vec4 ls_frag_pos;
 };
 
 layout(location = 0) out uint dir_light_count;
@@ -91,6 +91,6 @@ void main() {
     for(uint i=0; i < vs_info.dxxx.x; ++i) {
         fs_info.dir_lights[i].color = vec3(vs_info.dir_lights[i].color);
         fs_info.dir_lights[i].ts_light_pos = tbn * vec3(vs_info.dir_lights[i].position);
-        fs_info.dir_lights[i].ls_frag_pos = vec3(vs_info.dir_lights[i].space * world_pos);
+        fs_info.dir_lights[i].ls_frag_pos = vs_info.dir_lights[i].space * world_pos;
     }
 }

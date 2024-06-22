@@ -1095,11 +1095,9 @@ struct vs_info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vs_
 
     vs->dir_light_count = 1;
     vs->dir_lights[0].position = vector4(15, 15, 15,  1);
-    vs->dir_lights[0].color    = vector4(10.0, 10.0, 10.0, 0);
+    vs->dir_lights[0].color    = scale_vector(vector4(10.0, 10.0, 10.0, 0), 0.5);
 
-    vs->ambient.x = 2.5;
-    vs->ambient.y = 2.5;
-    vs->ambient.z = 2.5;
+    vs->ambient = scale_vector(vector3(1, 1, 1), 2.3);
 
     matrix model;
     identity_matrix(&model);
@@ -1727,9 +1725,9 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
     {
         VkSamplerCreateInfo ci = {
             .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-            .magFilter = VK_FILTER_NEAREST,
-            .minFilter = VK_FILTER_NEAREST,
-            .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+            .magFilter = VK_FILTER_LINEAR,
+            .minFilter = VK_FILTER_LINEAR,
+            .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
             .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
             .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
 
@@ -1737,11 +1735,12 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
             // especially with regard to shadow mapping.
             .minLod = 0,
             .maxLod = VK_LOD_CLAMP_NONE,
-            .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
-            // .borderColor = VK_BORDER_COLOR_INT_OPAQUE_WHITE,
+            .borderColor = VK_BORDER_COLOR_INT_OPAQUE_WHITE,
             .anisotropyEnable = flag_check(gpu->flags, GPU_SAMPLER_ANISOTROPY_ENABLE_BIT),
             .maxAnisotropy = gpu->defaults.sampler_anisotropy,
-            .compareEnable = 0, // This I especially do not know its function.
+
+            .compareEnable = VK_TRUE,
+            .compareOp = VK_COMPARE_OP_LESS,
         };
 
         maps->sampler = create_sampler(gpu, &ci);

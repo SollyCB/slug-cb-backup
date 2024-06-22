@@ -1019,8 +1019,6 @@ model_pipelines_transform_descriptors_and_draw_info(
         .pScissors = &dsci,
     };
 
-    #define CULL_C 1
-    #define CULL_D 1
 
     // @Todo This is supposed to be an 'over' operator blend. I am assuming
     // that that is the same as the vulkan VK_BLEND_OVER.
@@ -1038,11 +1036,7 @@ model_pipelines_transform_descriptors_and_draw_info(
         (VkPipelineRasterizationStateCreateInfo) {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
             .polygonMode = VK_POLYGON_MODE_LINE & maxif(arg->flags & LOAD_MODEL_WIREFRAME_BIT),
-            #if CULL_C
             .cullMode = VK_CULL_MODE_BACK_BIT,
-            #else
-            .cullMode = VK_CULL_MODE_NONE,
-            #endif
             .lineWidth = 1.0f,
         },
     };
@@ -1050,12 +1044,13 @@ model_pipelines_transform_descriptors_and_draw_info(
     VkPipelineRasterizationStateCreateInfo depth_rasterization = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
             .polygonMode = VK_POLYGON_MODE_LINE & maxif(arg->flags & LOAD_MODEL_WIREFRAME_BIT),
-            #if CULL_D
             .cullMode = VK_CULL_MODE_FRONT_BIT,
-            #else
-            .cullMode = VK_CULL_MODE_NONE,
-            #endif
             .lineWidth = 1.0f,
+
+            .depthBiasEnable = VK_TRUE,
+            .depthBiasConstantFactor = 1.005,
+            .depthBiasSlopeFactor = 1.1,
+            // .depthBiasClamp = 1,
     };
 
     // @Todo I want to look at multisampling. Idk how important it is for a good image.
@@ -1251,7 +1246,7 @@ model_pipelines_transform_descriptors_and_draw_info(
                 .pVertexInputState   = &vi[pc],
                 .pInputAssemblyState = &ia[pc],
                 .pViewportState      = &depth_viewport,
-                .pRasterizationState = pipeline_infos[pc - prim_count].pRasterizationState,
+                .pRasterizationState = &depth_rasterization, // pipeline_infos[pc - prim_count].pRasterizationState,
                 .pMultisampleState   = &multisample,
                 .pDepthStencilState  = &depth_depth,
                 .pColorBlendState    = pipeline_infos[pc - prim_count].pColorBlendState,

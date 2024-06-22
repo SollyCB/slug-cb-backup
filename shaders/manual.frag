@@ -13,7 +13,7 @@ void pv3(vec3 v) {
     debugPrintfEXT("%f, %f, %f\n", v.x, v.y, v.z);
 }
 
-layout(set = 1, binding = 0) uniform sampler2D shadow_maps[1];
+layout(set = 1, binding = 0) uniform sampler2DShadow shadow_maps[1];
 
 layout(set = 3, binding = 0) uniform Material_Ubo {
     vec4 bbbb; // float base_color[4];
@@ -44,11 +44,17 @@ layout(location = 1) in struct Fragment_Info {
 } fs_info;
 
 float in_shadow(uint i) {
-    vec2 pc = fs_info.dir_lights[i].ls_frag_pos.xy * 0.5 + 0.5;
+    // vec2 pc = fs_info.dir_lights[i].ls_frag_pos.xy * 0.5 + 0.5;
+    // float bias = ;
+    // return (fs_info.dir_lights[i].ls_frag_pos.z - bias) > texture(shadow_maps[i], pc.xy).r ? 1 : 0;
+
     vec3 N = fs_info.tang_normal;
     vec3 L = normalize(fs_info.dir_lights[i].ts_light_pos - fs_info.tang_frag_pos);
-    float bias = max(0.05 * (1.0 - dot(N, L)), 0.005);
-    return (fs_info.dir_lights[i].ls_frag_pos.z - bias) > texture(shadow_maps[i], pc.xy).r ? 1 : 0;
+    vec2 pc = fs_info.dir_lights[i].ls_frag_pos.xy * 0.5 + 0.5;
+
+    return (fs_info.dir_lights[i].ls_frag_pos.z > texture(shadow_maps[i],
+        vec3(pc.x, pc.y, fs_info.dir_lights[i].ls_frag_pos.z))) ? 1 : 0;
+
     return 0;
 }
 
@@ -115,6 +121,5 @@ void main() {
         light += fs_info.dir_lights[i].color * matbrdf * max(dot(N, L), 0);
     }
 
-    // fc = vec4(light, 1);
-    fc = vec4(dbg.norm, 1);
+    fc = vec4(light, 1);
 }

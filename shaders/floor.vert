@@ -27,7 +27,7 @@ layout(set = 0, binding = 0) uniform Vertex_Info {
 struct Directional_Light {
     vec3 color;
     vec3 ts_light_pos;
-    vec3 ls_frag_pos;
+    vec4 ls_frag_pos;
 };
 
 layout(location = 0) out uint dir_light_count;
@@ -66,5 +66,5 @@ void main() {
     gl_Position = vs_info.proj * vs_info.view * world_pos;
 
     dir_light_count = vs_info.dxxx.x;
-    fs_info.dir_lights[0].ls_frag_pos = vec3(vs_info.dir_lights[0].space * world_pos);
+    fs_info.dir_lights[0].ls_frag_pos = vs_info.dir_lights[0].space * world_pos;
 }

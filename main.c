@@ -204,11 +204,18 @@ int main() {
         allocator_reset_linear(&pr.allocs.temp);
         reset_gpu_buffers(&pr.gpu);
 
-        vector light_tgt = vector4(0, 0, 0, 1);
         matrix light_view_mat;
-        view_matrix(vector4(0, 0, 0, 1),
-                    normalize(sub_vector(light_tgt, vs_info->dir_lights[0].position)),
-                    vector3(0, 1, 0), &light_view_mat);
+        { // update light view, pos
+            vector q = quaternion(dt, vector3(0, 1, 0));
+            matrix m;
+            rotation_matrix(q, &m);
+            vs_info->dir_lights[0].position = mul_matrix_vector(&m, vs_info->dir_lights[0].position);
+
+            vector light_tgt = vector4(0, 0, 0, 1);
+            view_matrix(light_tgt,
+                        normalize(sub_vector(light_tgt, vs_info->dir_lights[0].position)),
+                        vector3(0, 1, 0), &light_view_mat);
+        }
 
         matrix lmvp;
         matrix light_ortho;
