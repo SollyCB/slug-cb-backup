@@ -282,8 +282,7 @@ int main() {
             ortho_matrix(minmax_frustum_x.min, minmax_frustum_x.max, minmax_frustum_y.max,
                          minmax_frustum_y.min, light_nearfar_planes.min, light_nearfar_planes.max, &light_ortho);
 
-            mul_matrix(&light_view_mat, &mat_model, &lmvp);
-            mul_matrix(&light_ortho, &lmvp, &vs_info->dir_lights[0].space);
+            mul_matrix(&light_ortho, &light_view_mat, &vs_info->dir_lights[0].space);
 
             #if 0
             // println_vector(mul_matrix_vector(&light_ortho, vector4(0, 0, 0, 1)));
