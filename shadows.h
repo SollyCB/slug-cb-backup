@@ -19,18 +19,16 @@ static inline void frustum_to_box(struct frustum *f, struct box *b)
     };
 }
 
-static inline void transform_frustum(struct frustum *f, struct trs *trs)
+static inline void transform_frustum(struct frustum *f, matrix *m)
 {
-    matrix m;
-    convert_trs(trs, &m);
-    f->tl_near = mul_matrix_vector(&m, f->tl_near);
-    f->tr_near = mul_matrix_vector(&m, f->tr_near);
-    f->bl_near = mul_matrix_vector(&m, f->bl_near);
-    f->br_near = mul_matrix_vector(&m, f->br_near);
-    f->tl_far = mul_matrix_vector(&m,  f->tl_far);
-    f->tr_far = mul_matrix_vector(&m,  f->tr_far);
-    f->bl_far = mul_matrix_vector(&m,  f->bl_far);
-    f->br_far = mul_matrix_vector(&m,  f->br_far);
+    f->tl_near = mul_matrix_vector(m, f->tl_near);
+    f->tr_near = mul_matrix_vector(m, f->tr_near);
+    f->bl_near = mul_matrix_vector(m, f->bl_near);
+    f->br_near = mul_matrix_vector(m, f->br_near);
+    f->tl_far = mul_matrix_vector(m,  f->tl_far);
+    f->tr_far = mul_matrix_vector(m,  f->tr_far);
+    f->bl_far = mul_matrix_vector(m,  f->bl_far);
+    f->br_far = mul_matrix_vector(m,  f->br_far);
 }
 
 static inline void scene_bounding_box(struct box *bb)

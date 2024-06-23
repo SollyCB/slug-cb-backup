@@ -257,21 +257,11 @@ int main() {
 
             scene_bounding_box(&scene_bb);
 
-            struct trs cf_trs = {
-                .t = vector3(0,0,7),
-                .r = quaternion(0, vector3(0, 1, 0)),
-                .s = vector3(1,1,1),
-            };
-            perspective_frustum(FOV, ASPECT_RATIO, 0.1, 100, &camera_frustum);
-            transform_frustum(&camera_frustum, &cf_trs);
-
-            matrix fm;
             {
-                matrix il,lm;
-                invert(&vs_info->view, &il);
-                il.m[15] = 1;
-                translation_matrix(vs_info->view_pos, &lm);
-                mul_matrix(&lm, &il, &fm);
+                matrix fm;
+                move_to_camera(cam.pos, cam.dir, vector3(0, 1, 0), &fm);
+                perspective_frustum(FOV, ASPECT_RATIO, 0.1, 100, &camera_frustum);
+                transform_frustum(&camera_frustum, &fm);
             }
 
             minmax_frustum_points(&camera_frustum, &light_view_mat, &minmax_frustum_x, &minmax_frustum_y);
@@ -291,11 +281,9 @@ int main() {
 
             mul_matrix(&light_ortho, &light_view_mat, &vs_info->dir_lights[0].space);
 
-            #if 0
-            // println_vector(mul_matrix_vector(&light_ortho, vector4(0, 0, 0, 1)));
+            #if 0 // set the light view as the player cam
             {
                 update_vs_info_mat_model(&pr.gpu, vs_info_desc.bb_offset, &mat_model);
-                // update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &mat_view);
                 update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &light_view_mat);
                 memcpy(&vs_info->proj, &light_ortho, sizeof(light_ortho));
             }
@@ -400,7 +388,6 @@ int main() {
                                   sizeof(matrix) * 2,
                                   sizeof(matrix),
                                   &light_ortho);
-                                  // &vs_info->dir_lights[0].space);
 
             draw_model_depth(draw_cmd, lmr.draw_info, 0);
 

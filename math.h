@@ -610,6 +610,26 @@ static inline void view_matrix(vector pos, vector dir, vector up, matrix *m)
     mul_matrix(&rot, &trn, m);
 }
 
+static inline void move_to_camera(vector pos, vector dir, vector up, matrix *m)
+{
+    vector w = normalize(up);
+    vector d = normalize(dir);
+    vector r = normalize(cross(d, w));
+    vector u = normalize(cross(r, d));
+
+    matrix rot;
+    matrix3(vector3( r.x,  r.y,  r.z),
+            vector3( u.x,  u.y,  u.z),
+            vector3(-d.x, -d.y, -d.z), &rot);
+
+    rot.m[15] = 1;
+
+    matrix trn;
+    translation_matrix(pos, &trn);
+
+    mul_matrix(&trn, &rot, m);
+}
+
 static inline float focal_length(float fov)
 {
     return 1 / tanf(fov / 2);
