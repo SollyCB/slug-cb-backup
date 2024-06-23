@@ -1103,11 +1103,7 @@ struct vs_info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vs_
     identity_matrix(&model);
 
     matrix proj;
-    #if PERSPECTIVE
-    perspective_matrix(FOV, ASPECT_RATIO, 0.1, 200, &proj);
-    #else
-    ortho_matrix(-41.4213562, 41.4213562, 0.1, 100.0, -10.0, 0.0, &proj);
-    #endif
+    perspective_matrix(FOV, ASPECT_RATIO, PERSPECTIVE_NEAR, PERSPECTIVE_FAR, &proj);
 
     memcpy(&vs->model, &model, sizeof(model));
     memcpy(&vs->proj, &proj, sizeof(proj));

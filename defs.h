@@ -7,9 +7,9 @@ extern int SCR_W;
 extern float ASPECT_RATIO;
 extern float FOV;
 
-#define PERSPECTIVE 1
-
 #define ASPECT_RATIO ((float)SCR_H / SCR_W)
+#define PERSPECTIVE_NEAR 0.1
+#define PERSPECTIVE_FAR  100.0
 
 #define _GNU_SOURCE
 

@@ -110,33 +110,23 @@ int main() {
 
     struct camera cam = {0};
     {
-        #if PERSPECTIVE
         cam.pos = vector4(0, 4, 7, 1);
-        #else
-        // cam.pos = vector4(0, 10, 0, 1);
-        cam.pos = vector4(0, 0, 0, 1);
-        #endif
 
-        cam.fov = FOV;
-        cam.sens = 0.03;
+        cam.fov   = FOV;
+        cam.sens  = 0.03;
         cam.speed = 5;
-
-        cam.mode = CAMERA_MODE_FLY;
 
         cam.dir = normalize(vector3(0, 0, -1));
 
         double r,u;
         cursorpos(&pr.glfw, &r, &u);
-        cam.x = r;
+        cam.x =  r;
         cam.y = -u;
 
-        cam.yaw = -1;
-
-        #if PERSPECTIVE
+        cam.yaw   = -1;
         cam.pitch = -0.1;
-        #else
-        cam.pitch = -1.0;
-        #endif
+
+        cam.mode = CAMERA_MODE_FLY;
     }
     prog_init(&pr, &cam);
 
@@ -211,6 +201,8 @@ int main() {
             rotation_matrix(q, &m);
             // vs_info->dir_lights[0].position = mul_matrix_vector(&m, vs_info->dir_lights[0].position);
 
+            // vs_info->dir_lights[0].position.x = sinf(t);
+
             vector light_tgt = vector4(0, 0, 0, 1);
             view_matrix(light_tgt,
                         normalize(sub_vector(light_tgt, vs_info->dir_lights[0].position)),
@@ -260,11 +252,29 @@ int main() {
             {
                 matrix fm;
                 move_to_camera(cam.pos, cam.dir, vector3(0, 1, 0), &fm);
-                perspective_frustum(FOV, ASPECT_RATIO, 0.1, 100, &camera_frustum);
+                perspective_frustum(FOV, ASPECT_RATIO, PERSPECTIVE_NEAR, PERSPECTIVE_FAR, &camera_frustum);
                 transform_frustum(&camera_frustum, &fm);
             }
 
             minmax_frustum_points(&camera_frustum, &light_view_mat, &minmax_frustum_x, &minmax_frustum_y);
+            { // move light in texel sized increments
+                float wupt_x = fabsf(minmax_frustum_x.max - minmax_frustum_x.min) / pr.gpu.settings.shadow_maps.width;
+                float wupt_y = fabsf(minmax_frustum_y.max - minmax_frustum_y.min) / pr.gpu.settings.shadow_maps.height;
+
+                minmax_frustum_x.max /= wupt_x;
+                minmax_frustum_x.min /= wupt_x;
+                minmax_frustum_x.max  = floorf(minmax_frustum_x.max);
+                minmax_frustum_x.min  = floorf(minmax_frustum_x.min);
+                minmax_frustum_x.max *= wupt_x;
+                minmax_frustum_x.min *= wupt_x;
+
+                minmax_frustum_y.max /= wupt_y;
+                minmax_frustum_y.min /= wupt_y;
+                minmax_frustum_y.max  = floorf(minmax_frustum_y.max);
+                minmax_frustum_y.min  = floorf(minmax_frustum_y.min);
+                minmax_frustum_y.max *= wupt_y;
+                minmax_frustum_y.min *= wupt_y;
+            }
 
             struct box ls_bb;
             for(uint i=0; i < carrlen(ls_bb.p); ++i)
