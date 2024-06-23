@@ -25,13 +25,12 @@ layout(location = 1) in struct Fragment_Info {
 float in_shadow(uint i) {
     vec2 pc = fs_info.dir_lights[i].ls_frag_pos.xy * 0.5 + 0.5;
 
-    return (fs_info.dir_lights[i].ls_frag_pos.z > texture(shadow_maps[i],
-        vec3(pc.x, pc.y, fs_info.dir_lights[i].ls_frag_pos.z))) ? 1 : 0;
+    return texture(shadow_maps[i], vec3(pc.x, pc.y, fs_info.dir_lights[i].ls_frag_pos.z));
 }
 
 layout(location = 0) out vec4 col;
 
 void main() {
-    col = vec4(1, 1, 1, 0) * (1 - in_shadow(0));
+    col = vec4(1, 1, 1, 0) * in_shadow(0);
     col.a = 1;
 }

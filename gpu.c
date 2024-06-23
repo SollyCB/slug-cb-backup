@@ -163,8 +163,8 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
 
     gpu->shader_dir = load_shader_dir(gpu, gpu->alloc_heap);
 
-    gpu->settings.shadow_maps.width = 640;
-    gpu->settings.shadow_maps.height = 480;
+    gpu->settings.shadow_maps.width = 4096;
+    gpu->settings.shadow_maps.height = 4096;
 }
 
 void shutdown_gpu(struct gpu *gpu) {
@@ -510,7 +510,7 @@ static void gpu_create_device_and_queues(struct gpu *gpu)
 #define GPU_SHADOW_ATTACHMENT_HEIGHT 480
 #define GPU_BIND_BUFFER_SIZE 1048576 // align(1000000, 16)
 #define GPU_TRANSFER_BUFFER_SIZE align(32000000, 16)
-#define GPU_TEXTURE_MEMORY_SIZE align(12000000, 16)
+#define GPU_TEXTURE_MEMORY_SIZE align(64000000, 16)
 #define GPU_DESCRIPTOR_BUFFER_SIZE_RESOURCE 1048576 / 2 // align(100000, 16)
 #define GPU_DESCRIPTOR_BUFFER_SIZE_SAMPLER 1048576 / 2 // align(100000, 16)
 

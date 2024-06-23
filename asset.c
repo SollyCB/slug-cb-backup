@@ -1048,7 +1048,7 @@ model_pipelines_transform_descriptors_and_draw_info(
             .lineWidth = 1.0f,
 
             .depthBiasEnable = VK_TRUE,
-            .depthBiasConstantFactor = 1.005,
+            .depthBiasConstantFactor = 1.05, // @Todo Idk what the right numbers are here...
             .depthBiasSlopeFactor = 1.1,
             // .depthBiasClamp = 1,
     };

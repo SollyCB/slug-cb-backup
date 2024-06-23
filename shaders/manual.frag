@@ -44,18 +44,11 @@ layout(location = 1) in struct Fragment_Info {
 } fs_info;
 
 float in_shadow(uint i) {
-    // vec2 pc = fs_info.dir_lights[i].ls_frag_pos.xy * 0.5 + 0.5;
-    // float bias = ;
-    // return (fs_info.dir_lights[i].ls_frag_pos.z - bias) > texture(shadow_maps[i], pc.xy).r ? 1 : 0;
-
     vec3 N = fs_info.tang_normal;
     vec3 L = normalize(fs_info.dir_lights[i].ts_light_pos - fs_info.tang_frag_pos);
+
     vec2 pc = fs_info.dir_lights[i].ls_frag_pos.xy * 0.5 + 0.5;
-
-    return (fs_info.dir_lights[i].ls_frag_pos.z > texture(shadow_maps[i],
-        vec3(pc.x, pc.y, fs_info.dir_lights[i].ls_frag_pos.z))) ? 1 : 0;
-
-    return 0;
+    return texture(shadow_maps[i], vec3(pc.x, pc.y, fs_info.dir_lights[i].ls_frag_pos.z));
 }
 
 void pa(float a[4]) {
@@ -116,7 +109,7 @@ void main() {
 
         vec3 matbrdf = spec + diff;
 
-        matbrdf *= 1 - in_shadow(i);
+        matbrdf *= in_shadow(i);
 
         light += fs_info.dir_lights[i].color * matbrdf * max(dot(N, L), 0);
     }

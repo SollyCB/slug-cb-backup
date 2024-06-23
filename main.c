@@ -209,7 +209,7 @@ int main() {
             vector q = quaternion(dt, vector3(0, 1, 0));
             matrix m;
             rotation_matrix(q, &m);
-            vs_info->dir_lights[0].position = mul_matrix_vector(&m, vs_info->dir_lights[0].position);
+            // vs_info->dir_lights[0].position = mul_matrix_vector(&m, vs_info->dir_lights[0].position);
 
             vector light_tgt = vector4(0, 0, 0, 1);
             view_matrix(light_tgt,
