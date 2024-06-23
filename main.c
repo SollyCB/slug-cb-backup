@@ -418,9 +418,10 @@ int main() {
             draw_model_color(draw_cmd, lmr.draw_info);
 
             {
-                #define DSB 1
-                #define DLF 1
-                #define DCF 1
+                #define DSB 0
+                #define DLP 1
+                #define DLF 0
+                #define DCF 0
 
                 struct box vfb;
                 frustum_to_box(&camera_frustum, &vfb);
@@ -455,8 +456,11 @@ int main() {
                     convert_trs(&ltrs, &lm);
                     mul_matrix(&m, &lm, &lm);
 
-                #if DLF
+                    #if DLP
                     draw_box(draw_cmd, &pr.gpu, &lbox, false, color_rp.rp, 0, &lpos_rsc, &lm, vector4(50, 50, 50, 1));
+                    #endif
+
+                    #if DLF
 
                     matrix il;
                     invert(&light_view_mat, &il);
@@ -471,23 +475,11 @@ int main() {
                     mul_matrix(&m, &il, &il);
                     draw_box(draw_cmd, &pr.gpu, &lfb, true, color_rp.rp, 0, &lf_rsc, &il, vector4(0, 1, 0, 1));
 
-                #endif
+                    #endif
 
                 }
 
             }
-
-            #if 0
-            {
-                matrix m;
-                mul_matrix(&vs_info->proj, &vs_info->view, &m);
-
-                // struct box b = (struct box) {
-                // };
-
-                // draw_box(draw_cmd, &pr.gpu, &scene_bb, true, color_rp.rp, 0, &draw_box_rsc, &m);
-            }
-            #endif
 
             vk_cmd_next_subpass(draw_cmd, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -543,8 +535,11 @@ int main() {
         draw_box_cleanup(&pr.gpu, &sb_rsc);
         #endif
 
-        #if DLF
+        #if DLP
         draw_box_cleanup(&pr.gpu, &lpos_rsc);
+        #endif
+
+        #if DLF
         draw_box_cleanup(&pr.gpu, &lf_rsc);
         #endif
 
