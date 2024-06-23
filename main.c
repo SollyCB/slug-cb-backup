@@ -201,8 +201,6 @@ int main() {
             rotation_matrix(q, &m);
             // vs_info->dir_lights[0].position = mul_matrix_vector(&m, vs_info->dir_lights[0].position);
 
-            // vs_info->dir_lights[0].position.x = sinf(t);
-
             vector light_tgt = vector4(0, 0, 0, 1);
             view_matrix(light_tgt,
                         normalize(sub_vector(light_tgt, vs_info->dir_lights[0].position)),
@@ -378,6 +376,7 @@ int main() {
         {
             begin_shadow_renderpass(draw_cmd, &depth_rp, &pr.gpu, shadow_maps.count);
 
+            // @Todo @Optimise Need to switch these back to a single push constant
             vk_cmd_push_constants(draw_cmd,
                                   lmr.draw_info->pipeline_layouts[lmr.draw_info->prim_count],
                                   VK_SHADER_STAGE_VERTEX_BIT,
@@ -463,19 +462,11 @@ int main() {
                     invert(&light_view_mat, &il);
                     il.m[15] = 1;
 
-                    // memcpy(&il, &light_view_mat, sizeof(il));
-
-                    // translation_matrix(vs_info->dir_lights[0].position, &lm);
-                    // translation_matrix(vector3(0, 0, 0), &lm);
-                    // mul_matrix(&lm, &il, &il);
-
                     mul_matrix(&m, &il, &il);
                     draw_box(draw_cmd, &pr.gpu, &lfb, true, color_rp.rp, 0, &lf_rsc, &il, vector4(0, 1, 0, 1));
 
                     #endif
-
                 }
-
             }
 
             vk_cmd_next_subpass(draw_cmd, VK_SUBPASS_CONTENTS_INLINE);
