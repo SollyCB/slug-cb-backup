@@ -163,8 +163,8 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
 
     gpu->shader_dir = load_shader_dir(gpu, gpu->alloc_heap);
 
-    gpu->settings.shadow_maps.width = 4096 / 2;
-    gpu->settings.shadow_maps.height = 4096 / 2;
+    gpu->settings.shadow_maps.width = 4096 / 4;
+    gpu->settings.shadow_maps.height = 4096 / 4;
 }
 
 void shutdown_gpu(struct gpu *gpu) {
@@ -1599,15 +1599,13 @@ void gpu_create_texture(struct gpu *gpu, struct image *image, struct gpu_texture
     DEBUG_VK_OBJ_CREATION(vkCreateImage, check);
 }
 
-bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommandBuffer graphics_cmd, struct shadow_maps *maps)
+bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommandBuffer graphics_cmd, uint cascade_count, struct shadow_maps *maps)
 {
-    // @TODO @CurrentTask
-    // shadow maps need to be created as arrayed images; then views need to be created which access each layer;
-    // then the depth renderpass needs to have a subpass for every array layer view in every shadow map.
-    
+    maps->cascade_count = cascade_count;
+
     maps->images = allocate(gpu->alloc_heap,
                             sizeof(*maps->images) * maps->count + // NOLINT sizeof(vulkan_handle)
-                            sizeof(*maps->views)  * maps->count); // NOLINT sizeof(vulkan_handle)
+                            sizeof(*maps->views)  * maps->count * cascade_count); // NOLINT sizeof(vulkan_handle)
     maps->views = (VkImageView*)(maps->images + maps->count);
 
     VkMemoryRequirements *mr = sallocate(gpu->alloc_temp, *mr, maps->count);
@@ -1619,8 +1617,8 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
             .format = GPU_SHADOW_ATTACHMENT_FORMAT,
             .extent = (VkExtent3D){gpu->settings.shadow_maps.width,gpu->settings.shadow_maps.height,1},
             .mipLevels = 1,
-            .arrayLayers = 1,
-            .samples = VK_SAMPLE_COUNT_1_BIT, // gpu->settings.texture_sample_count;
+            .arrayLayers = cascade_count,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
             .tiling = VK_IMAGE_TILING_OPTIMAL,
             .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -1643,7 +1641,7 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
         VkDescriptorSetLayoutBinding b = {
             .binding = 0,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount = maps->count,
+            .descriptorCount = maps->count * cascade_count,
             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
         };
 
@@ -1705,20 +1703,26 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
     }
 
     {
-        VkImageViewCreateInfo ci = {
-            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .viewType = VK_IMAGE_VIEW_TYPE_2D,
-            .format = GPU_SHADOW_ATTACHMENT_FORMAT,
-            .subresourceRange = {
-                .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-                .levelCount = 1,
-                .layerCount = 1,
-            },
-        };
+        uint vi = 0;
         for(uint i=0; i < maps->count; ++i) {
-            ci.image = maps->images[i];
-            VkResult check = vk_create_image_view(gpu->device, &ci, GAC, &maps->views[i]);
-            DEBUG_VK_OBJ_CREATION(vkCreateImageView, check);
+            for(uint j=0; j < cascade_count; ++j) {
+                VkImageViewCreateInfo ci = {
+                    .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                    .viewType = VK_IMAGE_VIEW_TYPE_2D,
+                    .format = GPU_SHADOW_ATTACHMENT_FORMAT,
+                    .image = maps->images[i],
+                    .subresourceRange = {
+                        .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+                        .levelCount = 1,
+                        .layerCount = 1,
+                        .baseArrayLayer = j,
+                    },
+                };
+                VkResult check = vk_create_image_view(gpu->device, &ci, GAC, &maps->views[vi]);
+                DEBUG_VK_OBJ_CREATION(vkCreateImageView, check);
+
+                vi++;
+            }
         }
     }
 
@@ -1746,7 +1750,7 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
         maps->sampler = create_sampler(gpu, &ci);
     }
 
-    for(uint i=0; i < maps->count; ++i) {
+    for(uint i=0; i < maps->count * cascade_count; ++i) {
         VkDescriptorImageInfo ii = {
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             .imageView = maps->views[i],
