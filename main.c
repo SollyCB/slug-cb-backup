@@ -149,7 +149,8 @@ int main() {
     VkSemaphore sem_transfer_complete = create_binary_semaphore(&pr.gpu);
     VkSemaphore sem_graphics_complete = create_binary_semaphore(&pr.gpu);
 
-    struct draw_box_rsc vf_rsc; // view frustum resources
+    #define SUB_FRUSTA_COUNT 4
+    struct draw_box_rsc vf_rsc[SUB_FRUSTA_COUNT]; // view frustum resources
     struct draw_box_rsc sb_rsc; // scene bb frustum resources
     struct draw_box_rsc lf_rsc; // light ortho frustum resources
     struct draw_box_rsc lpos_rsc; // light position
@@ -184,6 +185,7 @@ int main() {
     struct box scene_bb;
     struct minmax minmax_frustum_x,minmax_frustum_y, light_nearfar_planes;
     struct frustum camera_frustum;
+    struct frustum sub_frusta[SUB_FRUSTA_COUNT];
 
     uint frame_count = 0;
 
@@ -247,15 +249,19 @@ int main() {
 
             scene_bounding_box(&scene_bb);
 
+            perspective_frustum(FOV, ASPECT_RATIO, PERSPECTIVE_NEAR, PERSPECTIVE_FAR, &camera_frustum);
             {
                 matrix fm;
                 move_to_camera(cam.pos, cam.dir, vector3(0, 1, 0), &fm);
-                perspective_frustum(FOV, ASPECT_RATIO, PERSPECTIVE_NEAR, PERSPECTIVE_FAR, &camera_frustum);
-                transform_frustum(&camera_frustum, &fm);
+                // transform_frustum(&camera_frustum, &fm);
             }
+            partition_frustum_c(&camera_frustum, carrlen(sub_frusta), sub_frusta);
 
-            minmax_frustum_points(&camera_frustum, &light_view_mat, &minmax_frustum_x, &minmax_frustum_y);
+            // minmax_frustum_points(&camera_frustum, &light_view_mat, &minmax_frustum_x, &minmax_frustum_y);
+            minmax_frustum_points(&sub_frusta[0], &light_view_mat, &minmax_frustum_x, &minmax_frustum_y);
             { // move light in texel sized increments
+
+                // world units per texel (not totally sure if these are the correct numbers to use...)
                 float wupt_x = fabsf(minmax_frustum_x.max - minmax_frustum_x.min) / pr.gpu.settings.shadow_maps.width;
                 float wupt_y = fabsf(minmax_frustum_y.max - minmax_frustum_y.min) / pr.gpu.settings.shadow_maps.height;
 
@@ -278,11 +284,7 @@ int main() {
             for(uint i=0; i < carrlen(ls_bb.p); ++i)
                 ls_bb.p[i] = mul_matrix_vector(&light_view_mat, scene_bb.p[i]);
 
-            // println("%f, %f, %f, %f", minmax_frustum_x.min, minmax_frustum_x.max,
-            //          minmax_frustum_y.min, minmax_frustum_y.max);
-
             light_nearfar_planes = near_far(minmax_frustum_x, minmax_frustum_y, &ls_bb);
-            // println("%f, %f", light_nearfar_planes.min, light_nearfar_planes.max);
 
             ortho_matrix(minmax_frustum_x.min, minmax_frustum_x.max, minmax_frustum_y.max,
                          minmax_frustum_y.min, light_nearfar_planes.min, light_nearfar_planes.max, &light_ortho);
@@ -290,11 +292,9 @@ int main() {
             mul_matrix(&light_ortho, &light_view_mat, &vs_info->dir_lights[0].space);
 
             #if 0 // set the light view as the player cam
-            {
-                update_vs_info_mat_model(&pr.gpu, vs_info_desc.bb_offset, &mat_model);
-                update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &light_view_mat);
-                memcpy(&vs_info->proj, &light_ortho, sizeof(light_ortho));
-            }
+            update_vs_info_mat_model(&pr.gpu, vs_info_desc.bb_offset, &mat_model);
+            update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &light_view_mat);
+            memcpy(&vs_info->proj, &light_ortho, sizeof(light_ortho));
             #endif
         }
 
@@ -417,16 +417,18 @@ int main() {
                 #define DSB 0
                 #define DLP 1
                 #define DLF 0
-                #define DCF 0
+                #define DCF 1
 
-                struct box vfb;
-                frustum_to_box(&camera_frustum, &vfb);
+                struct box vfb[SUB_FRUSTA_COUNT];
+                for(uint i=0; i < carrlen(sub_frusta); ++i)
+                    frustum_to_box(&sub_frusta[i], &vfb[i]);
 
                 matrix m;
                 mul_matrix(&vs_info->proj, &vs_info->view, &m);
 
                 #if DCF
-                draw_box(draw_cmd, &pr.gpu, &vfb, true, color_rp.rp, 0, &vf_rsc, &m, vector4(1, 0, 0, 1));
+                for(uint i=0; i < carrlen(vfb); ++i)
+                    draw_box(draw_cmd, &pr.gpu, &vfb[i], true, color_rp.rp, 0, &vf_rsc[i], &m, vector4(1, 0, 0, 1));
                 #endif
 
                 #if DSB
@@ -516,7 +518,8 @@ int main() {
         draw_floor_cleanup(&pr.gpu, &df_rsc);
 
         #if DCF
-        draw_box_cleanup(&pr.gpu, &vf_rsc);
+        for(uint i=0; i < carrlen(vf_rsc); ++i)
+            draw_box_cleanup(&pr.gpu, &vf_rsc[i]);
         #endif
 
         #if DSB

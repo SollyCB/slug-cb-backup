@@ -56,5 +56,7 @@ struct minmax near_far(struct minmax x, struct minmax y, struct box *bb);
 void minmax_frustum_points(struct frustum *f, matrix *space, struct minmax *minmax_x, struct minmax *minmax_y);
 void perspective_frustum(float fov, float ar, float near, float far, struct frustum *ret);
 void ortho_frustum(float l, float r, float t, float b, float n, float f, struct frustum *ret);
+void partition_frustum_c(struct frustum *f, uint count, struct frustum *sf);
+void partition_frustum_s(struct frustum *f, uint count, struct frustum *sf);
 
 #endif // include guard

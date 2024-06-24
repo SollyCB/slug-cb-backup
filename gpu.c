@@ -163,8 +163,8 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
 
     gpu->shader_dir = load_shader_dir(gpu, gpu->alloc_heap);
 
-    gpu->settings.shadow_maps.width = 4096;
-    gpu->settings.shadow_maps.height = 4096;
+    gpu->settings.shadow_maps.width = 4096 / 2;
+    gpu->settings.shadow_maps.height = 4096 / 2;
 }
 
 void shutdown_gpu(struct gpu *gpu) {
@@ -1094,7 +1094,7 @@ struct vs_info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vs_
     Vertex_Info *vs = (Vertex_Info*)(gpu->mem.bind_buffer.data + bb_ofs);
 
     vs->dir_light_count = 1;
-    vs->dir_lights[0].position = vector4(15, 15, 15,  1);
+    vs->dir_lights[0].position = vector4(2, 15, 15,  1);
     vs->dir_lights[0].color    = scale_vector(vector4(10.0, 10.0, 10.0, 0), 0.5);
 
     vs->ambient = scale_vector(vector3(1, 1, 1), 2.3);
@@ -1601,6 +1601,10 @@ void gpu_create_texture(struct gpu *gpu, struct image *image, struct gpu_texture
 
 bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommandBuffer graphics_cmd, struct shadow_maps *maps)
 {
+    // @TODO @CurrentTask
+    // shadow maps need to be created as arrayed images; then views need to be created which access each layer;
+    // then the depth renderpass needs to have a subpass for every array layer view in every shadow map.
+    
     maps->images = allocate(gpu->alloc_heap,
                             sizeof(*maps->images) * maps->count + // NOLINT sizeof(vulkan_handle)
                             sizeof(*maps->views)  * maps->count); // NOLINT sizeof(vulkan_handle)

@@ -143,4 +143,50 @@ struct minmax near_far(struct minmax x, struct minmax y, struct box *b)
     return nf;
 }
 
+// split a frustum in to count sub-frusta (fit to cascade)
+void partition_frustum_c(struct frustum *f, uint count, struct frustum *sf)
+{
+    float scale = 1.0 / count;
+    
+    // This function is a little jank, but this is the simplest way that jumped to mind. The only overhead is ugliness.
+    for(uint i=0; i < count; ++i) {
+        sf[i] = (struct frustum) {
+            .tl_far =  scale_vector(f->tl_far,  (i + 1) * scale),
+            .tr_far =  scale_vector(f->tr_far,  (i + 1) * scale),
+            .bl_far =  scale_vector(f->bl_far,  (i + 1) * scale),
+            .br_far =  scale_vector(f->br_far,  (i + 1) * scale),
+        };
+    }
 
+    sf[0].tl_near = f->tl_near;
+    sf[0].tr_near = f->tr_near;
+    sf[0].bl_near = f->bl_near;
+    sf[0].br_near = f->br_near;
+
+    for(uint i=1; i < count; ++i) {
+        sf[i].tl_near = sf[i-1].tl_far;
+        sf[i].tr_near = sf[i-1].tr_far;
+        sf[i].bl_near = sf[i-1].bl_far;
+        sf[i].br_near = sf[i-1].br_far;
+    }
+}
+
+// split a frustum in to count sub-frusta (fit to scene)
+void partition_frustum_s(struct frustum *f, uint count, struct frustum *sf)
+{
+    float scale = 1.0 / count;
+    
+    for(uint i=0; i < count; ++i) {
+        sf[i] = (struct frustum) {
+            .tl_near = f->tl_near,
+            .tr_near = f->tr_near,
+            .bl_near = f->bl_near,
+            .br_near = f->br_near,
+
+            .tl_far =  scale_vector(f->tl_far,  (i + 1) * scale),
+            .tr_far =  scale_vector(f->tr_far,  (i + 1) * scale),
+            .bl_far =  scale_vector(f->bl_far,  (i + 1) * scale),
+            .br_far =  scale_vector(f->br_far,  (i + 1) * scale),
+        };
+    }
+}

@@ -105,7 +105,7 @@ void main() {
         vec3 F = f0 + (vec3(1) - f0) * pow(1 - abs(dot(V, H)), 5);
 
         vec3 diff = (vec3(1) - F) * (1 / PI) * mix(base_color.rgb, vec3(0), metallic);
-        vec3 spec = (F * D * G) / (4 * abs(dot(V, N)) * abs(dot(L, N)));
+        vec3 spec = (F * D * G) / max(4 * abs(dot(V, N)) * abs(dot(L, N)), 0.000001); // @Optimise Trying to prevent divide by zero error when either dot product is zero with this max(). This seems pretty optimal???
 
         vec3 matbrdf = spec + diff;
 
