@@ -1777,13 +1777,15 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
 
 void free_shadow_maps(struct gpu *gpu, struct shadow_maps *maps)
 {
-    for(uint i=0; i < maps->count; ++i) {
+    for(uint i=0; i < maps->count; ++i)
         vk_destroy_image(gpu->device, maps->images[i], GAC);
+
+    for(uint i=0; i < maps->count * maps->cascade_count; ++i)
         vk_destroy_image_view(gpu->device, maps->views[i], GAC);
-    }
+
     vk_destroy_sampler(gpu->device, maps->sampler, GAC);
     vk_destroy_descriptor_set_layout(gpu->device, maps->dsl, GAC);
-    deallocate(gpu->alloc_heap, maps->images);
+    deallocate(gpu->alloc_heap, maps->images); // @Optimise This should eventually happen on a thread.
 }
 
 void gpu_destroy_image(struct gpu *gpu, struct gpu_texture *image)
