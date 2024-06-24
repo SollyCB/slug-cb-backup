@@ -360,7 +360,7 @@ struct renderpass {
 };
 
 void create_color_renderpass(struct gpu *gpu, struct renderpass *rp);
-void create_shadow_renderpass(struct gpu *gpu, uint shadow_map_count, struct shadow_maps *shadow_maps, struct renderpass *rp);
+void create_shadow_renderpass(struct gpu *gpu, struct shadow_maps *shadow_maps, struct renderpass *rp);
 void begin_color_renderpass(VkCommandBuffer cmd, struct renderpass *rp, VkRect2D area);
 void begin_shadow_renderpass(VkCommandBuffer cmd, struct renderpass *rp, struct gpu *gpu, uint count);
 void free_shadow_maps(struct gpu *gpu, struct shadow_maps *maps);

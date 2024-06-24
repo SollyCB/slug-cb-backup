@@ -149,7 +149,6 @@ int main() {
     VkSemaphore sem_transfer_complete = create_binary_semaphore(&pr.gpu);
     VkSemaphore sem_graphics_complete = create_binary_semaphore(&pr.gpu);
 
-    #define SUB_FRUSTA_COUNT 4
     struct draw_box_rsc vf_rsc[SUB_FRUSTA_COUNT]; // view frustum resources
     struct draw_box_rsc sb_rsc; // scene bb frustum resources
     struct draw_box_rsc lf_rsc; // light ortho frustum resources
@@ -320,11 +319,11 @@ int main() {
             return -1;
 
         struct shadow_maps shadow_maps = {.count = 1};
-        if (!create_shadow_maps(&pr.gpu, transfer_cmd, graphics_cmd, &shadow_maps))
+        if (!create_shadow_maps(&pr.gpu, transfer_cmd, graphics_cmd, SUB_FRUSTA_COUNT, &shadow_maps))
             return -1;
 
         struct renderpass depth_rp;
-        create_shadow_renderpass(&pr.gpu, 1, &shadow_maps, &depth_rp);
+        create_shadow_renderpass(&pr.gpu, &shadow_maps, &depth_rp);
 
         uint scene = 0;
 

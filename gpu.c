@@ -1998,24 +1998,23 @@ void create_color_renderpass(struct gpu *gpu, struct renderpass *rp)
 
 
 // @Optimise Move to thread fn
-void create_shadow_renderpass(struct gpu *gpu, uint shadow_map_count,
-                              struct shadow_maps *shadow_maps, struct renderpass *rp)
+void create_shadow_renderpass(struct gpu *gpu, struct shadow_maps *shadow_maps, struct renderpass *rp)
 {
     VkAttachmentReference *ar;
     VkSubpassDescription *ds;
     VkSubpassDependency *dp;
 
     VkAttachmentDescription *ad = allocate(gpu->alloc_temp,
-            sizeof(*ad) * shadow_map_count +
-            sizeof(*ar) * shadow_map_count +
-            sizeof(*ds) * shadow_map_count +
-            sizeof(*dp) * shadow_map_count);
+            sizeof(*ad) * shadow_maps->count * shadow_maps->cascade_count +
+            sizeof(*ar) * shadow_maps->count * shadow_maps->cascade_count +
+            sizeof(*ds) * shadow_maps->count * shadow_maps->cascade_count +
+            sizeof(*dp) * shadow_maps->count * shadow_maps->cascade_count);
 
-    ar = (VkAttachmentReference*)(ad + shadow_map_count);
-    ds =  (VkSubpassDescription*)(ar + shadow_map_count);
-    dp =   (VkSubpassDependency*)(ds + shadow_map_count);
+    ar = (VkAttachmentReference*)(ad + shadow_maps->count * shadow_maps->cascade_count);
+    ds =  (VkSubpassDescription*)(ar + shadow_maps->count * shadow_maps->cascade_count);
+    dp =   (VkSubpassDependency*)(ds + shadow_maps->count * shadow_maps->cascade_count);
 
-    for(uint i=0; i < shadow_map_count; ++i) {
+    for(uint i=0; i < shadow_maps->count; ++i) { // @TODO I think I only need one attachment description
         ad[i] = (VkAttachmentDescription) {
             .format         = GPU_SHADOW_ATTACHMENT_FORMAT,
             .samples        = VK_SAMPLE_COUNT_1_BIT,
@@ -2028,20 +2027,20 @@ void create_shadow_renderpass(struct gpu *gpu, uint shadow_map_count,
         };
     }
 
-    for(uint i=0; i < shadow_map_count; ++i) {
+    for(uint i=0;i < shadow_maps->count * shadow_maps->cascade_count; ++i) {
         ar[i] = (VkAttachmentReference) {
             .attachment = i,
             .layout     = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         };
     }
 
-    for(uint i=0; i < shadow_map_count; ++i) {
+    for(uint i=0; i < shadow_maps->count * shadow_maps->cascade_count; ++i) {
         ds[i] = (VkSubpassDescription) {
             .pDepthStencilAttachment = &ar[i],
         };
     }
 
-    for(uint i=0; i < shadow_map_count; ++i) {
+    for(uint i=0; i < shadow_maps->count * shadow_maps->cascade_count; ++i) {
         dp[i] = (VkSubpassDependency) {
             .srcSubpass      = VK_SUBPASS_EXTERNAL,
             .dstSubpass      = i,
@@ -2055,11 +2054,11 @@ void create_shadow_renderpass(struct gpu *gpu, uint shadow_map_count,
 
     VkRenderPassCreateInfo rpci = {
         .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = shadow_map_count,
+        .attachmentCount = shadow_maps->count * shadow_maps->cascade_count,
         .pAttachments    = ad,
-        .subpassCount    = shadow_map_count,
+        .subpassCount    = shadow_maps->count * shadow_maps->cascade_count,
         .pSubpasses      = ds,
-        .dependencyCount = shadow_map_count,
+        .dependencyCount = shadow_maps->count * shadow_maps->cascade_count,
         .pDependencies   = dp,
     };
     {
@@ -2070,7 +2069,7 @@ void create_shadow_renderpass(struct gpu *gpu, uint shadow_map_count,
     VkFramebufferCreateInfo fbci = {
         .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .renderPass      = rp->rp,
-        .attachmentCount = shadow_map_count,
+        .attachmentCount = shadow_maps->count * shadow_maps->cascade_count,
         .pAttachments    = shadow_maps->views,
         .width           = gpu->settings.shadow_maps.width,
         .height          = gpu->settings.shadow_maps.height,
