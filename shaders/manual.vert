@@ -26,7 +26,7 @@ layout(location = 3) in vec2 in_texcoord;
 struct In_Directional_Light {
     vec4 position;
     vec4 color;
-    mat4 space;
+    mat4 space[4];
 };
 
 layout(set = 0, binding = 0) uniform Vertex_Info {
@@ -91,6 +91,6 @@ void main() {
     for(uint i=0; i < vs_info.dxxx.x; ++i) {
         fs_info.dir_lights[i].color = vec3(vs_info.dir_lights[i].color);
         fs_info.dir_lights[i].ts_light_pos = tbn * vec3(vs_info.dir_lights[i].position);
-        fs_info.dir_lights[i].ls_frag_pos = vs_info.dir_lights[i].space * world_pos;
+        fs_info.dir_lights[i].ls_frag_pos = vs_info.dir_lights[i].space[0] * world_pos; // @TODO CSM - find correct space
     }
 }

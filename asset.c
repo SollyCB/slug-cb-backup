@@ -1260,7 +1260,7 @@ model_pipelines_transform_descriptors_and_draw_info(
 
     for(uint j=1; j < arg->depth_pass_count; ++j) // depth pipelines copy out
         for(uint i=0; i < prim_count; ++i) {
-            pipeline_infos[pc] = pipeline_infos[prim_count];
+            pipeline_infos[pc] = pipeline_infos[prim_count + i];
             pipeline_infos[pc].subpass = j;
             pc++;
         }

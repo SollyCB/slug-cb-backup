@@ -24,7 +24,7 @@ typedef enum {
 typedef struct directional_light {
     vector position;
     vector color;
-    matrix space;
+    matrix space[SUB_FRUSTA_COUNT];
 } In_Directional_Light;
 
 typedef struct point_light {

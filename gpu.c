@@ -164,8 +164,8 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
 
     gpu->shader_dir = load_shader_dir(gpu, gpu->alloc_heap);
 
-    gpu->settings.shadow_maps.width = 4096 / 4;
-    gpu->settings.shadow_maps.height = 4096 / 4;
+    gpu->settings.shadow_maps.width = 4096 / 2;
+    gpu->settings.shadow_maps.height = 4096 / 2;
 }
 
 void shutdown_gpu(struct gpu *gpu) {
@@ -1095,7 +1095,7 @@ struct vs_info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vs_
     Vertex_Info *vs = (Vertex_Info*)(gpu->mem.bind_buffer.data + bb_ofs);
 
     vs->dir_light_count = 1;
-    vs->dir_lights[0].position = vector4(2, 15, 15,  1);
+    vs->dir_lights[0].position = vector4(4, 15, 15,  1);
     vs->dir_lights[0].color    = scale_vector(vector4(10.0, 10.0, 10.0, 0), 0.5);
 
     vs->ambient = scale_vector(vector3(1, 1, 1), 2.3);
@@ -1104,7 +1104,11 @@ struct vs_info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vs_
     identity_matrix(&model);
 
     matrix proj;
+    #if 0
     perspective_matrix(FOV, ASPECT_RATIO, PERSPECTIVE_NEAR, PERSPECTIVE_FAR, &proj);
+    #else
+    perspective_matrix(FOV, ASPECT_RATIO, PERSPECTIVE_NEAR, 200, &proj);
+    #endif
 
     memcpy(&vs->model, &model, sizeof(model));
     memcpy(&vs->proj, &proj, sizeof(proj));
@@ -2017,7 +2021,7 @@ void create_shadow_renderpass(struct gpu *gpu, struct shadow_maps *shadow_maps, 
     ds =  (VkSubpassDescription*)(ar + shadow_maps->count * shadow_maps->cascade_count);
     dp =   (VkSubpassDependency*)(ds + shadow_maps->count * shadow_maps->cascade_count);
 
-    for(uint i=0; i < shadow_maps->count; ++i) { // @TODO I think I only need one attachment description
+    for(uint i=0; i < shadow_maps->count * shadow_maps->cascade_count; ++i) { // @TODO I think I only need one attachment description
         ad[i] = (VkAttachmentDescription) {
             .format         = GPU_SHADOW_ATTACHMENT_FORMAT,
             .samples        = VK_SAMPLE_COUNT_1_BIT,
@@ -2076,7 +2080,7 @@ void create_shadow_renderpass(struct gpu *gpu, struct shadow_maps *shadow_maps, 
         .pAttachments    = shadow_maps->views,
         .width           = gpu->settings.shadow_maps.width,
         .height          = gpu->settings.shadow_maps.height,
-        .layers          = 1,
+        .layers          = 1, // @Todo Can I use this for rendering to cascades?
     };
     {
         VkResult check = vk_create_framebuffer(gpu->device, &fbci, GAC, &rp->fb);
@@ -2184,12 +2188,12 @@ void do_shadow_pass(VkCommandBuffer cmd, struct shadow_pass_info *info, allocato
                                   &info->light_spaces[idx]);
             #endif
 
-            draw_model_depth(cmd, info->lmr->draw_info, 0);
+            draw_model_depth(cmd, info->lmr->draw_info, idx);
+
+            if (idx < info->maps->cascade_count * info->maps->count - 1)
+                vk_cmd_next_subpass(cmd, VK_SUBPASS_CONTENTS_INLINE);
 
             idx++;
-
-            if (i < info->maps->cascade_count - 1)
-                vk_cmd_next_subpass(cmd, VK_SUBPASS_CONTENTS_INLINE);
         }
     }
 
