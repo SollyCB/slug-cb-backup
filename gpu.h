@@ -359,10 +359,25 @@ struct renderpass {
     VkFramebuffer fb;
 };
 
+struct shadow_pass_info {
+    struct renderpass *rp;
+    struct gpu *gpu;
+    struct shadow_maps *maps;
+    struct load_model_ret *lmr;
+
+#if SPLIT_SHADOW_MVP
+    matrix *light_model;
+    matrix *light_view;
+    matrix *light_proj;
+#else
+    matrix *light_spaces;
+#endif
+};
+
 void create_color_renderpass(struct gpu *gpu, struct renderpass *rp);
 void create_shadow_renderpass(struct gpu *gpu, struct shadow_maps *shadow_maps, struct renderpass *rp);
 void begin_color_renderpass(VkCommandBuffer cmd, struct renderpass *rp, VkRect2D area);
-void begin_shadow_renderpass(VkCommandBuffer cmd, struct renderpass *rp, struct gpu *gpu, uint count);
+void do_shadow_pass(VkCommandBuffer cmd, struct shadow_pass_info *info, allocator *alloc);
 void free_shadow_maps(struct gpu *gpu, struct shadow_maps *maps);
 
 static inline void end_renderpass(VkCommandBuffer cmd) {vk_cmd_end_renderpass(cmd);}

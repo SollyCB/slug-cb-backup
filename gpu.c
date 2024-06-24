@@ -10,6 +10,7 @@
 #include "thread.h"
 #include "math.h"
 #include "blend_types.h"
+#include "asset.h"
 
 #if DEBUG
 static VKAPI_ATTR VkBool32 VKAPI_CALL gpu_debug_messenger_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
@@ -2118,11 +2119,11 @@ void begin_color_renderpass(VkCommandBuffer cmd, struct renderpass *rp, VkRect2D
     vk_cmd_begin_renderpass(cmd, &bi, VK_SUBPASS_CONTENTS_INLINE);
 }
 
-void begin_shadow_renderpass(VkCommandBuffer cmd, struct renderpass *rp, struct gpu *gpu, uint count)
+void begin_shadow_renderpass(VkCommandBuffer cmd, struct renderpass *rp, struct gpu *gpu, uint count, allocator *alloc)
 {
     assert(gpu->settings.shadow_maps.width && gpu->settings.shadow_maps.height);
 
-    VkClearValue *clears = sallocate(gpu->alloc_temp, *clears, count);
+    VkClearValue *clears = sallocate(alloc, *clears, count);
 
     for(uint i=0; i < count; ++i)
         clears[i] = (VkClearValue) {
@@ -2142,6 +2143,55 @@ void begin_shadow_renderpass(VkCommandBuffer cmd, struct renderpass *rp, struct 
                                            .height = gpu->settings.shadow_maps.height},
     };
     vk_cmd_begin_renderpass(cmd, &bi, VK_SUBPASS_CONTENTS_INLINE);
+}
+
+void do_shadow_pass(VkCommandBuffer cmd, struct shadow_pass_info *info, allocator *alloc)
+{
+    begin_shadow_renderpass(cmd, info->rp, info->gpu, info->maps->count * info->maps->cascade_count, alloc);
+
+    uint idx = 0;
+    for(uint i=0; i < info->maps->count; ++i) {
+        for(uint j=0; j < info->maps->cascade_count; ++j) {
+            #if SPLIT_SHADOW_MVP
+            vk_cmd_push_constants(cmd,
+                                  info->lmr->draw_info->pipeline_layouts[info->lmr->draw_info->prim_count],
+                                  VK_SHADER_STAGE_VERTEX_BIT,
+                                  0,
+                                  sizeof(matrix),
+                                  &info->light_model[i]);
+
+            vk_cmd_push_constants(cmd,
+                                  info->lmr->draw_info->pipeline_layouts[info->lmr->draw_info->prim_count],
+                                  VK_SHADER_STAGE_VERTEX_BIT,
+                                  sizeof(matrix),
+                                  sizeof(matrix),
+                                  &info->light_view[i]);
+
+            vk_cmd_push_constants(cmd,
+                                  info->lmr->draw_info->pipeline_layouts[info->lmr->draw_info->prim_count],
+                                  VK_SHADER_STAGE_VERTEX_BIT,
+                                  sizeof(matrix) * 2,
+                                  sizeof(matrix),
+                                  &info->light_proj[idx]);
+            #else
+            vk_cmd_push_constants(cmd,
+                                  info->lmr->draw_info->pipeline_layouts[info->lmr->draw_info->prim_count],
+                                  VK_SHADER_STAGE_VERTEX_BIT,
+                                  0,
+                                  sizeof(matrix),
+                                  &info->light_spaces[idx]);
+            #endif
+
+            draw_model_depth(cmd, info->lmr->draw_info, 0);
+
+            idx++;
+
+            if (i < info->maps->cascade_count - 1)
+                vk_cmd_next_subpass(cmd, VK_SUBPASS_CONTENTS_INLINE);
+        }
+    }
+
+    end_renderpass(cmd);
 }
 
 VkCommandPool create_commandpool(VkDevice device, uint queue_family_index, uint flags)

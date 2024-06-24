@@ -13,7 +13,7 @@ void pv3(vec3 v) {
     debugPrintfEXT("%f, %f, %f\n", v.x, v.y, v.z);
 }
 
-layout(set = 1, binding = 0) uniform sampler2DShadow shadow_maps[1];
+layout(set = 1, binding = 0) uniform sampler2DShadow shadow_maps[1 * 4];
 
 layout(set = 3, binding = 0) uniform Material_Ubo {
     vec4 bbbb; // float base_color[4];

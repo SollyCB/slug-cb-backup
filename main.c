@@ -373,36 +373,20 @@ int main() {
             ;
 
         {
-            begin_shadow_renderpass(draw_cmd, &depth_rp, &pr.gpu, shadow_maps.count);
-
-            // @Todo @Optimise Need to switch these back to a single push constant
-            vk_cmd_push_constants(draw_cmd,
-                                  lmr.draw_info->pipeline_layouts[lmr.draw_info->prim_count],
-                                  VK_SHADER_STAGE_VERTEX_BIT,
-                                  0,
-                                  sizeof(matrix),
-                                  &mat_model);
-
-            vk_cmd_push_constants(draw_cmd,
-                                  lmr.draw_info->pipeline_layouts[lmr.draw_info->prim_count],
-                                  VK_SHADER_STAGE_VERTEX_BIT,
-                                  sizeof(matrix),
-                                  sizeof(matrix),
-                                  &light_view_mat);
-
-            vk_cmd_push_constants(draw_cmd,
-                                  lmr.draw_info->pipeline_layouts[lmr.draw_info->prim_count],
-                                  VK_SHADER_STAGE_VERTEX_BIT,
-                                  sizeof(matrix) * 2,
-                                  sizeof(matrix),
-                                  &light_ortho);
-
-            draw_model_depth(draw_cmd, lmr.draw_info, 0);
-
-            // if (i < shadow_maps.count - 1)
-            //     vk_cmd_next_subpass(draw_cmd, VK_SUBPASS_CONTENTS_INLINE);
-
-            end_renderpass(draw_cmd);
+            struct shadow_pass_info spi = {
+                .gpu = &pr.gpu,
+                .rp = &depth_rp,
+                .maps = &shadow_maps,
+                .lmr = &lmr,
+                #if SPLIT_SHADOW_MVP
+                .light_model = &mat_model,
+                .light_view = &light_view_mat,
+                .light_proj = &light_ortho,
+                #else
+                .light_space = light_space,
+                #endif
+            };
+            do_shadow_pass(draw_cmd, &spi, &pr.allocs.temp);
 
             bind_descriptor_buffers(draw_cmd, &pr.gpu);
 
