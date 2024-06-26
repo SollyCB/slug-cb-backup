@@ -13,8 +13,6 @@ typedef struct Vertex_Info          Vertex_Info;
 typedef struct Vertex_Transforms    Vertex_Transforms;
 typedef struct Material_Uniforms    Material_Uniforms;
 
-#define VERTEX_TRANSFORMS_ALL_MEMBERS
-
 #endif // ifndef GL_core_profile
 
 #if 0 // @Unused for now...
@@ -45,14 +43,9 @@ struct Vertex_Info {
     uvec4 dxxx; // dir light count, null, null, null
 };
 
-struct Vertex_Transforms { // @TODO This will have broken asset.c transform calculations
-    #if    defined(SHADER_SKINNED) || defined(VERTEX_TRANSFORMS_ALL_MEMBERS)
-    mat4 joints_trs[JOINT_COUNT];
-    #elif !defined(SHADER_SKINNED) || defined(VERTEX_TRANSFORMS_ALL_MEMBERS)
-    mat4 node_trs;
-    #elif defined(SHADER_MORPH)    || defined(VERTEX_TRANSFORMS_ALL_MEMBERS)
-    vec4 morph_weights[MORPH_WEIGHT_COUNT];
-    #endif
+struct Vertex_Transforms { // @TODO This will have broken asset.c transform calculations (I might have fixed it)
+    mat4 trs[JOINT_COUNT];
+    vec4 weights[(MORPH_WEIGHT_COUNT / 4) + 1];
 };
 
 // matched to gltf_material_uniforms but defined for shader alignment
@@ -61,6 +54,20 @@ struct Material_Uniforms {
     vec4 mrno; // float metallic_factor; float roughness_factor; float normal_scale; float occlusion_strength;
     vec4 eeea; // float emissive_factor[3]; float alpha_cutoff;
 };
+
+#ifndef GL_core_profile
+
+static inline uint vt_ubo_sz(void)
+{
+    return sizeof(Vertex_Transforms);
+}
+
+static inline uint vt_ubo_ofs(bool weights)
+{
+    return offsetof(Vertex_Transforms, weights) & maxif(weights);
+}
+
+#endif
 
 #ifdef GL_core_profile // glsl code invisible to C
 

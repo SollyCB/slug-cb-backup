@@ -10,13 +10,14 @@ layout(location = 3) in vec2 in_texcoord;
 
 void main() {
     
-    vec4 world_pos = vs_info.model * transforms.node_trs * vec4(in_position, 1);
+    mat4 ws = vs_info.model * transforms.trs[0];
+    vec4 world_pos = ws * vec4(in_position, 1);
     gl_Position = vs_info.proj * vs_info.view * world_pos;
 
     fs_info.texcoord = in_texcoord;
 
-    vec3 normal = vec3(vs_info.model * transforms.node_trs * vec4(in_normal, 0));
-    vec3 tangent = vec3(vs_info.model * transforms.node_trs * vec4(in_tangent.xyz, 0));
+    vec3 normal = vec3(ws * vec4(in_normal, 0));
+    vec3 tangent = vec3(ws * vec4(in_tangent.xyz, 0));
 
     mat3 tbn = transpose(mat3(tangent, cross(normal, vec3(tangent)), normal));
     fs_info.tang_frag_pos = tbn * vec3(world_pos);

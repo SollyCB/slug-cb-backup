@@ -431,8 +431,7 @@ static uint allocate_model_resources(
     uint transforms_ubos_size     = 0;
     for(uint i=0; i < model->mesh_count; ++i) {
         offsets->transforms_ubos[i] = transforms_ubos_size + buffers_size;
-        transforms_ubos_size += calculate_transforms_ubo_size(&model->meshes[i]) *
-                                offsets->mesh_instance_counts[i];
+        transforms_ubos_size += vt_ubo_sz() * offsets->mesh_instance_counts[i];
         // @Optimise Check that the compiler knows to only zero the struct once
         // outside the loop.
         VkDescriptorSetLayoutBinding binding = {
@@ -920,7 +919,8 @@ model_pipelines_transform_descriptors_and_draw_info(
         draw_info->mesh_primitive_counts[i] = model->meshes[i].primitive_count;
         draw_info->mesh_instance_counts[i] = offsets->mesh_instance_counts[i];
 
-        uint ubo_size = calculate_transforms_ubo_size(&model->meshes[i]);
+        uint ubo_size = vt_ubo_sz();
+
         // @Optimise Check what this loop compiles to and whether stuff gets lifted out properly.
         for(uint j=0; j < offsets->mesh_instance_counts[i]; ++j) {
             size_t ubo_offset = offsets->base_bind + offsets->transforms_ubos[i] + ubo_size*j;
@@ -1585,10 +1585,7 @@ static void model_node_transforms(
                 uint tz = ctz(mesh_mask);
                 mesh_mask &= ~(1<<tz);
 
-                // @Optimise I call calculate_transforms_ubo_size a lot in this file. Maybe
-                // should be storing the sizes along with the offsets.
-                ubo_build_arg.ubo_data = ubo_data_base + offsets->transforms_ubos[tz] +
-                    calculate_transforms_ubo_size(&model->meshes[tz]) * mesh_counts[tz];
+                ubo_build_arg.ubo_data = ubo_data_base + offsets->transforms_ubos[tz] + vt_ubo_sz() * mesh_counts[tz];
                 model_build_transform_ubo(tz, &ubo_build_arg);
 
                 mesh_counts[tz]++;
@@ -1933,57 +1930,51 @@ static void model_animations(
 
 static void model_build_transform_ubo(uint mesh, struct model_build_transform_ubo_arg *arg)
 {
-    gltf *model = arg->model;
-    uchar *ubo_data = arg->ubo_data;
-    uint64 skins = arg->meshes[mesh].skin_mask;
-    uint64 *nodes = arg->meshes[mesh].node_mask;
-    uint64 one = 1;
+    gltf   *model      = arg->model;
+    uchar  *ubo_data   = arg->ubo_data;
+    uint64  skin_mask  = arg->meshes[mesh].skin_mask;
+    uint64 *node_masks = arg->meshes[mesh].node_mask;
+    uint64  one        = 1;
 
-    uint joints_trs_ofs = transforms_ubo_offsetof(&model->meshes[mesh], TRANSFORMS_UBO_JOINTS_TRS);
-    uint joints_tbn_ofs = transforms_ubo_offsetof(&model->meshes[mesh], TRANSFORMS_UBO_JOINTS_TBN);
+    uint joints_trs_ofs = vt_ubo_ofs(false);
 
-    uint pc = popcnt(skins);
+    uint pc = popcnt(skin_mask);
     for(uint j=0; j < pc; ++j) {
-        uint tz = ctz(skins);
-        skins &= ~(one<<tz);
+        uint tz = ctz(skin_mask);
+        skin_mask &= ~(one<<tz);
+
         gltf_skin *skin = &model->skins[tz];
-        for(uint i=0; i < skin->joint_count; ++i) {
-            memcpy(ubo_data + joints_trs_ofs + sizeof(matrix) * i,
-                   arg->xforms + skin->joints[i], sizeof(matrix));
-            memcpy(ubo_data + joints_tbn_ofs + sizeof(matrix) * i,
-                   arg->xforms + skin->joints[i], sizeof(matrix)); // @TODO TBN matrices.
-        }
+        for(uint i=0; i < skin->joint_count; ++i)
+            memcpy(ubo_data + joints_trs_ofs + sizeof(*arg->xforms) * i,
+                   arg->xforms + skin->joints[i], sizeof(*arg->xforms));
     }
 
-    uint node_trs_ofs = transforms_ubo_offsetof(&model->meshes[mesh], TRANSFORMS_UBO_NODE_TRS);
-    uint node_tbn_ofs = transforms_ubo_offsetof(&model->meshes[mesh], TRANSFORMS_UBO_NODE_TBN);
-    uint node_w_ofs = transforms_ubo_offsetof(&model->meshes[mesh], TRANSFORMS_UBO_MORPH_WEIGHTS);
+    uint node_trs_ofs = vt_ubo_ofs(false);
+    uint node_w_ofs   = vt_ubo_ofs(true);
 
     bool skinned = model->meshes[mesh].joint_count;
     for(uint i=0; i < carrlen(arg->meshes[mesh].node_mask); ++i) {
-        pc = popcnt(nodes[i]);
+        pc = popcnt(node_masks[i]);
         for(uint j=0; j < pc; ++j) {
-            uint tz = ctz(nodes[i]);
-            nodes[i] &= ~(one<<tz);
+            uint tz = ctz(node_masks[i]);
+            node_masks[i] &= ~(one<<tz);
 
-            uint node = tz + (i * 64);
+            uint node_i = tz + (i * 64);
 
-            if (!skinned) {
-                memcpy(ubo_data + node_trs_ofs, arg->xforms + node, sizeof(matrix));
-                memcpy(ubo_data + node_tbn_ofs, arg->xforms + node, sizeof(matrix)); // @TODO TBN matrices.
-            }
+            if (!skinned)
+                memcpy(ubo_data + node_trs_ofs, arg->xforms + node_i, sizeof(*arg->xforms));
 
             // @Test @Optimise Weights should maybe be copied into weight_data in the animation
             // function regardless of their being animated as that would remove the branch here. It
             // would increase the run time of the animations function, but I think that is worth it
             // as I feel that this loop will run more times than the animation function.
-            if (model->nodes[node].weight_count) {
-                if (arg->weight_anim_mask[node>>6] & (one << (node & 63)))
-                    memcpy(ubo_data + node_w_ofs, arg->weight_data + arg->weight_offsets[node],
-                           sizeof(float) * model->nodes[node].weight_count);
+            if (model->nodes[node_i].weight_count) {
+                if (arg->weight_anim_mask[node_i>>6] & (one << (node_i & 63)))
+                    memcpy(ubo_data + node_w_ofs, arg->weight_data + arg->weight_offsets[node_i],
+                           sizeof(*arg->weight_data) * model->nodes[node_i].weight_count);
                 else
-                    memcpy(ubo_data + node_w_ofs, model->nodes[i].weights,
-                           sizeof(float) * model->nodes[node].weight_count);
+                    memcpy(ubo_data + node_w_ofs, model->nodes[node_i].weights,
+                           sizeof(*model->nodes[node_i].weights) * model->nodes[node_i].weight_count);
             }
         }
     }

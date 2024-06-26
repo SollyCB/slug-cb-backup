@@ -121,32 +121,4 @@ void find_or_generate_model_shader_sets(
     struct shader_config *conf,
     gltf                 *model);
 
-static inline size_t calculate_transforms_ubo_size(gltf_mesh *mesh)
-{
-    // @Todo I want these 'sizeof's to read sizeof(Transforms_Ubo.node_trs), but that
-    // is a compile error. See if I can get that working somehow.
-    size_t ret = 0;
-    ret += (sizeof(matrix) * 2) & max_if(!mesh->joint_count); // node_trs + node_tbn
-    ret += (sizeof(matrix) * 2 * mesh->joint_count); // joint_trs + joint_tbn
-    ret += (sizeof(float) * mesh->weight_count);
-    return alloc_align(ret);
-}
-
-enum {
-    TRANSFORMS_UBO_NODE_TRS,
-    TRANSFORMS_UBO_NODE_TBN,
-    TRANSFORMS_UBO_JOINTS_TRS,
-    TRANSFORMS_UBO_JOINTS_TBN,
-    TRANSFORMS_UBO_MORPH_WEIGHTS,
-};
-static inline uint transforms_ubo_offsetof(gltf_mesh *mesh, uint field)
-{
-    // @Optimise would be nice to remove the multiply.
-    uint mul = mesh->joint_count ? mesh->joint_count : 1;
-    uint size = 0;
-    size += sizeof(matrix) * mul & maxif(field != TRANSFORMS_UBO_JOINTS_TRS && field != TRANSFORMS_UBO_NODE_TRS);
-    size += sizeof(matrix) * mul & maxif(field == TRANSFORMS_UBO_MORPH_WEIGHTS && size);
-    return size;
-}
-
 #endif
