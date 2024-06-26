@@ -3,6 +3,7 @@
 
 #include "gltf.h"
 #include "defs.h"
+#include "shader.h.glsl"
 
 #define RECREATE_SHADER_DIR 1
 
@@ -18,51 +19,6 @@ typedef enum {
     DESCRIPTOR_SET_ORDER_MATERIAL_UBO,
     DESCRIPTOR_SET_ORDER_MATERIAL_TEXTURES,
 } descriptor_set_order;
-
-// Vertex Shader Variable
-
-typedef struct directional_light {
-    vector position;
-    vector color;
-    matrix space[SUB_FRUSTA_COUNT];
-} In_Directional_Light;
-
-typedef struct point_light {
-    vector position;
-    vector color;
-    matrix space;
-    float linear;
-    float quadratic;
-} In_Point_Light;
-
-typedef struct vs_info {
-    vector view_pos;
-    vector ambient;
-    matrix model;
-    matrix view;
-    matrix proj;
-
-    In_Directional_Light dir_lights[2];
-
-    uint dir_light_count; // dir light count, null, null, null
-
-    uint pad[3];
-
-    // Later
-    #if 0
-    uint point_light_count;
-    In_Point_Light point_lights[1];
-    #endif
-
-} Vertex_Info;
-
-typedef struct transforms_ubo {
-    matrix node_trs;
-    matrix node_tbn;
-    matrix joints_trs[1];
-    matrix joints_tbn[1];
-    float morph_weights[1];
-} Transforms_Ubo;
 
 typedef struct material_ubo {
     float base_color_factor[4];

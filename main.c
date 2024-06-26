@@ -410,10 +410,10 @@ int main() {
             draw_model_color(draw_cmd, lmr.draw_info);
 
             {
-                #define DSB 1
+                #define DSB 0
                 #define DLP 1
-                #define DLF 1
-                #define DCF 1
+                #define DLF 0
+                #define DCF 0
 
                 struct box vfb[SUB_FRUSTA_COUNT];
                 for(uint i=0; i < carrlen(sub_frusta); ++i)

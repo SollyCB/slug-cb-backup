@@ -63,6 +63,11 @@ typedef struct matrix {
     float m[16];
 } matrix cl_align(16);
 
+// glsl compatibility for cpu interactive structs
+#define vec4 vector
+#define mat4 matrix
+typedef uint32 uvec4 cl_align(16);
+
 static inline vector get_vector(float x, float y, float z, float w)
 {
     return (vector) {.x = x, .y = y, .z = z, .w = w};

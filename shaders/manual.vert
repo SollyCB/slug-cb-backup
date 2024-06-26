@@ -1,76 +1,13 @@
 #version 450
 
-#extension GL_EXT_debug_printf : enable
+#extension GL_GOOGLE_include_directive : require
 
-void pmat(mat4 m) {
-    debugPrintfEXT("[ %f, %f, %f, %f,\n  %f, %f, %f, %f,\n  %f, %f, %f, %f,\n  %f, %f, %f, %f]\n",
-    m[0][0], m[1][0], m[2][0], m[3][0],
-    m[0][1], m[1][1], m[2][1], m[3][1],
-    m[0][2], m[1][2], m[2][2], m[3][2],
-    m[0][3], m[1][3], m[2][3], m[3][3]);
-}
+#define VERT
+#include "../shader.h.glsl"
 
-void pv3(vec3 v) {
-    debugPrintfEXT("%f, %f, %f\n", v.x, v.y, v.z);
-}
-
-void pv4(vec4 v) {
-    debugPrintfEXT("%f, %f, %f, %f\n", v.x, v.y, v.z, v.w);
-}
-
-layout(location = 0) in vec3 in_position;
-layout(location = 1) in vec3 in_normal;
-layout(location = 2) in vec4 in_tangent;
 layout(location = 3) in vec2 in_texcoord;
 
-struct In_Directional_Light {
-    vec4 position;
-    vec4 color;
-    mat4 space[4];
-};
-
-layout(set = 0, binding = 0) uniform Vertex_Info {
-    vec4 view_pos;
-    vec4 ambient;
-    mat4 model;
-    mat4 view;
-    mat4 proj;
-
-    In_Directional_Light dir_lights[2];
-
-    uvec4 dxxx; // dir light count, null, null, null
-} vs_info;
-
-layout(set = 2, binding = 0) uniform Transforms_Ubo {
-    mat4 node_trs;
-    mat4 node_tbn;
-} transforms;
-
-struct Directional_Light {
-    vec3 color;
-    vec3 ts_light_pos;
-    vec4 ls_frag_pos;
-};
-
-layout(location = 0) out uint dir_light_count;
-
-layout(location = 1) out struct Fragment_Info {
-    vec2 texcoord;
-    vec3 tang_normal;
-    vec3 tang_frag_pos;
-    vec3 tang_view_pos;
-    vec3 ambient;
-
-    Directional_Light dir_lights[2];
-} fs_info;
-
-layout(location = 20) out struct Dbg {
-    vec3 norm;
-} dbg;
-
 void main() {
-
-    dbg.norm = normalize(in_normal) * 0.5 + 0.5;
     
     vec4 world_pos = vs_info.model * transforms.node_trs * vec4(in_position, 1);
     gl_Position = vs_info.proj * vs_info.view * world_pos;
