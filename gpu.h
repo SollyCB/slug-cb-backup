@@ -234,42 +234,42 @@ bool htp_allocate_resources(
 void htp_free_resources(struct gpu *gpu, struct htp_rsc *rsc);
 void htp_commands(VkCommandBuffer cmd, struct gpu *gpu, struct htp_rsc *rsc);
 
-struct vs_info_descriptor { // @BadName
+struct vertex_info_descriptor { // @BadName
     VkDescriptorSetLayout dsl;
     size_t db_offset;
     size_t bb_offset;
 };
 
-struct vs_info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vs_info_descriptor *ret);
+Vertex_Info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vertex_info_descriptor *ret);
 
 // @Todo All these update functions rely on UMA
 static inline void update_vs_info_mat_model(struct gpu *gpu, size_t bb_ofs, matrix *model)
 {
-    struct vs_info *vs = (struct vs_info*)(gpu->mem.bind_buffer.data + bb_ofs);
+    Vertex_Info *vs = (Vertex_Info*)(gpu->mem.bind_buffer.data + bb_ofs);
     vs->model = *model;
 }
 
 static inline void update_vs_info_mat_view(struct gpu *gpu, size_t bb_ofs, matrix *view)
 {
-    struct vs_info *vs = (struct vs_info*)(gpu->mem.bind_buffer.data + bb_ofs);
+    Vertex_Info *vs = (Vertex_Info*)(gpu->mem.bind_buffer.data + bb_ofs);
     vs->view = *view;
 }
 
 static inline void update_vs_info_mat_proj(struct gpu *gpu, size_t bb_ofs, matrix *proj)
 {
-    struct vs_info *vs = (struct vs_info*)(gpu->mem.bind_buffer.data + bb_ofs);
+    Vertex_Info *vs = (Vertex_Info*)(gpu->mem.bind_buffer.data + bb_ofs);
     vs->proj = *proj;
 }
 
 static inline void update_vs_info_pos_view(struct gpu *gpu, size_t bb_ofs, vector view_pos)
 {
-    struct vs_info *vs = (struct vs_info*)(gpu->mem.bind_buffer.data + bb_ofs);
+    Vertex_Info *vs = (Vertex_Info*)(gpu->mem.bind_buffer.data + bb_ofs);
     vs->view_pos = get_vector(view_pos.x, view_pos.y, view_pos.z, 1);
 }
 
 static inline void update_vs_info_ambient(struct gpu *gpu, size_t bb_ofs, vector ambient)
 {
-    struct vs_info *vs = (struct vs_info*)(gpu->mem.bind_buffer.data + bb_ofs);
+    Vertex_Info *vs = (Vertex_Info*)(gpu->mem.bind_buffer.data + bb_ofs);
     vs->ambient = get_vector(ambient.x, ambient.y, ambient.z, 1);
 }
 

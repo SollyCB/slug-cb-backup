@@ -1,5 +1,6 @@
 #include "defs.h"
 #include "gpu.h"
+#include "shader.h.glsl"
 #include "sol_vulkan.h"
 #include "vulkan_errors.h"
 #include "glfw.h"
@@ -1044,7 +1045,7 @@ static void gpu_reset_viewport_and_scissor_to_window_extent(struct gpu *gpu)
 }
 
 // @Todo This only works for UMA and DESCRIPTOR_BUFFER_HOST_VISIBLE
-struct vs_info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vs_info_descriptor *ret)
+Vertex_Info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vertex_info_descriptor *ret)
 {
     VkDescriptorSetLayoutBinding binding = {
         .binding = 0,
@@ -1094,7 +1095,7 @@ struct vs_info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vs_
 
     Vertex_Info *vs = (Vertex_Info*)(gpu->mem.bind_buffer.data + bb_ofs);
 
-    vs->dir_light_count = 1;
+    vs->dxxx[0] = 1;
     vs->dir_lights[0].position = vector4(4, 15, 15,  1);
     vs->dir_lights[0].color    = scale_vector(vector4(10.0, 10.0, 10.0, 0), 0.5);
 
@@ -1646,7 +1647,7 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
         VkDescriptorSetLayoutBinding b = {
             .binding = 0,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount = maps->count * cascade_count,
+            .descriptorCount = DIR_LIGHT_COUNT * SHADOW_CASCADE_COUNT, // maps->count * cascade_count,
             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
         };
 

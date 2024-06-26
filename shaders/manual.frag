@@ -1,17 +1,9 @@
 #version 450
 
-#extension GL_GOOGLE_include_directive : enable
+#extension GL_GOOGLE_include_directive : require
 
 #define FRAG
 #include "../shader.h.glsl"
-
-float in_shadow(uint i) {
-    vec3 N = fs_info.tang_normal;
-    vec3 L = normalize(fs_info.dir_lights[i].ts_light_pos - fs_info.tang_frag_pos);
-
-    vec2 pc = fs_info.dir_lights[i].ls_frag_pos.xy * 0.5 + 0.5;
-    return texture(shadow_maps[i], vec3(pc.x, pc.y, fs_info.dir_lights[i].ls_frag_pos.z));
-}
 
 void main() {
     vec4 base_color = texture(material_textures[0], fs_info.texcoord) * material_ubo.bbbb;

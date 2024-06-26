@@ -55,6 +55,7 @@ struct Vertex_Transforms { // @TODO This will have broken asset.c transform calc
     #endif
 };
 
+// matched to gltf_material_uniforms but defined for shader alignment
 struct Material_Uniforms {
     vec4 bbbb; // float base_color[4];
     vec4 mrno; // float metallic_factor; float roughness_factor; float normal_scale; float occlusion_strength;
@@ -83,34 +84,14 @@ struct Fragment_Info {
 
 #ifdef VERT // vertex shader only
 
+#ifdef VERTEX_INPUT
 layout(location = 0) in vec3 in_position;
 layout(location = 1) in vec3 in_normal;
 layout(location = 2) in vec4 in_tangent;
+#endif
 
 layout(set = 0, binding = 0) uniform UBO_Vertex_Info { Vertex_Info vs_info; };
 layout(set = 2, binding = 0) uniform UBO_Transforms { Vertex_Transforms transforms; };
-
-#endif
-
-#ifdef FRAG // fragment shader only
-
-layout(set = 1, binding = 0) uniform sampler2DShadow shadow_maps[1 * 4];
-layout(set = 3, binding = 0) uniform UBO_Material_Uniforms { Material_Uniforms material_ubo; };
-layout(set = 4, binding = 0) uniform sampler2D material_textures[2];
-
-layout(location = 0) out vec4 fc;
-
-void pmatubo() {
-    debugPrintfEXT("base_color: %f, %f, %f, %f\nmetallic: %f\nroughness: %f\nnormal: %f\nocclusion: %f\nemissive: %f, %f, %f\nalpha_cutoff: %f\n",
-            material_ubo.bbbb.x, material_ubo.bbbb.y, material_ubo.bbbb.z, material_ubo.bbbb.w,
-            material_ubo.mrno.x, material_ubo.mrno.y, material_ubo.mrno.z, material_ubo.mrno.w,
-            material_ubo.eeea.x, material_ubo.eeea.y, material_ubo.eeea.z, material_ubo.eeea.w);
-}
-
-#endif
-
-                        /* pass through variables */
-#ifdef VERT
 
 layout(location = 0) out uint dir_light_count;
 layout(location = 1) out Fragment_Info fs_info;
@@ -119,8 +100,27 @@ layout(location = 1) out Fragment_Info fs_info;
 
 #ifdef FRAG // fragment shader only
 
+layout(set = 1, binding = 0) uniform sampler2DShadow shadow_maps[DIR_LIGHT_COUNT * SHADOW_CASCADE_COUNT];
+layout(set = 3, binding = 0) uniform UBO_Material_Uniforms { Material_Uniforms material_ubo; };
+layout(set = 4, binding = 0) uniform sampler2D material_textures[2];
+
+layout(location = 0) out vec4 fc;
+
 layout(location = 0) flat in uint dir_light_count;
 layout(location = 1) in Fragment_Info fs_info;
+
+float in_shadow(uint i) {
+    vec2 pc = fs_info.dir_lights[i].ls_frag_pos.xy * 0.5 + 0.5;
+
+    return texture(shadow_maps[i], vec3(pc.x, pc.y, fs_info.dir_lights[i].ls_frag_pos.z));
+}
+
+void pmatubo() {
+    debugPrintfEXT("base_color: %f, %f, %f, %f\nmetallic: %f\nroughness: %f\nnormal: %f\nocclusion: %f\nemissive: %f, %f, %f\nalpha_cutoff: %f\n",
+            material_ubo.bbbb.x, material_ubo.bbbb.y, material_ubo.bbbb.z, material_ubo.bbbb.w,
+            material_ubo.mrno.x, material_ubo.mrno.y, material_ubo.mrno.z, material_ubo.mrno.w,
+            material_ubo.eeea.x, material_ubo.eeea.y, material_ubo.eeea.z, material_ubo.eeea.w);
+}
 
 #endif
 

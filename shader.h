@@ -20,21 +20,7 @@ typedef enum {
     DESCRIPTOR_SET_ORDER_MATERIAL_TEXTURES,
 } descriptor_set_order;
 
-typedef struct material_ubo {
-    float base_color_factor[4];
-    float metallic_factor;
-    float roughness_factor;
-    float normal_scale;
-    float occlusion_strength;
-    float emissive_factor[3];
-    float alpha_cutoff;
-} Material_Ubo cl_align(16);
-
-#define SHADER_MATERIAL_UBO_SIZE sizeof(Material_Ubo)
-
-// #if SHADER_MATERIAL_UBO_SIZE != sizeof(gltf_material_uniforms)
-//     #error SHADER_MATERIAL_UBO_SIZE must be equal in size to gltf_material_uniforms
-// #endif
+#define SHADER_MATERIAL_UBO_SIZE sizeof(Material_Uniforms)
 
 // @Hardware I can manage with set count 4 easily, but it would be more expensive:
 // Transforms_Ubo and Material_Ubo can exist in the same set, but then the Transforms_Ubo

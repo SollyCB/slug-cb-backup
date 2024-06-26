@@ -3,6 +3,7 @@
 #extension GL_GOOGLE_include_directive : require
 
 #define VERT
+#define VERTEX_INPUT
 #include "../shader.h.glsl"
 
 layout(location = 3) in vec2 in_texcoord;
