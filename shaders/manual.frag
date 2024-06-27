@@ -58,4 +58,13 @@ void main() {
     }
 
     fc = vec4(light, 1);
+
+    {
+        vec4 fd = vec4(fs_info.view_frag_pos.z);
+        vec4 cb = fs_info.cascade_boundaries;
+
+        // is the frag depth before the far plane
+        vec4 cp = vec4(fd.x > cb.x, fd.y > cb.y, fd.z > cb.z, fd.w > cb.w);
+        debugPrintfEXT("%u\n", ci);
+    }
 }

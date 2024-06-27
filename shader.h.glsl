@@ -75,6 +75,26 @@ static inline uint vt_ubo_ofs(bool weights)
 
 #extension GL_EXT_debug_printf : enable
 
+#define PI 3.1415926
+float sq(float x) { return x * x; }
+float heaviside(float x) { return x > 0 ? 1 : 0; }
+
+void pmat(mat4 m) {
+    debugPrintfEXT("[ %f, %f, %f, %f,\n  %f, %f, %f, %f,\n  %f, %f, %f, %f,\n  %f, %f, %f, %f]\n",
+    m[0][0], m[1][0], m[2][0], m[3][0],
+    m[0][1], m[1][1], m[2][1], m[3][1],
+    m[0][2], m[1][2], m[2][2], m[3][2],
+    m[0][3], m[1][3], m[2][3], m[3][3]);
+}
+
+void pv3(vec3 v) {
+    debugPrintfEXT("%f, %f, %f\n", v.x, v.y, v.z);
+}
+
+void pv4(vec4 v) {
+    debugPrintfEXT("%f, %f, %f, %f\n", v.x, v.y, v.z, v.w);
+}
+
 struct Directional_Light {
     vec3 color;
     vec3 ts_light_pos;
@@ -121,17 +141,19 @@ layout(location = 0) flat in uint dir_light_count;
 layout(location = 1) in Fragment_Info fs_info;
 
 float in_shadow(uint li, uint ci) {
-    return texture(shadow_maps[li], vec3(fs_info.dir_lights[li].ls_frag_pos[3].xy * 0.5 + 0.5,
-                                         fs_info.dir_lights[li].ls_frag_pos[3].z));
+    return texture(shadow_maps[li + ci], vec3(fs_info.dir_lights[li].ls_frag_pos[ci].xy * 0.5 + 0.5,
+                                              fs_info.dir_lights[li].ls_frag_pos[ci].z));
 }
 
 uint cascade_i() {
     vec4 fd = vec4(fs_info.view_frag_pos.z);
     vec4 cb = fs_info.cascade_boundaries;
-    vec4 cp = vec4(abs(fd.x) > abs(cb.x), abs(fd.y) > abs(cb.y), abs(fd.z) > abs(cb.z), abs(fd.w) > abs(cb.w)); // neg z fwd
 
-    return uint(dot(vec4(SHADOW_CASCADE_COUNT > 1, SHADOW_CASCADE_COUNT > 2,
-                         SHADOW_CASCADE_COUNT > 3, SHADOW_CASCADE_COUNT > 4), cp));
+    vec4 cp = vec4(fd.x < cb.x, fd.y < cb.y, fd.z < cb.z, fd.w < cb.w);
+
+    uint i = uint(dot(vec4(SHADOW_CASCADE_COUNT > 1, SHADOW_CASCADE_COUNT > 2,
+                           SHADOW_CASCADE_COUNT > 3, SHADOW_CASCADE_COUNT > 4), cp));
+    return min(i, SHADOW_CASCADE_COUNT - 1);
 }
 
 void pmatubo() {
@@ -142,26 +164,6 @@ void pmatubo() {
 }
 
 #endif
-
-#define PI 3.1415926
-float sq(float x) { return x * x; }
-float heaviside(float x) { return x > 0 ? 1 : 0; }
-
-void pmat(mat4 m) {
-    debugPrintfEXT("[ %f, %f, %f, %f,\n  %f, %f, %f, %f,\n  %f, %f, %f, %f,\n  %f, %f, %f, %f]\n",
-    m[0][0], m[1][0], m[2][0], m[3][0],
-    m[0][1], m[1][1], m[2][1], m[3][1],
-    m[0][2], m[1][2], m[2][2], m[3][2],
-    m[0][3], m[1][3], m[2][3], m[3][3]);
-}
-
-void pv3(vec3 v) {
-    debugPrintfEXT("%f, %f, %f\n", v.x, v.y, v.z);
-}
-
-void pv4(vec4 v) {
-    debugPrintfEXT("%f, %f, %f, %f\n", v.x, v.y, v.z, v.w);
-}
 
 #endif // ifdef GL_core_profile
 

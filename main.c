@@ -243,8 +243,8 @@ int main() {
 
             struct trs model_trs;
             get_trs(
-                vector3(3, 3, -4),
-                quaternion(0, vector3(1, 0, 0)),
+                vector3(3, 3, -3),
+                quaternion(PI/4, vector3(1, 0, 0)),
                 vector3(1, 1, 1),
                 &model_trs
             );
@@ -294,8 +294,7 @@ int main() {
                 light_nearfar_planes[i] = near_far(minmax_frustum_x[i], minmax_frustum_y[i], &ls_bb);
 
                 float *cb = &vs_info->cascade_boundaries.x;
-                cb[i] = mul_matrix_vector(&mat_view, sub_frusta[i].bl_near).z;
-                // cb[i] = sub_frusta[i].bl_near.z; // @TODO This shit makes no sense as it is in world space not view space (I think)
+                cb[i] = mul_matrix_vector(&mat_view, sub_frusta[i].bl_far).z;
 
                 ortho_matrix(minmax_frustum_x[i].min, minmax_frustum_x[i].max,
                              minmax_frustum_y[i].max, minmax_frustum_y[i].min,
@@ -307,7 +306,7 @@ int main() {
             #if 0 // set the light view as the player cam
             update_vs_info_mat_model(&pr.gpu, vs_info_desc.bb_offset, &mat_model);
             update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &light_view_mat);
-            memcpy(&vs_info->proj, &light_proj[0], sizeof(light_proj[0]));
+            memcpy(&vs_info->proj, &light_proj[1], sizeof(light_proj[0]));
             #endif
         }
 
