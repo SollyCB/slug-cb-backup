@@ -90,12 +90,6 @@ static inline void get_matrix(vector colx, vector coly, vector colz, vector colw
 #define matrix4(x, y, z, w, m) get_matrix(x, y, z, w, m)
 #define matrix3(x, y, z, m) get_matrix(x, y, z, (vector){0}, m)
 
-static inline float vector_i(vector v, uint i)
-{
-    assert(i < 4);
-    return ((float*)&v)[i];
-}
-
 static inline vector vector3_w(vector v, float w)
 {
     v.w = w;

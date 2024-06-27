@@ -18,9 +18,15 @@ void main() {
     vec3 in_position = points[gl_VertexIndex];
 
     vec4 world_pos = vec4(in_position, 1);
-    gl_Position = vs_info.proj * vs_info.view * world_pos;
+    vec4 vp = vs_info.view * world_pos;
+    gl_Position = vs_info.proj * vp;
+
+    fs_info.cascade_boundaries = vs_info.cascade_boundaries;
+    fs_info.view_frag_pos = vec3(vp);
 
     dir_light_count = vs_info.dxxx.x;
+
     for(uint i=0; i < dir_light_count; ++i)
-        fs_info.dir_lights[0].ls_frag_pos = vs_info.dir_lights[i].space[0] * world_pos; // @TODO space selection
+        for(uint j=0; j < SHADOW_CASCADE_COUNT; ++j)
+            fs_info.dir_lights[i].ls_frag_pos[j] = vec3(vs_info.dir_lights[i].space[j] * world_pos);
 }

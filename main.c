@@ -22,6 +22,7 @@
 #include "timer.h"
 #include "shadows.h"
 #include "camera.h"
+#include "shader.h.glsl"
 
 #define DRAW_SUBPASS 0
 #define HTP_SUBPASS  1
@@ -171,9 +172,12 @@ int main() {
         },
     };
 
-    matrix light_model[SHADOW_CASCADE_COUNT];
-    matrix light_view[SHADOW_CASCADE_COUNT];
+    matrix light_view;
+    #if SPLIT_SHADOW_MVP
     matrix light_proj[SHADOW_CASCADE_COUNT];
+    #else
+    matrix light_space[SHADOW_CASCADE_COUNT];
+    #endif
 
     bool32 t_cleanup[2] = {0};
 
@@ -224,7 +228,7 @@ int main() {
             matrix mat_view;
             view_matrix(cam.pos, cam.dir, vector3(0, 1, 0), &mat_view);
 
-            vs_info->view_pos = cam.pos;
+            vs_info->eye_pos = cam.pos;
 
             if (!jumping) {
                 jumping = true;
@@ -255,7 +259,7 @@ int main() {
             {
                 matrix fm;
                 move_to_camera(cam.pos, cam.dir, vector3(0, 1, 0), &fm);
-                // transform_frustum(&camera_frustum, &fm);
+                transform_frustum(&camera_frustum, &fm);
             }
             partition_frustum_c(&camera_frustum, carrlen(sub_frusta), sub_frusta);
 
@@ -289,6 +293,10 @@ int main() {
             for(uint i=0; i < SHADOW_CASCADE_COUNT; ++i) {
                 light_nearfar_planes[i] = near_far(minmax_frustum_x[i], minmax_frustum_y[i], &ls_bb);
 
+                float *cb = &vs_info->cascade_boundaries.x;
+                cb[i] = mul_matrix_vector(&mat_view, sub_frusta[i].bl_near).z;
+                // cb[i] = sub_frusta[i].bl_near.z; // @TODO This shit makes no sense as it is in world space not view space (I think)
+
                 ortho_matrix(minmax_frustum_x[i].min, minmax_frustum_x[i].max,
                              minmax_frustum_y[i].max, minmax_frustum_y[i].min,
                              light_nearfar_planes[i].min, light_nearfar_planes[i].max, &light_proj[i]);
@@ -299,7 +307,7 @@ int main() {
             #if 0 // set the light view as the player cam
             update_vs_info_mat_model(&pr.gpu, vs_info_desc.bb_offset, &mat_model);
             update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &light_view_mat);
-            memcpy(&vs_info->proj, &light_proj[0], sizeof(light_ortho));
+            memcpy(&vs_info->proj, &light_proj[0], sizeof(light_proj[0]));
             #endif
         }
 
@@ -379,21 +387,14 @@ int main() {
             ;
 
         {
-            #if SPLIT_SHADOW_MVP
-            for(uint i=0; i < carrlen(light_model); ++i)
-                light_model[i] = mat_model;
-            for(uint i=0; i < carrlen(light_view); ++i)
-                light_view[i] = light_view_mat;
-            #endif
-
             struct shadow_pass_info spi = {
                 .gpu = &pr.gpu,
                 .rp = &depth_rp,
                 .maps = &shadow_maps,
                 .lmr = &lmr,
                 #if SPLIT_SHADOW_MVP
-                .light_model = light_model,
-                .light_view = light_view,
+                .light_model = &mat_model,
+                .light_view = &light_view_mat,
                 .light_proj = light_proj,
                 #else
                 .light_space = light_space,
@@ -410,14 +411,15 @@ int main() {
             draw_model_color(draw_cmd, lmr.draw_info);
 
             {
-                #define DSB 0
                 #define DLP 1
-                #define DLF 0
-                #define DCF 0
+                #define DSB 1
+                #define DLF 1
+                #define DCF 1
 
                 struct box vfb[SHADOW_CASCADE_COUNT];
                 for(uint i=0; i < carrlen(sub_frusta); ++i)
                     frustum_to_box(&sub_frusta[i], &vfb[i]);
+                    // frustum_to_box(&camera_frustum, &vfb[i]);
 
                 matrix m;
                 mul_matrix(&vs_info->proj, &vs_info->view, &m);

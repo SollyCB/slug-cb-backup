@@ -6,6 +6,10 @@
 #include "../shader.h.glsl"
 
 void main() {
+
+    uint ci = cascade_i();
+    // debugPrintfEXT("%u\n", ci);
+
     vec4 base_color = texture(material_textures[0], fs_info.texcoord) * material_ubo.bbbb;
 
     vec4 metallic_roughness = texture(material_textures[1], fs_info.texcoord);
@@ -18,7 +22,7 @@ void main() {
      * H is the half vector, where H = normalize(L + V) */
     vec3 light = base_color.xyz * fs_info.ambient;
 
-    vec3 V = normalize(fs_info.tang_view_pos.xyz - fs_info.tang_frag_pos);
+    vec3 V = normalize(fs_info.tang_eye_pos.xyz - fs_info.tang_frag_pos);
     vec3 N = fs_info.tang_normal;
 
     float a = sq(roughness);
@@ -27,7 +31,7 @@ void main() {
         vec3 L = normalize(fs_info.dir_lights[i].ts_light_pos - fs_info.tang_frag_pos);
         vec3 H = normalize(L + V);
 
-        // The below function seems to give brighter diffuse. Not sure why.
+        // The below function seems to give brighter diffuse. Not sure why. (defined in pbr.glsl)
         // vec3 matbrdf = material_brdf(base_color.xyz, metallic, roughness, V, L, H, N);
 
         float Dtop = sq(a) * heaviside(dot(N, H));
@@ -48,7 +52,7 @@ void main() {
 
         vec3 matbrdf = spec + diff;
 
-        matbrdf *= in_shadow(i);
+        matbrdf *= in_shadow(i, ci);
 
         light += fs_info.dir_lights[i].color * matbrdf * max(dot(N, L), 0);
     }

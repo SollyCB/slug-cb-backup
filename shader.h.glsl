@@ -5,6 +5,7 @@
 #define SHADOW_CASCADE_COUNT 4
 #define JOINT_COUNT 1
 #define MORPH_WEIGHT_COUNT 1
+#define SPLIT_SHADOW_MVP 1
 
 #ifndef GL_core_profile // C code invisible to glsl
 
@@ -32,8 +33,9 @@ struct In_Directional_Light {
 };
 
 struct Vertex_Info {
-    vec4 view_pos;
+    vec4 eye_pos;
     vec4 ambient;
+    vec4 cascade_boundaries;
     mat4 model;
     mat4 view;
     mat4 proj;
@@ -43,7 +45,7 @@ struct Vertex_Info {
     uvec4 dxxx; // dir light count, null, null, null
 };
 
-struct Vertex_Transforms { // @TODO This will have broken asset.c transform calculations (I might have fixed it)
+struct Vertex_Transforms {
     mat4 trs[JOINT_COUNT];
     vec4 weights[(MORPH_WEIGHT_COUNT / 4) + 1];
 };
@@ -76,15 +78,17 @@ static inline uint vt_ubo_ofs(bool weights)
 struct Directional_Light {
     vec3 color;
     vec3 ts_light_pos;
-    vec4 ls_frag_pos;
+    vec3 ls_frag_pos[SHADOW_CASCADE_COUNT];
 };
 
 struct Fragment_Info {
     vec2 texcoord;
     vec3 tang_normal;
     vec3 tang_frag_pos;
-    vec3 tang_view_pos;
+    vec3 tang_eye_pos;
+    vec3 view_frag_pos;
     vec3 ambient;
+    vec4 cascade_boundaries;
 
     Directional_Light dir_lights[DIR_LIGHT_COUNT];
 };
@@ -116,10 +120,18 @@ layout(location = 0) out vec4 fc;
 layout(location = 0) flat in uint dir_light_count;
 layout(location = 1) in Fragment_Info fs_info;
 
-float in_shadow(uint i) {
-    vec2 pc = fs_info.dir_lights[i].ls_frag_pos.xy * 0.5 + 0.5;
+float in_shadow(uint li, uint ci) {
+    return texture(shadow_maps[li], vec3(fs_info.dir_lights[li].ls_frag_pos[3].xy * 0.5 + 0.5,
+                                         fs_info.dir_lights[li].ls_frag_pos[3].z));
+}
 
-    return texture(shadow_maps[i], vec3(pc.x, pc.y, fs_info.dir_lights[i].ls_frag_pos.z));
+uint cascade_i() {
+    vec4 fd = vec4(fs_info.view_frag_pos.z);
+    vec4 cb = fs_info.cascade_boundaries;
+    vec4 cp = vec4(abs(fd.x) > abs(cb.x), abs(fd.y) > abs(cb.y), abs(fd.z) > abs(cb.z), abs(fd.w) > abs(cb.w)); // neg z fwd
+
+    return uint(dot(vec4(SHADOW_CASCADE_COUNT > 1, SHADOW_CASCADE_COUNT > 2,
+                         SHADOW_CASCADE_COUNT > 3, SHADOW_CASCADE_COUNT > 4), cp));
 }
 
 void pmatubo() {

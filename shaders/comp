@@ -1,3 +1,11 @@
 #!/usr/bin/bash
 
-glslangValidator -V $1.$2 -o $1.$2.spv
+files=("manual.vert" "manual.frag" "floor.frag" "floor.vert")
+
+if [[ $2 ]]; then
+  glslang -V $1.$2 -o $1.$2.spv
+else
+  for f in ${files[@]}; do
+    glslang -V $f -o $f.spv
+  done
+fi

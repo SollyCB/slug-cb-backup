@@ -1105,7 +1105,7 @@ Vertex_Info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vertex
     identity_matrix(&model);
 
     matrix proj;
-    #if 0
+    #if 1
     perspective_matrix(FOV, ASPECT_RATIO, PERSPECTIVE_NEAR, PERSPECTIVE_FAR, &proj);
     #else
     perspective_matrix(FOV, ASPECT_RATIO, PERSPECTIVE_NEAR, 200, &proj);
@@ -2035,6 +2035,7 @@ void create_shadow_renderpass(struct gpu *gpu, struct shadow_maps *shadow_maps, 
         };
     }
 
+    assert(shadow_maps->count == 1);
     for(uint i=0;i < shadow_maps->count * shadow_maps->cascade_count; ++i) {
         ar[i] = (VkAttachmentReference) {
             .attachment = i,

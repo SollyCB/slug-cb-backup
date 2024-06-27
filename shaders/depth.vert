@@ -4,10 +4,13 @@
 layout(location = 0) in vec3 pos;
 
 layout(push_constant) uniform pc {
+    #if SPLIT_SHADOW_MVP
     mat4 m;
     mat4 v;
     mat4 p;
-    // mat4 mvp;
+    #else
+    mat4 mvp;
+    #endif
 };
 
 void pmat(mat4 m) {

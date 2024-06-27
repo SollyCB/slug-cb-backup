@@ -151,10 +151,10 @@ void partition_frustum_c(struct frustum *f, uint count, struct frustum *sf)
     // This function is a little jank, but this is the simplest way that jumped to mind. The only overhead is ugliness.
     for(uint i=0; i < count; ++i) {
         sf[i] = (struct frustum) {
-            .tl_far =  scale_vector(f->tl_far,  (i + 1) * scale),
-            .tr_far =  scale_vector(f->tr_far,  (i + 1) * scale),
-            .bl_far =  scale_vector(f->bl_far,  (i + 1) * scale),
-            .br_far =  scale_vector(f->br_far,  (i + 1) * scale),
+            .tl_far = add_vector(scale_vector(sub_vector(f->tl_far, f->tl_near), (i + 1) * scale), f->tl_near),
+            .tr_far = add_vector(scale_vector(sub_vector(f->tr_far, f->tr_near), (i + 1) * scale), f->tr_near),
+            .bl_far = add_vector(scale_vector(sub_vector(f->bl_far, f->bl_near), (i + 1) * scale), f->bl_near),
+            .br_far = add_vector(scale_vector(sub_vector(f->br_far, f->br_near), (i + 1) * scale), f->br_near),
         };
     }
 
@@ -183,10 +183,10 @@ void partition_frustum_s(struct frustum *f, uint count, struct frustum *sf)
             .bl_near = f->bl_near,
             .br_near = f->br_near,
 
-            .tl_far =  scale_vector(f->tl_far,  (i + 1) * scale),
-            .tr_far =  scale_vector(f->tr_far,  (i + 1) * scale),
-            .bl_far =  scale_vector(f->bl_far,  (i + 1) * scale),
-            .br_far =  scale_vector(f->br_far,  (i + 1) * scale),
+            .tl_far = add_vector(scale_vector(sub_vector(f->tl_far, f->tl_near), (i + 1) * scale), f->tl_near),
+            .tr_far = add_vector(scale_vector(sub_vector(f->tr_far, f->tr_near), (i + 1) * scale), f->tr_near),
+            .bl_far = add_vector(scale_vector(sub_vector(f->bl_far, f->bl_near), (i + 1) * scale), f->bl_near),
+            .br_far = add_vector(scale_vector(sub_vector(f->br_far, f->br_near), (i + 1) * scale), f->br_near),
         };
     }
 }

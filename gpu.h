@@ -261,10 +261,10 @@ static inline void update_vs_info_mat_proj(struct gpu *gpu, size_t bb_ofs, matri
     vs->proj = *proj;
 }
 
-static inline void update_vs_info_pos_view(struct gpu *gpu, size_t bb_ofs, vector view_pos)
+static inline void update_vs_info_pos_eye(struct gpu *gpu, size_t bb_ofs, vector eye_pos)
 {
     Vertex_Info *vs = (Vertex_Info*)(gpu->mem.bind_buffer.data + bb_ofs);
-    vs->view_pos = get_vector(view_pos.x, view_pos.y, view_pos.z, 1);
+    vs->eye_pos = get_vector(eye_pos.x, eye_pos.y, eye_pos.z, 1);
 }
 
 static inline void update_vs_info_ambient(struct gpu *gpu, size_t bb_ofs, vector ambient)

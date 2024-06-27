@@ -22,8 +22,14 @@ else
     exit 1
 fi
 
-echo "Success"
-
 if [[ -f source.o ]]; then
     rm source.o
 fi
+
+echo "C Build Success"
+
+shader_files=("manual.vert" "manual.frag" "floor.frag" "floor.vert")
+
+for f in ${shader_files[@]}; do
+   (cd shaders && glslang -V $f -o $f.spv)
+done
