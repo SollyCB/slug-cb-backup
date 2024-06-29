@@ -243,7 +243,7 @@ int main() {
 
             struct trs model_trs;
             get_trs(
-                vector3(3, 3, -3),
+                vector3(3, 3, -47),
                 quaternion(PI/4, vector3(1, 0, 0)),
                 vector3(1, 1, 1),
                 &model_trs
@@ -259,14 +259,14 @@ int main() {
             {
                 matrix fm;
                 move_to_camera(cam.pos, cam.dir, vector3(0, 1, 0), &fm);
-                transform_frustum(&camera_frustum, &fm);
+                // transform_frustum(&camera_frustum, &fm);
             }
             partition_frustum_c(&camera_frustum, carrlen(sub_frusta), sub_frusta);
 
             for(uint i=0; i < SHADOW_CASCADE_COUNT; ++i) {
                 minmax_frustum_points(&sub_frusta[i], &light_view_mat, &minmax_frustum_x[i], &minmax_frustum_y[i]);
 
-                // world units per texel (not totally sure if these are the correct numbers to use...)
+                // world units per texel (not totally sure if these are the correct numbers to use but it seems to work)
                 float wupt_x = fabsf(minmax_frustum_x[i].max - minmax_frustum_x[i].min) / pr.gpu.settings.shadow_maps.width;
                 float wupt_y = fabsf(minmax_frustum_y[i].max - minmax_frustum_y[i].min) / pr.gpu.settings.shadow_maps.height;
 
@@ -294,7 +294,8 @@ int main() {
                 light_nearfar_planes[i] = near_far(minmax_frustum_x[i], minmax_frustum_y[i], &ls_bb);
 
                 float *cb = &vs_info->cascade_boundaries.x;
-                cb[i] = mul_matrix_vector(&mat_view, sub_frusta[i].bl_far).z;
+                cb[i] = sub_frusta[i].bl_far.z;
+                // cb[i] = mul_matrix_vector(&mat_view, sub_frusta[i].bl_far).z;
 
                 ortho_matrix(minmax_frustum_x[i].min, minmax_frustum_x[i].max,
                              minmax_frustum_y[i].max, minmax_frustum_y[i].min,
@@ -464,8 +465,26 @@ int main() {
                     il.m[15] = 1;
                     mul_matrix(&m, &il, &il);
 
-                    for(uint i=0; i < SHADOW_CASCADE_COUNT; ++i)
-                        draw_box(draw_cmd, &pr.gpu, &lfb[i], true, color_rp.rp, 0, &lf_rsc[i], &il, vector4(0, 1, 0, 1));
+                    vector col = vector4(0, 0, 0, 1);
+                    for(uint i=0; i < SHADOW_CASCADE_COUNT; ++i) {
+                        switch(i) {
+                            case 0:
+                                col = vector4(1, 1, 0, 1);
+                                break;
+                            case 1:
+                                col = vector4(1, 0, 1, 1);
+                                break;
+                            case 2:
+                                col = vector4(0, 1, 1, 1);
+                                break;
+                            case 3:
+                                col = vector4(0, 0, 1, 1);
+                                break;
+                            defauilt:
+                                break;
+                        }
+                        draw_box(draw_cmd, &pr.gpu, &lfb[i], true, color_rp.rp, 0, &lf_rsc[i], &il, col);
+                    }
 
                     #endif
                 }
