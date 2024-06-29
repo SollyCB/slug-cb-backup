@@ -140,20 +140,57 @@ layout(location = 0) out vec4 fc;
 layout(location = 0) flat in uint dir_light_count;
 layout(location = 1) in Fragment_Info fs_info;
 
-float in_shadow(uint li, uint ci) {
-    return texture(shadow_maps[li + ci], vec3(fs_info.dir_lights[li].ls_frag_pos[ci].xy * 0.5 + 0.5,
-                                              fs_info.dir_lights[li].ls_frag_pos[ci].z));
+vec3 cascade_i() {
+    float fd = fs_info.view_frag_pos.z;
+    vec4  cb = fs_info.cascade_boundaries;
+
+    float d = 2; // @Todo This band feels too large, but any smaller and I get the boundary split...
+
+    vec4 a = vec4(fd < cb.x,
+                  fd < cb.y,
+                  fd < cb.z,
+                  fd < cb.w);
+
+    uint ai = uint(dot(vec4(1), a));
+
+    vec4 b = vec4(abs(fd - cb.x) < d,
+                  abs(fd - cb.y) < d,
+                  abs(fd - cb.z) < d,
+                  abs(fd - cb.w) < d);
+
+    vec3 ret = vec3(0);
+
+    uint j = 0;
+    for(uint i=0; i < 4; ++i) {
+        ret[j] += b[i];
+        j += uint(b[i]);
+    }
+
+    ret.y += ret.x * float(ret.y == 0);
+    ret.z  = (((fd - d) - cb[ai]) / (2 * d)) * float(ret.x != ret.y);
+
+    return ret;
 }
 
-uint cascade_i() {
-    vec4 fd = vec4(fs_info.view_frag_pos.z);
-    vec4 cb = fs_info.cascade_boundaries;
+float in_shadow(uint li) {
+    vec3 ci = cascade_i();
 
-    vec4 cp = vec4(fd.x < cb.x, fd.y < cb.y, fd.z < cb.z, fd.w < cb.w);
+    uint ca = uint(ci.x);
+    uint cb = uint(ci.y);
+    float c = ci.z;
 
-    uint i = uint(dot(vec4(SHADOW_CASCADE_COUNT > 1, SHADOW_CASCADE_COUNT > 2,
-                           SHADOW_CASCADE_COUNT > 3, SHADOW_CASCADE_COUNT > 4), cp));
-    return min(i, SHADOW_CASCADE_COUNT - 1);
+    // ca = 1;
+    // cb = 2;
+    // c = 0.5;
+
+    float a = texture(shadow_maps[li + ca],
+                      vec3(fs_info.dir_lights[li].ls_frag_pos[ca].xy * 0.5 + 0.5,
+                           fs_info.dir_lights[li].ls_frag_pos[ca].z));
+    float b = texture(shadow_maps[li + cb],
+                      vec3(fs_info.dir_lights[li].ls_frag_pos[cb].xy * 0.5 + 0.5,
+                           fs_info.dir_lights[li].ls_frag_pos[cb].z));
+
+    return mix(a, b, c);
 }
 
 void pmatubo() {

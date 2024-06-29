@@ -6,13 +6,16 @@
 #include "../shader.h.glsl"
 
 void main() {
-    uint ci = cascade_i();
-    vec3 col = vec3(1, 0, 1);
+    vec3 ci = cascade_i();
 
-    if (ci == 0) col = vec3(1, 0, 1);
-    if (ci == 1) col = vec3(0, 1, 0);
-    if (ci == 2) col = vec3(0, 0, 1);
+    vec3 cols[] = {
+        vec3(1, 0, 1),
+        vec3(0, 1, 0),
+        vec3(0, 0, 1),
+    };
+
+    vec3 col = mix(cols[uint(ci.x)], cols[uint(ci.y)], ci.z);
 
     for(uint i=0; i < dir_light_count; ++i)
-        fc = vec4(col * in_shadow(i, ci), 1);
+        fc = vec4(col * in_shadow(i), 1);
 }

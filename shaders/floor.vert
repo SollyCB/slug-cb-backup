@@ -21,6 +21,7 @@ void main() {
     vec4 vp = vs_info.view * world_pos;
     gl_Position = vs_info.proj * vp;
 
+    // @TODO Make vs_info visible to frag shader.
     fs_info.cascade_boundaries = vs_info.cascade_boundaries;
 
     // fs_info.view_frag_pos = vec3(vp);

@@ -7,8 +7,8 @@
 
 void main() {
 
-    uint ci = cascade_i();
-    // debugPrintfEXT("%u\n", ci);
+    // vec3 ci = cascade_i();
+    // pv3(ci);
 
     vec4 base_color = texture(material_textures[0], fs_info.texcoord) * material_ubo.bbbb;
 
@@ -52,7 +52,7 @@ void main() {
 
         vec3 matbrdf = spec + diff;
 
-        matbrdf *= in_shadow(i, ci);
+        matbrdf *= 1; // in_shadow(i);
 
         light += fs_info.dir_lights[i].color * matbrdf * max(dot(N, L), 0);
     }
