@@ -1105,7 +1105,7 @@ Vertex_Info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vertex
     identity_matrix(&model);
 
     matrix proj;
-    #if 0
+    #if 1
     perspective_matrix(FOV, ASPECT_RATIO, PERSPECTIVE_NEAR, PERSPECTIVE_FAR, &proj);
     #else
     perspective_matrix(FOV, ASPECT_RATIO, PERSPECTIVE_NEAR, 200, &proj);
