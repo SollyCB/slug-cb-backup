@@ -17,6 +17,12 @@ static void glfw_cursor_enter_callback(GLFWwindow* window, int entered)
 {
 }
 
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+    FOV -= 10 * yoffset;
+}
+
+
 static void glfw_error_callback(int e, const char *desc)
 {
     log_print_error("glfw error code %u, %s", e, desc);
@@ -38,6 +44,8 @@ void init_glfw(struct window *glfw, struct camera *c) {
 
     glfwSetErrorCallback(glfw_error_callback);
     glfwSetCursorEnterCallback(glfw->window, glfw_cursor_enter_callback);
+    glfwSetScrollCallback(glfw->window, scroll_callback);
+
 }
 
 void shutdown_glfw(struct window *glfw) {

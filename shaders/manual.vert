@@ -9,7 +9,7 @@
 layout(location = 3) in vec2 in_texcoord;
 
 void main() {
-    
+
     mat4 ws = vs_info.model * transforms.trs[0];
     vec4 world_pos = ws * vec4(in_position, 1);
     vec4 view_pos = vs_info.view * world_pos;
@@ -34,7 +34,7 @@ void main() {
         fs_info.dir_lights[i].color = vec3(vs_info.dir_lights[i].color);
         fs_info.dir_lights[i].ts_light_pos = tbn * vec3(vs_info.dir_lights[i].position);
 
-        for(uint j=0; j < SHADOW_CASCADE_COUNT; ++j)
+        for(uint j=0; j < CSM_COUNT; ++j)
             fs_info.dir_lights[i].ls_frag_pos[j] = vec3(vs_info.dir_lights[i].space[j] * world_pos);
     }
 }

@@ -150,9 +150,9 @@ int main() {
     VkSemaphore sem_transfer_complete = create_binary_semaphore(&pr.gpu);
     VkSemaphore sem_graphics_complete = create_binary_semaphore(&pr.gpu);
 
-    struct draw_box_rsc vf_rsc[SHADOW_CASCADE_COUNT]; // view frustum resources
+    struct draw_box_rsc vf_rsc[CSM_COUNT]; // view frustum resources
     struct draw_box_rsc sb_rsc; // scene bb frustum resources
-    struct draw_box_rsc lf_rsc[SHADOW_CASCADE_COUNT]; // light ortho frustum resources
+    struct draw_box_rsc lf_rsc[CSM_COUNT]; // light ortho frustum resources
     struct draw_box_rsc lpos_rsc; // light position
     struct draw_floor_rsc df_rsc;
 
@@ -174,9 +174,9 @@ int main() {
 
     matrix light_view;
     #if SPLIT_SHADOW_MVP
-    matrix light_proj[SHADOW_CASCADE_COUNT];
+    matrix light_proj[CSM_COUNT];
     #else
-    matrix light_space[SHADOW_CASCADE_COUNT];
+    matrix light_space[CSM_COUNT];
     #endif
 
     bool32 t_cleanup[2] = {0};
@@ -191,8 +191,8 @@ int main() {
 
     struct box scene_bb;
     struct frustum camera_frustum;
-    struct frustum sub_frusta[SHADOW_CASCADE_COUNT];
-    struct minmax minmax_frustum_x[SHADOW_CASCADE_COUNT],minmax_frustum_y[SHADOW_CASCADE_COUNT], light_nearfar_planes[SHADOW_CASCADE_COUNT];
+    struct frustum sub_frusta[CSM_COUNT];
+    struct minmax minmax_frustum_x[CSM_COUNT],minmax_frustum_y[CSM_COUNT], light_nearfar_planes[CSM_COUNT];
 
     uint frame_count = 0;
 
@@ -211,9 +211,9 @@ int main() {
             // vs_info->dir_lights[0].position = mul_matrix_vector(&m, vs_info->dir_lights[0].position);
 
             vector light_tgt = vector4(0, 0, 0, 1);
-            view_matrix(light_tgt,
+            view_matrix(vs_info->dir_lights[0].position,
                         normalize(sub_vector(light_tgt, vs_info->dir_lights[0].position)),
-                        vector3(0, 1, 0), &light_view_mat);
+                        vector3(0, 0, -1), &light_view_mat);
         }
 
         matrix lmvp;
@@ -259,11 +259,11 @@ int main() {
             {
                 matrix fm;
                 move_to_camera(cam.pos, cam.dir, vector3(0, 1, 0), &fm);
-                // transform_frustum(&camera_frustum, &fm);
+                transform_frustum(&camera_frustum, &fm);
             }
             partition_frustum_c(&camera_frustum, carrlen(sub_frusta), sub_frusta);
 
-            for(uint i=0; i < SHADOW_CASCADE_COUNT; ++i) {
+            for(uint i=0; i < CSM_COUNT; ++i) {
                 minmax_frustum_points(&sub_frusta[i], &light_view_mat, &minmax_frustum_x[i], &minmax_frustum_y[i]);
 
                 // world units per texel (not totally sure if these are the correct numbers to use but it seems to work)
@@ -290,12 +290,12 @@ int main() {
             for(uint i=0; i < carrlen(ls_bb.p); ++i)
                 ls_bb.p[i] = mul_matrix_vector(&light_view_mat, scene_bb.p[i]);
 
-            for(uint i=0; i < SHADOW_CASCADE_COUNT; ++i) {
+            for(uint i=0; i < CSM_COUNT; ++i) {
                 light_nearfar_planes[i] = near_far(minmax_frustum_x[i], minmax_frustum_y[i], &ls_bb);
 
                 float *cb = &vs_info->cascade_boundaries.x;
-                cb[i] = sub_frusta[i].bl_far.z;
-                // cb[i] = mul_matrix_vector(&mat_view, sub_frusta[i].bl_far).z;
+                // cb[i] = sub_frusta[i].bl_far.z;
+                cb[i] = mul_matrix_vector(&mat_view, sub_frusta[i].bl_far).z;
 
                 ortho_matrix(minmax_frustum_x[i].min, minmax_frustum_x[i].max,
                              minmax_frustum_y[i].max, minmax_frustum_y[i].min,
@@ -333,7 +333,7 @@ int main() {
             return -1;
 
         struct shadow_maps shadow_maps = {.count = 1};
-        if (!create_shadow_maps(&pr.gpu, transfer_cmd, graphics_cmd, SHADOW_CASCADE_COUNT, &shadow_maps))
+        if (!create_shadow_maps(&pr.gpu, transfer_cmd, graphics_cmd, CSM_COUNT, &shadow_maps))
             return -1;
 
         struct renderpass depth_rp;
@@ -416,7 +416,7 @@ int main() {
                 #define DLF 1
                 #define DCF 1
 
-                struct box vfb[SHADOW_CASCADE_COUNT];
+                struct box vfb[CSM_COUNT];
                 for(uint i=0; i < carrlen(sub_frusta); ++i)
                     frustum_to_box(&sub_frusta[i], &vfb[i]);
                     // frustum_to_box(&camera_frustum, &vfb[i]);
@@ -433,9 +433,9 @@ int main() {
                 draw_box(draw_cmd, &pr.gpu, &scene_bb, true, color_rp.rp, 0, &sb_rsc, &m, vector4(0, 0, 1, 1));
                 #endif
 
-                struct frustum lf[SHADOW_CASCADE_COUNT];
-                struct box lfb[SHADOW_CASCADE_COUNT];
-                for(uint i=0; i < SHADOW_CASCADE_COUNT; ++i) {
+                struct frustum lf[CSM_COUNT];
+                struct box lfb[CSM_COUNT];
+                for(uint i=0; i < CSM_COUNT; ++i) {
                     ortho_frustum(minmax_frustum_x[i].min, minmax_frustum_x[i].max,
                                   minmax_frustum_y[i].min, minmax_frustum_y[i].max,
                                   light_nearfar_planes[i].min, light_nearfar_planes[i].max, &lf[i]);
@@ -466,7 +466,7 @@ int main() {
                     mul_matrix(&m, &il, &il);
 
                     vector col = vector4(0, 0, 0, 1);
-                    for(uint i=0; i < SHADOW_CASCADE_COUNT; ++i) {
+                    for(uint i=0; i < CSM_COUNT; ++i) {
                         switch(i) {
                             case 0:
                                 col = vector4(1, 1, 0, 1);
@@ -550,7 +550,7 @@ int main() {
         #endif
 
         #if DLF
-        for(uint i=0; i < SHADOW_CASCADE_COUNT; ++i)
+        for(uint i=0; i < CSM_COUNT; ++i)
             draw_box_cleanup(&pr.gpu, &lf_rsc[i]);
         #endif
 

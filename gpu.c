@@ -1096,7 +1096,7 @@ Vertex_Info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vertex
     Vertex_Info *vs = (Vertex_Info*)(gpu->mem.bind_buffer.data + bb_ofs);
 
     vs->dxxx[0] = 1;
-    vs->dir_lights[0].position = vector4(15, 15, 15,  1);
+    vs->dir_lights[0].position = vector4(0, 15, 0,  1);
     vs->dir_lights[0].color    = scale_vector(vector4(10.0, 10.0, 10.0, 0), 0.5);
 
     vs->ambient = scale_vector(vector3(1, 1, 1), 2.3);
@@ -1647,7 +1647,7 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
         VkDescriptorSetLayoutBinding b = {
             .binding = 0,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount = DIR_LIGHT_COUNT * SHADOW_CASCADE_COUNT, // maps->count * cascade_count,
+            .descriptorCount = DIR_LIGHT_COUNT * CSM_COUNT, // maps->count * cascade_count,
             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
         };
 

@@ -2,7 +2,8 @@
 #define SHADER_H_GLSL_
 
 #define DIR_LIGHT_COUNT 2
-#define SHADOW_CASCADE_COUNT 4
+#define CSM_COUNT 4
+#define CSM_BLEND_BAND 10
 #define JOINT_COUNT 1
 #define MORPH_WEIGHT_COUNT 1
 #define SPLIT_SHADOW_MVP 1
@@ -29,7 +30,7 @@ typedef struct point_light {
 struct In_Directional_Light {
     vec4 position;
     vec4 color;
-    mat4 space[SHADOW_CASCADE_COUNT];
+    mat4 space[CSM_COUNT];
 };
 
 struct Vertex_Info {
@@ -98,7 +99,7 @@ void pv4(vec4 v) {
 struct Directional_Light {
     vec3 color;
     vec3 ts_light_pos;
-    vec3 ls_frag_pos[SHADOW_CASCADE_COUNT];
+    vec3 ls_frag_pos[CSM_COUNT];
 };
 
 struct Fragment_Info {
@@ -108,7 +109,7 @@ struct Fragment_Info {
     vec3 tang_eye_pos;
     vec3 view_frag_pos;
     vec3 ambient;
-    vec4 cascade_boundaries;
+    vec4 cascade_boundaries; // @TODO Make vs_info visible in frag shader to prevent needless copies.
 
     Directional_Light dir_lights[DIR_LIGHT_COUNT];
 };
@@ -131,7 +132,7 @@ layout(location = 1) out Fragment_Info fs_info;
 
 #ifdef FRAG // fragment shader only
 
-layout(set = 1, binding = 0) uniform sampler2DShadow shadow_maps[DIR_LIGHT_COUNT * SHADOW_CASCADE_COUNT];
+layout(set = 1, binding = 0) uniform sampler2DShadow shadow_maps[DIR_LIGHT_COUNT * CSM_COUNT];
 layout(set = 3, binding = 0) uniform UBO_Material_Uniforms { Material_Uniforms material_ubo; };
 layout(set = 4, binding = 0) uniform sampler2D material_textures[2];
 
@@ -141,47 +142,30 @@ layout(location = 0) flat in uint dir_light_count;
 layout(location = 1) in Fragment_Info fs_info;
 
 vec3 cascade_i() {
-    float fd = fs_info.view_frag_pos.z;
-    vec4  cb = fs_info.cascade_boundaries;
+    float fz = fs_info.view_frag_pos.z;
+    vec4  d  = fs_info.cascade_boundaries;
 
-    float d = 2; // @Todo This band feels too large, but any smaller and I get the boundary split...
+    int  j = 4 - int(dot(vec4(fz > d.x, fz > d.y, fz > d.z, fz > d.w), vec4(1,1,1,1)));
+    int  i = max(j - 1, 0);
+    vec4 b = vec4(fz-d.x,fz-d.y,fz-d.z,fz-d.w); // positive == before far plane
 
-    vec4 a = vec4(fd < cb.x,
-                  fd < cb.y,
-                  fd < cb.z,
-                  fd < cb.w);
+    float d0 = abs(b[i]);
+    float d1 = abs(b[j]);
+    uint sdi = i + 1 * int(d1 < d0); // cascade pivot index
+    float sd = b[sdi];
 
-    uint ai = uint(dot(vec4(1), a));
+    float bf = (sd / CSM_BLEND_BAND) * 0.5 + 0.5;
 
-    vec4 b = vec4(abs(fd - cb.x) < d,
-                  abs(fd - cb.y) < d,
-                  abs(fd - cb.z) < d,
-                  abs(fd - cb.w) < d);
-
-    vec3 ret = vec3(0);
-
-    uint j = 0;
-    for(uint i=0; i < 4; ++i) {
-        ret[j] += b[i];
-        j += uint(b[i]);
-    }
-
-    ret.y += ret.x * float(ret.y == 0);
-    ret.z  = (((fd - d) - cb[ai]) / (2 * d)) * float(ret.x != ret.y);
-
-    return ret;
+    return vec3(sdi + 1 * int(bf < 0), min(sdi + 1 * int(bf < 1), CSM_COUNT-1), clamp(1 - bf, 0, 1));
 }
 
 float in_shadow(uint li) {
     vec3 ci = cascade_i();
+    // pv3(ci);
 
     uint ca = uint(ci.x);
     uint cb = uint(ci.y);
     float c = ci.z;
-
-    // ca = 1;
-    // cb = 2;
-    // c = 0.5;
 
     float a = texture(shadow_maps[li + ca],
                       vec3(fs_info.dir_lights[li].ls_frag_pos[ca].xy * 0.5 + 0.5,

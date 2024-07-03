@@ -7,9 +7,6 @@
 
 void main() {
 
-    // vec3 ci = cascade_i();
-    // pv3(ci);
-
     vec4 base_color = texture(material_textures[0], fs_info.texcoord) * material_ubo.bbbb;
 
     vec4 metallic_roughness = texture(material_textures[1], fs_info.texcoord);
@@ -52,10 +49,12 @@ void main() {
 
         vec3 matbrdf = spec + diff;
 
-        matbrdf *= 1; // in_shadow(i);
+        matbrdf *= 1 - in_shadow(i);
 
         light += fs_info.dir_lights[i].color * matbrdf * max(dot(N, L), 0);
     }
+
+    pv3(cascade_i());
 
     fc = vec4(light, 1);
 }

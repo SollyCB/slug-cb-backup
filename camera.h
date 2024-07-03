@@ -24,6 +24,7 @@ struct camera {
     float sens,speed;
     float pitch,yaw;
     float x,y;
+    float zoom;
 };
 
 static inline void camera_look(struct camera *c, float r, float u, float dt)
