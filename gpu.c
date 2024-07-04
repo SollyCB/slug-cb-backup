@@ -1052,7 +1052,7 @@ Vertex_Info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vertex
         .binding = 0,
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,
     };
     VkDescriptorSetLayoutCreateInfo ci = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,

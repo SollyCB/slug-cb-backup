@@ -99,7 +99,6 @@ void pv4(vec4 v) {
 struct Directional_Light {
     vec3 color;
     vec3 ts_light_pos;
-    vec3 ls_frag_pos[CSM_COUNT];
 };
 
 struct Fragment_Info {
@@ -107,12 +106,13 @@ struct Fragment_Info {
     vec3 tang_normal;
     vec3 tang_frag_pos;
     vec3 tang_eye_pos;
-    vec3 view_frag_pos;
-    vec3 ambient;
-    vec4 cascade_boundaries; // @TODO Make vs_info visible in frag shader to prevent needless copies.
+    vec4 world_frag_pos;
+    vec4 view_frag_pos;
 
     Directional_Light dir_lights[DIR_LIGHT_COUNT];
 };
+
+layout(set = 0, binding = 0) uniform UBO_Vertex_Info { Vertex_Info vs_info; };
 
 #ifdef VERT // vertex shader only
 
@@ -122,7 +122,6 @@ layout(location = 1) in vec3 in_normal;
 layout(location = 2) in vec4 in_tangent;
 #endif
 
-layout(set = 0, binding = 0) uniform UBO_Vertex_Info { Vertex_Info vs_info; };
 layout(set = 2, binding = 0) uniform UBO_Transforms { Vertex_Transforms transforms; };
 
 layout(location = 0) out uint dir_light_count;
@@ -143,7 +142,7 @@ layout(location = 1) in Fragment_Info fs_info;
 
 vec3 cascade_i() {
     float fz = fs_info.view_frag_pos.z;
-    vec4  d  = fs_info.cascade_boundaries;
+    vec4  d  = vs_info.cascade_boundaries;
 
     int  j = 4 - int(dot(vec4(fz > d.x, fz > d.y, fz > d.z, fz > d.w), vec4(1,1,1,1)));
     int  i = max(j - 1, 0);
@@ -166,12 +165,13 @@ float in_shadow(uint li) {
     uint cb = uint(ci.y);
     float c = ci.z;
 
-    float a = texture(shadow_maps[li * CSM_COUNT + ca],
-                      vec3(fs_info.dir_lights[li].ls_frag_pos[ca].xy * 0.5 + 0.5,
-                           fs_info.dir_lights[li].ls_frag_pos[ca].z));
-    float b = texture(shadow_maps[li * CSM_COUNT + cb],
-                      vec3(fs_info.dir_lights[li].ls_frag_pos[cb].xy * 0.5 + 0.5,
-                           fs_info.dir_lights[li].ls_frag_pos[cb].z));
+    vec3 p = vec3(vs_info.dir_lights[li].space[ca] * fs_info.world_frag_pos);
+    vec3 q = vec3(vs_info.dir_lights[li].space[cb] * fs_info.world_frag_pos);
+    p.xy = p.xy * 0.5 + 0.5;
+    q.xy = q.xy * 0.5 + 0.5;
+
+    float a = texture(shadow_maps[li * CSM_COUNT + ca], p);
+    float b = texture(shadow_maps[li * CSM_COUNT + cb], q);
 
     return mix(a, b, c);
 }

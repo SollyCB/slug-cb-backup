@@ -25,15 +25,7 @@ void main() {
     else
         gl_Position = vs_info.proj * vp;
 
-    // @TODO Make vs_info visible to frag shader.
-    fs_info.cascade_boundaries = vs_info.cascade_boundaries;
-
-    fs_info.view_frag_pos = vec3(vp);
-    // fs_info.view_frag_pos = vec3(world_pos);
-
+    fs_info.view_frag_pos = vp;
+    fs_info.world_frag_pos = world_pos;
     dir_light_count = vs_info.dlcx.x;
-
-    for(uint i=0; i < dir_light_count; ++i)
-        for(uint j=0; j < CSM_COUNT; ++j)
-            fs_info.dir_lights[i].ls_frag_pos[j] = vec3(vs_info.dir_lights[i].space[j] * world_pos);
 }

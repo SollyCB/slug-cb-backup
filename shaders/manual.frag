@@ -17,7 +17,7 @@ void main() {
      * L is the normalized vector from the shading location to the light
      * N is the surface normal in the same space as the above values
      * H is the half vector, where H = normalize(L + V) */
-    vec3 light = base_color.xyz * fs_info.ambient;
+    vec3 light = base_color.xyz * vs_info.ambient.xyz;
 
     vec3 V = normalize(fs_info.tang_eye_pos.xyz - fs_info.tang_frag_pos);
     vec3 N = fs_info.tang_normal;

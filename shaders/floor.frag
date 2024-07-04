@@ -10,13 +10,13 @@ void main() {
 
     uint ci;
 
-    if (fs_info.view_frag_pos.z > fs_info.cascade_boundaries[0])
+    if (fs_info.view_frag_pos.z > vs_info.cascade_boundaries[0])
         ci = 0;
-    else if (fs_info.view_frag_pos.z > fs_info.cascade_boundaries[1])
+    else if (fs_info.view_frag_pos.z > vs_info.cascade_boundaries[1])
         ci = 1;
-    else if (fs_info.view_frag_pos.z > fs_info.cascade_boundaries[2])
+    else if (fs_info.view_frag_pos.z > vs_info.cascade_boundaries[2])
         ci = 2;
-    else if (fs_info.view_frag_pos.z > fs_info.cascade_boundaries[3])
+    else if (fs_info.view_frag_pos.z > vs_info.cascade_boundaries[3])
         ci = 3;
     else
         ci = 4;

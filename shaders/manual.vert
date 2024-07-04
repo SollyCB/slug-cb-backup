@@ -29,16 +29,12 @@ void main() {
     fs_info.tang_eye_pos = tbn * vec3(vs_info.eye_pos);
     fs_info.tang_normal = normalize(tbn * normal);
 
-    fs_info.ambient = vec3(vs_info.ambient);
-    fs_info.cascade_boundaries = vs_info.cascade_boundaries;
-    fs_info.view_frag_pos = vec3(view_pos);
+    fs_info.view_frag_pos = view_pos;
+    fs_info.world_frag_pos = world_pos;
     dir_light_count = vs_info.dlcx.x;
 
     for(uint i=0; i < vs_info.dlcx.x; ++i) {
         fs_info.dir_lights[i].color = vec3(vs_info.dir_lights[i].color);
         fs_info.dir_lights[i].ts_light_pos = tbn * vec3(vs_info.dir_lights[i].position);
-
-        for(uint j=0; j < CSM_COUNT; ++j)
-            fs_info.dir_lights[i].ls_frag_pos[j] = vec3(vs_info.dir_lights[i].space[j] * world_pos);
     }
 }
