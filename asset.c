@@ -1050,7 +1050,7 @@ model_pipelines_transform_descriptors_and_draw_info(
             .depthBiasEnable = VK_TRUE,
             .depthBiasConstantFactor = 1.05, // @Todo Idk what the right numbers are here...
             .depthBiasSlopeFactor = 1.1,
-            // .depthBiasClamp = 1,
+            .depthBiasClamp = 1.1,
     };
 
     // @Todo I want to look at multisampling. Idk how important it is for a good image.

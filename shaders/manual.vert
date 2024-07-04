@@ -13,7 +13,11 @@ void main() {
     mat4 ws = vs_info.model * transforms.trs[0];
     vec4 world_pos = ws * vec4(in_position, 1);
     vec4 view_pos = vs_info.view * world_pos;
-    gl_Position = vs_info.proj * view_pos;
+
+    if (vs_info.dlcx[1] != 0)
+        gl_Position = vs_info.dir_lights[0].space[vs_info.dlcx[2]] * world_pos;
+    else
+        gl_Position = vs_info.proj * view_pos;
 
     fs_info.texcoord = in_texcoord;
 
@@ -28,9 +32,9 @@ void main() {
     fs_info.ambient = vec3(vs_info.ambient);
     fs_info.cascade_boundaries = vs_info.cascade_boundaries;
     fs_info.view_frag_pos = vec3(view_pos);
-    dir_light_count = vs_info.dxxx.x;
+    dir_light_count = vs_info.dlcx.x;
 
-    for(uint i=0; i < vs_info.dxxx.x; ++i) {
+    for(uint i=0; i < vs_info.dlcx.x; ++i) {
         fs_info.dir_lights[i].color = vec3(vs_info.dir_lights[i].color);
         fs_info.dir_lights[i].ts_light_pos = tbn * vec3(vs_info.dir_lights[i].position);
 

@@ -243,8 +243,9 @@ int main() {
 
             struct trs model_trs;
             get_trs(
-                vector3(3, 3, -47),
-                quaternion(PI/4, vector3(1, 0, 0)),
+                vector3(3, 3, -3),
+                // quaternion(PI/4, vector3(1, 0, 0)),
+                quaternion(0, vector3(1, 0, 0)),
                 vector3(1, 1, 1),
                 &model_trs
             );
@@ -304,11 +305,18 @@ int main() {
                 mul_matrix(&light_proj[i], &light_view_mat, &vs_info->dir_lights[0].space[i]);
             }
 
-            #if 0 // set the light view as the player cam
+            #if 0
             update_vs_info_mat_model(&pr.gpu, vs_info_desc.bb_offset, &mat_model);
             update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &light_view_mat);
-            memcpy(&vs_info->proj, &light_proj[1], sizeof(light_proj[0]));
+            memcpy(&vs_info->proj, &light_proj[cam.csi], sizeof(light_proj[0]));
             #endif
+
+            if (cam.mode == CAMERA_MODE_LIGHT) {
+                vs_info->dlcx[1] = true;
+                vs_info->dlcx[2] = cam.csi;
+            } else {
+                vs_info->dlcx[1] = false;
+            }
         }
 
         pr.gpu.swapchain.i = next_swapchain_image(&pr.gpu, sem_have_swapchain_image, fence);

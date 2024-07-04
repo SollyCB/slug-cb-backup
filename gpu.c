@@ -282,6 +282,7 @@ static void gpu_create_device_and_queues(struct gpu *gpu)
     VkPhysicalDeviceFeatures vk1_features = {
         .samplerAnisotropy = VK_TRUE,
         .fillModeNonSolid = VK_TRUE,
+        .depthBiasClamp = VK_TRUE,
     };
     VkPhysicalDeviceVulkan11Features vk11_features = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
@@ -1095,7 +1096,7 @@ Vertex_Info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vertex
 
     Vertex_Info *vs = (Vertex_Info*)(gpu->mem.bind_buffer.data + bb_ofs);
 
-    vs->dxxx[0] = 1;
+    vs->dlcx[0] = 1;
     vs->dir_lights[0].position = vector4(0, 15, 0,  1);
     vs->dir_lights[0].color    = scale_vector(vector4(10.0, 10.0, 10.0, 0), 0.5);
 
@@ -1105,7 +1106,7 @@ Vertex_Info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vertex
     identity_matrix(&model);
 
     matrix proj;
-    #if 0
+    #if 1
     perspective_matrix(FOV, ASPECT_RATIO, PERSPECTIVE_NEAR, PERSPECTIVE_FAR, &proj);
     #else
     perspective_matrix(FOV, ASPECT_RATIO, PERSPECTIVE_NEAR, 200, &proj);
@@ -1708,27 +1709,22 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
         img_ofs += mr[i].size;
     }
 
-    {
-        uint vi = 0;
-        for(uint i=0; i < maps->count; ++i) {
-            for(uint j=0; j < cascade_count; ++j) {
-                VkImageViewCreateInfo ci = {
-                    .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-                    .viewType = VK_IMAGE_VIEW_TYPE_2D,
-                    .format = GPU_SHADOW_ATTACHMENT_FORMAT,
-                    .image = maps->images[i],
-                    .subresourceRange = {
-                        .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-                        .levelCount = 1,
-                        .layerCount = 1,
-                        .baseArrayLayer = j,
-                    },
-                };
-                VkResult check = vk_create_image_view(gpu->device, &ci, GAC, &maps->views[vi]);
-                DEBUG_VK_OBJ_CREATION(vkCreateImageView, check);
-
-                vi++;
-            }
+    for(uint i=0; i < maps->count; ++i) {
+        for(uint j=0; j < cascade_count; ++j) {
+            VkImageViewCreateInfo ci = {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                .viewType = VK_IMAGE_VIEW_TYPE_2D,
+                .format = GPU_SHADOW_ATTACHMENT_FORMAT,
+                .image = maps->images[i],
+                .subresourceRange = {
+                    .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+                    .levelCount = 1,
+                    .layerCount = 1,
+                    .baseArrayLayer = j,
+                },
+            };
+            VkResult check = vk_create_image_view(gpu->device, &ci, GAC, &maps->views[i*CSM_COUNT +j]);
+            DEBUG_VK_OBJ_CREATION(vkCreateImageView, check);
         }
     }
 
@@ -1737,17 +1733,19 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
             .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
             .magFilter = VK_FILTER_LINEAR,
             .minFilter = VK_FILTER_LINEAR,
-            .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+            .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
             .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
             .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+
+            // @CSMChanges.
 
             // @Todo I do not really know what a lot of this stuff really does,
             // especially with regard to shadow mapping.
             .minLod = 0,
-            .maxLod = VK_LOD_CLAMP_NONE,
+            .maxLod = 0, // VK_LOD_CLAMP_NONE,
             .borderColor = VK_BORDER_COLOR_INT_OPAQUE_WHITE,
-            .anisotropyEnable = flag_check(gpu->flags, GPU_SAMPLER_ANISOTROPY_ENABLE_BIT),
-            .maxAnisotropy = gpu->defaults.sampler_anisotropy,
+            .anisotropyEnable = VK_FALSE, // flag_check(gpu->flags, GPU_SAMPLER_ANISOTROPY_ENABLE_BIT),
+            .maxAnisotropy = 0, // gpu->defaults.sampler_anisotropy,
 
             .compareEnable = VK_TRUE,
             .compareOp = VK_COMPARE_OP_LESS,

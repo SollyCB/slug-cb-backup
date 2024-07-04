@@ -54,7 +54,5 @@ void main() {
         light += fs_info.dir_lights[i].color * matbrdf * max(dot(N, L), 0);
     }
 
-    pv3(cascade_i());
-
     fc = vec4(light, 1);
 }

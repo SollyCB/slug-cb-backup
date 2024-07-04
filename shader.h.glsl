@@ -3,7 +3,7 @@
 
 #define DIR_LIGHT_COUNT 2
 #define CSM_COUNT 4
-#define CSM_BLEND_BAND 10
+#define CSM_BLEND_BAND 1
 #define JOINT_COUNT 1
 #define MORPH_WEIGHT_COUNT 1
 #define SPLIT_SHADOW_MVP 1
@@ -43,7 +43,7 @@ struct Vertex_Info {
 
     In_Directional_Light dir_lights[DIR_LIGHT_COUNT];
 
-    uvec4 dxxx; // dir light count, null, null, null
+    uvec4 dlcx; // dir light count, use light view, light view cascade index, null
 };
 
 struct Vertex_Transforms {
@@ -161,16 +161,15 @@ vec3 cascade_i() {
 
 float in_shadow(uint li) {
     vec3 ci = cascade_i();
-    // pv3(ci);
 
     uint ca = uint(ci.x);
     uint cb = uint(ci.y);
     float c = ci.z;
 
-    float a = texture(shadow_maps[li + ca],
+    float a = texture(shadow_maps[li * CSM_COUNT + ca],
                       vec3(fs_info.dir_lights[li].ls_frag_pos[ca].xy * 0.5 + 0.5,
                            fs_info.dir_lights[li].ls_frag_pos[ca].z));
-    float b = texture(shadow_maps[li + cb],
+    float b = texture(shadow_maps[li * CSM_COUNT + cb],
                       vec3(fs_info.dir_lights[li].ls_frag_pos[cb].xy * 0.5 + 0.5,
                            fs_info.dir_lights[li].ls_frag_pos[cb].z));
 

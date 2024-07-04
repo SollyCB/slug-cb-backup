@@ -13,6 +13,7 @@ enum {
 enum {
     CAMERA_MODE_FLY,
     CAMERA_MODE_NORMAL,
+    CAMERA_MODE_LIGHT,
 };
 
 struct camera {
@@ -20,6 +21,7 @@ struct camera {
     vector dir;
     uint flags;
     uint mode;
+    uint csi;
     float fov;
     float sens,speed;
     float pitch,yaw;
@@ -132,15 +134,33 @@ static inline void update_camera(struct camera *c, struct window *w, float dt)
     }
     if (glfwGetKey(w->window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
         up = -1;
-    if (glfwGetKey(w->window, GLFW_KEY_1) == GLFW_PRESS)
-        c->speed /= 2;
-    if (glfwGetKey(w->window, GLFW_KEY_2) == GLFW_PRESS)
-        c->speed *= 2;
+
+
+    if (c->mode != CAMERA_MODE_LIGHT) {
+        if (glfwGetKey(w->window, GLFW_KEY_1) == GLFW_PRESS)
+            c->speed /= 2;
+        if (glfwGetKey(w->window, GLFW_KEY_2) == GLFW_PRESS)
+            c->speed *= 2;
+    }
 
     if (glfwGetKey(w->window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
         up = 1;
         c->mode = CAMERA_MODE_NORMAL;
         glfwSetInputMode(w->window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+    }
+
+    if (glfwGetKey(w->window, GLFW_KEY_L) == GLFW_PRESS)
+        c->mode = CAMERA_MODE_LIGHT;
+
+    if (c->mode == CAMERA_MODE_LIGHT) {
+        if (glfwGetKey(w->window, GLFW_KEY_1) == GLFW_PRESS)
+            c->csi = 0;
+        if (glfwGetKey(w->window, GLFW_KEY_2) == GLFW_PRESS)
+            c->csi = 1;
+        if (glfwGetKey(w->window, GLFW_KEY_3) == GLFW_PRESS)
+            c->csi = 2;
+        if (glfwGetKey(w->window, GLFW_KEY_4) == GLFW_PRESS)
+            c->csi = 3;
     }
 
     camera_move(c, fwd, right, up, dt);
