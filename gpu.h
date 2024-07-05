@@ -128,7 +128,9 @@ struct shadow_maps {
 
 struct gpu_texture_deprecated {
     struct gpu_texture image;
+    #if DESCRIPTOR_BUFFER
     uchar descriptor[GPU_MAX_DESCRIPTOR_SIZE];
+    #endif
 };
 
 struct gpu_defaults {
@@ -220,6 +222,14 @@ void resource_dp_reset(struct gpu *gpu, uint thread_i)
 void sampler_dp_reset(struct gpu *gpu, uint thread_i)
 {
     vk_reset_descriptor_pool(gpu->device, gpu->sampler_dp[thread_i + 1], 0x0); // +1 main thread 0
+}
+
+void reset_descriptor_pools(struct gpu *gpu)
+{
+    for(uint i=0; i < THREAD_COUNT+1; ++i) {
+        resource_dp_reset(gpu, i);
+        sampler_dp_reset(gpu, i);
+    }
 }
 
 #define GPU_BUF_ALLOC_FAIL Max_u64

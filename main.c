@@ -552,6 +552,7 @@ int main() {
 
         fence_wait_secs_and_reset(&pr.gpu, fence, 3);
         signal_thread_true(&t_cleanup[FRAME_I]);
+        reset_descriptor_pools(&pr.gpu);
 
         draw_floor_cleanup(&pr.gpu, &df_rsc);
 
@@ -584,7 +585,6 @@ int main() {
         FRAME_I = (FRAME_I + 1) & 1;
 
         frame_count++;
-
 
         {
             #if 0 // Throttle frame rate

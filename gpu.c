@@ -156,7 +156,7 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
     DEBUG_VK_OBJ_CREATION(vkCreateImageView, check);
 
     #if NO_DESCRIPTOR_BUFFER
-    // @TODO
+    // I don't think that anything needs to be handled here with regards to descriptors.
     #else
     VkDescriptorImageInfo img_desc_info = {gpu->defaults.sampler,gpu->defaults.texture.image.view,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
 
@@ -1229,6 +1229,8 @@ bool resource_dp_allocate(struct gpu *gpu, uint thread_i, uint count,
     };
     VkResult r = vk_allocate_descriptor_sets(gpu->device, &ai, sets);
     DEBUG_VK_OBJ_CREATION(vkAllocateDescriptorSet, r);
+
+    return r == VK_SUCCESS;
 }
 
 bool sampler_dp_allocate(struct gpu *gpu, uint thread_i, uint count,
@@ -1242,6 +1244,8 @@ bool sampler_dp_allocate(struct gpu *gpu, uint thread_i, uint count,
     };
     VkResult r = vk_allocate_descriptor_sets(gpu->device, &ai, sets);
     DEBUG_VK_OBJ_CREATION(vkAllocateDescriptorSet, r);
+
+    return r == VK_SUCCESS;
 }
 
 void gpu_upload_bind_buffer(

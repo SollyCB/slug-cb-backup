@@ -21,6 +21,7 @@ extern float FOV;
 #define GPU 1
 #define CHECK_END_STATE 1
 #define NO_DESCRIPTOR_BUFFER 1
+#define DESCRIPTOR_BUFFER (!NO_DESCRIPTOR_BUFFER)
 
 #define MAX_URI_LEN 64
 #define STATUS_INCOMPLETE 0xeeffeeff

@@ -56,8 +56,12 @@ struct load_model_arg {
     struct animation_info *animations;
     uint                  *scenes;
     VkDescriptorSetLayout  dsls[SHADER_MAX_DESCRIPTOR_SET_COUNT_OUTSIDE_MODEL_SCOPE];
+    #if NO_DESCRIPTOR_BUFFER
+    VkDescriptorSet        descriptor_sets[SHADER_MAX_DESCRIPTOR_SET_COUNT_OUTSIDE_MODEL_SCOPE];
+    #else
     uint                   db_indices[SHADER_MAX_DESCRIPTOR_SET_COUNT_OUTSIDE_MODEL_SCOPE];
     size_t                 db_offsets[SHADER_MAX_DESCRIPTOR_SET_COUNT_OUTSIDE_MODEL_SCOPE];
+    #endif
     VkRenderPass           color_renderpass;
     VkRenderPass           depth_renderpass;
     VkViewport             viewport;

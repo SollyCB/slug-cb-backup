@@ -17,12 +17,18 @@ struct model_memory_offsets {
     size_t           base_descriptor_sampler;
     uint            *buffers;
     uint            *transforms_ubos;
-    uint            *transforms_ubo_dsls;
     uint            *mesh_instance_counts;
+    #if NO_DESCRIPTOR_BUFFER
+    VkDescriptorSet  transforms_ubo_ds;
+    VkDescriptorSet  material_ubo_ds;
+    VkDescriptorSet  material_textures_ds;
+    #else
+    uint            *transforms_ubo_dsls;
     uint            *material_textures_dsls;
-    uint             material_ubo;
     uint             material_ubo_dsl_stride;
     struct pair_uint material_ubo_dsl;
+    #endif
+    uint             material_ubo;
 };
 
 struct model_resources {
@@ -37,9 +43,12 @@ struct model_resources {
     struct gpu            *gpu;
     struct gpu_texture    *images;
     VkSampler             *samplers;
+    #if NO_DESCRIPTOR_BUFFER
+    VkDescriptorSet       *resource_ds;
+    VkDescriptorSet       *texture_ds;
+    #endif
+    VkDescriptorSetLayout *resource_dsls;
     VkDescriptorSetLayout *texture_dsls;
-    VkDescriptorSetLayout *transforms_ubo_dsls;
-    VkDescriptorSetLayout  material_ubo_dsl;
     VkPipeline            *pipelines;
     VkPipelineLayout      *pipeline_layouts;
     VkShaderModule         depth_shader_vert;
@@ -63,13 +72,13 @@ struct model_material {
     uint flags;
 };
 
-static uint
-load_model(
+static uint load_model(
     struct load_model_arg  *arg,
     struct load_model_ret  *ret,
     struct model_resources *resources,
     struct allocators      *allocs,
-    struct draw_model_info *draw_info);
+    struct draw_model_info *draw_info,
+    uint                    thread_id);
 
 static void model_cleanup(struct model_resources *resources);
 
@@ -100,13 +109,17 @@ void load_model_tf(struct thread_work_arg *arg)
 
     // vulkan handles are typedef'd pointers which makes the linter complain.
     struct model_resources *resources;
-    uint resources_size = sizeof(*resources)                      * 1                     +
-                          sizeof(*resources->images)              * model->image_count    +
-                          sizeof(*resources->samplers)            * model->sampler_count  + // NOLINT - sizeof(vulkan_handle)
-                          sizeof(*resources->texture_dsls)        * model->material_count + // NOLINT - sizeof(vulkan_handle)
-                          sizeof(*resources->transforms_ubo_dsls) * model->mesh_count     + // NOLINT - sizeof(vulkan_handle)
-                          sizeof(*resources->pipelines)           * pipeline_count        + // NOLINT - sizeof(vulkan_handle)
-                          sizeof(*resources->pipeline_layouts)    * (prim_count + 1);       // NOLINT - sizeof(vulkan_handle)
+    uint resources_size = sizeof(*resources)                      * 1                       +
+                          sizeof(*resources->images)              *  model->image_count     +
+                          sizeof(*resources->samplers)            *  model->sampler_count   +
+                          #if NO_DESCRIPTOR_BUFFER
+                          sizeof(*resources->resource_ds)         * (model->mesh_count + 1) +
+                          sizeof(*resources->texture_ds)          *  model->material_count  +
+                          #endif
+                          sizeof(*resources->resource_dsls)       * (model->mesh_count + 1) +
+                          sizeof(*resources->texture_dsls)        *  model->material_count  +
+                          sizeof(*resources->pipelines)           *  pipeline_count         +
+                          sizeof(*resources->pipeline_layouts)    * (prim_count + 1);
 
     struct draw_model_info *draw_info;
     uint draw_infos_size = sizeof(*draw_info)                                  * 1                      +
@@ -125,12 +138,19 @@ void load_model_tf(struct thread_work_arg *arg)
     resources->alloc = arg->allocs.persistent;
     resources->gpu = lmi->arg->gpu;
 
-    resources->images               =    (struct gpu_texture*)(resources                      + 1);
-    resources->samplers             =             (VkSampler*)(resources->images              + model->image_count);
-    resources->texture_dsls         = (VkDescriptorSetLayout*)(resources->samplers            + model->sampler_count);
-    resources->transforms_ubo_dsls  =                          resources->texture_dsls        + model->material_count;
-    resources->pipelines            =            (VkPipeline*)(resources->transforms_ubo_dsls + model->mesh_count);
-    resources->pipeline_layouts     =      (VkPipelineLayout*)(resources->pipelines           + pipeline_count);
+    resources->images              =    (struct gpu_texture*)(resources                      + 1);
+    resources->samplers            =             (VkSampler*)(resources->images              + model->image_count);
+    #if NO_DESCRIPTOR_BUFFER
+    resources->resource_ds         =       (VkDescriptorSet*)(resources->samplers            + model->sampler_count);
+    resources->texture_ds          =                          resources->resource_ds         + model->mesh_count + 1;
+    resources->resource_dsls       = (VkDescriptorSetLayout*)(resources->texture_ds          + model->material_count);
+    resources->texture_dsls        =                          resources->resource_dsls       + model->mesh_count + 1;
+    #else
+    resources->resource_dsls       = (VkDescriptorSetLayout*)(resources->samplers            + model->sampler_count);
+    resources->texture_dsls        =                          resources->transforms_ubo_dsls + model->mesh_count + 1;
+    #endif
+    resources->pipelines           =            (VkPipeline*)(resources->texture_dsls        + model->material_count);
+    resources->pipeline_layouts    =      (VkPipelineLayout*)(resources->pipelines           + pipeline_count);
 
     draw_info->pipelines = resources->pipelines;
     draw_info->pipeline_layouts = resources->pipeline_layouts;
@@ -163,7 +183,7 @@ void load_model_tf(struct thread_work_arg *arg)
 
     lmi->ret->draw_info = draw_info;
 
-    uint res = load_model(lmi->arg, lmi->ret, resources, &arg->allocs, draw_info);
+    uint res = load_model(lmi->arg, lmi->ret, resources, &arg->allocs, draw_info, arg->self->id);
 
     lmi->ret->result = res;
 
@@ -186,7 +206,7 @@ void load_model_tf(struct thread_work_arg *arg)
 static void* model_cleanup_tf(struct thread_work_arg *arg)
 {
     struct model_resources *resources = arg->arg;
-    model_cleanup(resources);
+    model_cleanup(resources, arg->self->id);
     return NULL;
 }
 
@@ -315,7 +335,8 @@ allocate_model_resources(
     struct load_model_ret       *ret,
     struct model_memory_offsets *offsets,
     struct model_resources      *resources,
-    struct allocators           *allocs);
+    struct allocators           *allocs,
+    uint                         thread_id);
 
 static struct model_texture_descriptors
 get_model_texture_descriptors(
@@ -350,7 +371,8 @@ static uint load_model(
     struct load_model_ret  *ret,
     struct model_resources *resources,
     struct allocators      *allocs,
-    struct draw_model_info *draw_info)
+    struct draw_model_info *draw_info,
+    uint                    thread_id)
 {
     // @Todo @Note Should allocation_mask be set or unset on failure?
     // Currently going for it will be set.
@@ -360,7 +382,7 @@ static uint load_model(
     uint result = LOAD_MODEL_RESULT_SUCCESS;
 
     struct model_memory_offsets offsets;
-    result = allocate_model_resources(arg, ret, &offsets, resources, allocs);
+    result = allocate_model_resources(arg, ret, &offsets, resources, allocs, thread_id);
     if (result != LOAD_MODEL_RESULT_SUCCESS)
         goto fn_return;
 
@@ -390,12 +412,27 @@ static uint allocate_model_resources(
     struct load_model_ret       *ret,
     struct model_memory_offsets *offsets,
     struct model_resources      *resources,
-    struct allocators           *allocs)
+    struct allocators           *allocs,
+    uint                         thread_id)
 {
     gltf *model = arg->model;
     struct gpu *gpu = arg->gpu;
     uint result = LOAD_MODEL_RESULT_INCOMPLETE; // set on error
 
+    #if NO_DESCRIPTOR_BUFFER
+    void *offset_data = allocate(allocs->temp,
+            sizeof(*offsets->buffers)              *  model->buffer_count    +
+            sizeof(*offsets->transforms_ubos)      *  model->mesh_count      +
+            sizeof(*offsets->mesh_instance_counts) *  model->mesh_count      +
+            sizeof(uint)                           *  model->image_count * 2);
+
+    offsets->buffers              = offset_data;
+    offsets->transforms_ubos      = offsets->buffers         + model->buffer_count;
+    offsets->mesh_instance_counts = offsets->transforms_ubos + model->mesh_count;
+
+    uint *image_offsets_stage = offsets->mesh_instance_count + model->mesh_count;
+    uint *image_offsets_device = image_offsets_stage         + model->image_count;
+    #else
     void *offset_data = allocate(allocs->temp,
             sizeof(*offsets->buffers)                * model->buffer_count   +
             sizeof(*offsets->transforms_ubos)        * model->mesh_count     +
@@ -412,6 +449,7 @@ static uint allocate_model_resources(
 
     uint *image_offsets_stage = offsets->material_textures_dsls + model->material_count;
     uint *image_offsets_device = image_offsets_stage            + model->image_count;
+    #endif
 
     smemset(offsets->mesh_instance_counts, 0,
            *offsets->mesh_instance_counts, model->mesh_count);
@@ -441,14 +479,14 @@ static uint allocate_model_resources(
         };
         VkDescriptorSetLayoutCreateInfo ci = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+            .flags = DESCRIPTOR_BUFFER ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT : 0,
             .bindingCount = 1,
             .pBindings = &binding,
         };
-        VkResult check = vk_create_descriptor_set_layout(gpu->device, &ci, GAC,
-                &resources->transforms_ubo_dsls[i]);
+        VkResult check = vk_create_descriptor_set_layout(gpu->device, &ci, GAC, &resources->resource_dsls[i]);
         DEBUG_VK_OBJ_CREATION(vkCreateDescriptorSetLayout, check);
 
+        #if DESCRIPTOR_BUFFER
         size_t size;
         vk_get_descriptor_set_layout_size_ext(gpu->device,
                 resources->transforms_ubo_dsls[i], &size);
@@ -456,6 +494,7 @@ static uint allocate_model_resources(
         size = align(size, gpu->descriptors.props.descriptorBufferOffsetAlignment);
         offsets->transforms_ubo_dsls[i] = transforms_ubo_dsls_size;
         transforms_ubo_dsls_size += size;
+        #endif
 
         resources->mesh_count++;
     }
@@ -473,14 +512,14 @@ static uint allocate_model_resources(
         };
         VkDescriptorSetLayoutCreateInfo ci = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+            .flags = DESCRIPTOR_BUFFER ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT : 0,
             .bindingCount = 1,
             .pBindings = &binding,
         };
-        VkResult check = vk_create_descriptor_set_layout(gpu->device, &ci, GAC,
-                &resources->material_ubo_dsl);
+        VkResult check = vk_create_descriptor_set_layout(gpu->device, &ci, GAC, &resources->resource_dsls[model->mesh_count]);
         DEBUG_VK_OBJ_CREATION(vkCreateDescriptorSetLayout, check);
 
+        #if DESCRIPTOR_BUFFER
         size_t size;
         vk_get_descriptor_set_layout_size_ext(gpu->device, resources->material_ubo_dsl, &size);
 
@@ -489,6 +528,7 @@ static uint allocate_model_resources(
                                                         transforms_ubo_dsls_size};
         material_ubo_dsls_size = size * model->material_count;
         offsets->material_ubo_dsl_stride = size;
+        #endif
     }
 
     uint material_textures_dsls_size = 0;
@@ -514,6 +554,7 @@ static uint allocate_model_resources(
                 &resources->texture_dsls[resources->texture_dsl_count]);
         DEBUG_VK_OBJ_CREATION(vkCreateDescriptorSetLayout, check);
 
+        #if DESCRIPTOR_BUFFER
         size_t size;
         vk_get_descriptor_set_layout_size_ext(gpu->device,
                                               resources->texture_dsls[resources->texture_dsl_count],
@@ -522,6 +563,7 @@ static uint allocate_model_resources(
         size = align(size, gpu->descriptors.props.descriptorBufferOffsetAlignment);
         offsets->material_textures_dsls[i] = material_textures_dsls_size;
         material_textures_dsls_size += size;
+        #endif
 
         resources->texture_dsl_count++;
     }
@@ -567,6 +609,7 @@ static uint allocate_model_resources(
     if (gpu->flags & GPU_UMA_BIT)
             stage_size += buffers_size + transforms_ubos_size + material_ubos_size;
 
+    #if DESCRIPTOR_BUFFER
     if (gpu->flags & GPU_DESCRIPTOR_BUFFER_NOT_HOST_VISIBLE_BIT) {
         for(uint i=0; i < model->mesh_count; ++i)
             offsets->transforms_ubo_dsls[i] += stage_size;
@@ -580,6 +623,7 @@ static uint allocate_model_resources(
                       material_ubo_dsls_size +
                       material_textures_dsls_size;
     }
+    #endif
 
     // Allocate stage memory
     offsets->base_stage = gpu_buffer_allocate(gpu, &gpu->mem.transfer_buffer, stage_size);
@@ -598,6 +642,20 @@ static uint allocate_model_resources(
     }
     ret->allocation_mask |= LOAD_MODEL_ALLOCATION_BIND_BUFFER_BIT;
 
+    #if NO_DESCRIPTOR_BUFFER
+    if (!resource_dp_allocate(gpu, thread_id, model->mesh_count + 1,
+                resources->resource_dsls, resources->resource_ds))
+    {
+        result = LOAD_MODEL_RESULT_INSUFFICIENT_RESOURCE_DESCRIPTOR_MEMORY;
+        goto fail;
+    }
+    if (!sampler_dp_allocate(gpu, thread_id, model->mesh_count + 1,
+                resources->texture_dsls, resources->texture_ds))
+    {
+        result = LOAD_MODEL_RESULT_INSUFFICIENT_SAMPLER_DESCRIPTOR_MEMORY;
+        goto fail;
+    }
+    #else
     // Allocate descriptor memory
     if (gpu->flags & GPU_DESCRIPTOR_BUFFER_NOT_HOST_VISIBLE_BIT) {
         {
@@ -660,6 +718,7 @@ static uint allocate_model_resources(
             }
         }
     }
+    #endif
 
     // @Optimise This is slightly inefficient, as this will copy data which is not relevant
     // to the gpu, such as animation keyframes. There could be marks in the buffers which
