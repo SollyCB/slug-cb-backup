@@ -1178,6 +1178,7 @@ static void gpu_store_pipeline_cache(struct gpu *gpu)
     vkDestroyPipelineCache(gpu->device, gpu->pipeline_cache, GPU_ALLOCATION_CALLBACKS);
 }
 
+// @Todo These numbers seem quite small lol...
 #define DESCRIPTOR_POOL_MAX_SETS_RESOURCE 32
 #define DESCRIPTOR_POOL_MAX_SETS_SAMPLER  32
 #define DESCRIPTOR_POOL_MAX_DESCRIPTORS_RESOURCE 32
@@ -1223,7 +1224,7 @@ bool resource_dp_allocate(struct gpu *gpu, uint thread_i, uint count,
 {
     VkDescriptorSetAllocateInfo ai = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .descriptorPool = gpu->resource_dp[thread_i+1], // +1 main thread is zero
+        .descriptorPool = gpu->resource_dp[thread_i],
         .descriptorSetCount = count,
         .pSetLayouts = layouts,
     };
@@ -1238,7 +1239,7 @@ bool sampler_dp_allocate(struct gpu *gpu, uint thread_i, uint count,
 {
     VkDescriptorSetAllocateInfo ai = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .descriptorPool = gpu->sampler_dp[thread_i+1], // +1 main thread is zero
+        .descriptorPool = gpu->sampler_dp[thread_i],
         .descriptorSetCount = count,
         .pSetLayouts = layouts,
     };

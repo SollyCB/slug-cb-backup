@@ -215,13 +215,15 @@ void gpu_destroy_sampler(struct gpu *gpu, VkSampler sampler);
 bool resource_dp_allocate(struct gpu *gpu, uint thread_i, uint count, VkDescriptorSetLayout *layouts, VkDescriptorSet *sets);
 bool sampler_dp_allocate(struct gpu *gpu, uint thread_i, uint count, VkDescriptorSetLayout *layouts, VkDescriptorSet *sets);
 
+// @TODO How to handle thread_id ambiguation with main thread? Need to check if
+// I can start thread_id at 1 in the init_thread_pool function.
 void resource_dp_reset(struct gpu *gpu, uint thread_i)
 {
-    vk_reset_descriptor_pool(gpu->device, gpu->resource_dp[thread_i + 1], 0x0); // +1 main thread 0
+    vk_reset_descriptor_pool(gpu->device, gpu->resource_dp[thread_i], 0x0); // +1 main thread 0
 }
 void sampler_dp_reset(struct gpu *gpu, uint thread_i)
 {
-    vk_reset_descriptor_pool(gpu->device, gpu->sampler_dp[thread_i + 1], 0x0); // +1 main thread 0
+    vk_reset_descriptor_pool(gpu->device, gpu->sampler_dp[thread_i], 0x0); // +1 main thread 0
 }
 
 void reset_descriptor_pools(struct gpu *gpu)

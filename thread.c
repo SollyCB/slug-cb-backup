@@ -54,7 +54,7 @@ int new_thread_pool(struct allocation buffers_heap[THREAD_COUNT], struct allocat
 
     int res;
     for(i=0;i<THREAD_COUNT;++i) {
-        pool->threads[i].id = i;
+        pool->threads[i].id = i+1; // disambiguate from main thread
         pool->threads[i].pool_write_flags = 0x0;
         pool->threads[i].thread_write_flags = 0x0;
         pool->threads[i].persistent = new_heap_allocator(buffers_heap[i].size, buffers_heap[i].data);
