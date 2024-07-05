@@ -541,7 +541,12 @@ inline static void vertex_input_semaphore_submit_info(VkSemaphore sem, uint64 va
 
 inline static void color_output_semaphore_submit_info(VkSemaphore sem, uint64 val, VkSemaphoreSubmitInfo *ret)
 {
-    semaphore_submit_info(sem, val, PL_COLOR_OUTPUT_BIT, ret);
+    semaphore_submit_info(sem, val, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, ret);
+}
+
+inline static void all_graphics_semaphore_submit_info(VkSemaphore sem, uint64 val, VkSemaphoreSubmitInfo *ret)
+{
+    semaphore_submit_info(sem, val, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, ret);
 }
 
 inline static void command_buffer_submit_info(VkCommandBuffer command_buffer, VkCommandBufferSubmitInfo *ret)
