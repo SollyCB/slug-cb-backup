@@ -42,5 +42,5 @@ echo "C Build Success"
 shader_files=("manual.vert" "manual.frag" "floor.frag" "floor.vert")
 
 for f in ${shader_files[@]}; do
-   (cd shaders && glslang -V $f -o $f.spv)
+   (cd shaders && glslang -g -V $f -o $f.spv)
 done

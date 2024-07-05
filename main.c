@@ -196,8 +196,8 @@ int main() {
 
     uint frame_count = 0;
 
-    // for(uint frame_count=0; frame_count < 50; ++frame_count) {
-    for(uint frame_index=0; frame_index < 3; ++frame_index) {
+    // for(uint frame_index=0; frame_index < 3; ++frame_index) {
+    while(1) {
         poll_glfw();
 
         allocator_reset_linear(&pr.allocs.temp);
@@ -354,7 +354,7 @@ int main() {
         uint scene = 0;
 
         struct load_model_arg lma = {
-            .flags = 0x0,
+            .flags = 0, // LOAD_MODEL_BLIT_MIPMAPS_BIT,
             .dsl_count = 2,
             .animation_count = 0,
             .scene_count = model.scene_count,

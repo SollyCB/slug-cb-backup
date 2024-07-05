@@ -24,7 +24,8 @@ enum {
 };
 
 enum {
-    LOAD_MODEL_WIREFRAME_BIT = 0x01,
+    LOAD_MODEL_WIREFRAME_BIT    = 0x01,
+    LOAD_MODEL_BLIT_MIPMAPS_BIT = 0x02,
 };
 
 // @Unimplemented Currently just using the SUBPASS_COLOR bit index. I need to

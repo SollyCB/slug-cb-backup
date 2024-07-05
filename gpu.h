@@ -593,7 +593,8 @@ static inline void present_queue_submit(struct gpu *gpu, uint w_sem_count, VkSem
 
 static inline void fence_wait_secs_and_reset(struct gpu *gpu, VkFence fence, uint time)
 {
-    vk_wait_for_fences(gpu->device, 1, &fence, 1, time * 1e9);
+    VkResult r = vk_wait_for_fences(gpu->device, 1, &fence, 1, time * 1e9);
+    DEBUG_VK_OBJ_CREATION(vkWaitForFences, r);
     vk_reset_fences(gpu->device, 1, &fence);
 }
 

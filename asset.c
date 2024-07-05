@@ -690,8 +690,13 @@ static uint allocate_model_resources(
     }
     gpu_upload_images_with_base_offset(gpu, model->image_count, resources->images,
             offsets->base_stage, image_offsets_stage, ret->cmd_transfer, ret->cmd_graphics);
-    // This also transfers the image layout to shader read only.
-    gpu_blit_gltf_texture_mipmaps(model, resources->images, ret->cmd_graphics);
+
+    if (arg->flags & LOAD_MODEL_BLIT_MIPMAPS_BIT) {
+        // This also transfers the image layout to shader read only.
+        gpu_blit_gltf_texture_mipmaps(model, resources->images, ret->cmd_graphics);
+    } else {
+        transition_texture_layouts(ret->cmd_graphics, model->image_count, resources->images, allocs->temp);
+    }
 
     for(uint i=0; i < model->sampler_count; ++i) {
         resources->samplers[i] = gpu_create_gltf_sampler(gpu, &model->samplers[i]);
@@ -1050,7 +1055,7 @@ model_pipelines_transform_descriptors_and_draw_info(
             .depthBiasEnable = VK_TRUE,
             .depthBiasConstantFactor = 1.05, // @Todo Idk what the right numbers are here...
             .depthBiasSlopeFactor = 1.1,
-            .depthBiasClamp = 1.1,
+            .depthBiasClamp = 1.0,
     };
 
     // @Todo I want to look at multisampling. Idk how important it is for a good image.
@@ -1070,7 +1075,7 @@ model_pipelines_transform_descriptors_and_draw_info(
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
         .depthTestEnable = 1,
         .depthWriteEnable = 1,
-        .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+        .depthCompareOp = VK_COMPARE_OP_LESS,
     };
 
     // @Optimise These blend attachments are references to globals, idk if that

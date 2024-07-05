@@ -1488,29 +1488,57 @@ void gpu_upload_images_with_base_offset(
     }
 }
 
+// @Todo Does not respect mip levels
+void transition_texture_layouts(VkCommandBuffer cmd, uint count, struct gpu_texture *textures, allocator *alloc)
+{
+    VkImageMemoryBarrier2 *b = sallocate(alloc, *b, count);
+
+    for(uint i=0; i < count; ++i) {
+        b[i] = (VkImageMemoryBarrier2) {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .oldLayout             = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .newLayout             = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            .srcStageMask          = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .dstStageMask          = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+            .srcAccessMask         = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .dstAccessMask         = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+            .srcQueueFamilyIndex   = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex   = VK_QUEUE_FAMILY_IGNORED,
+            .image                 = textures[i].vkimage,
+            .subresourceRange      = (VkImageSubresourceRange){VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+        };
+    }
+
+    VkDependencyInfo dep = {VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
+    dep.imageMemoryBarrierCount = count;
+    dep.pImageMemoryBarriers = b;
+
+    vk_cmd_pipeline_barrier2(cmd, &dep);
+}
+
 void gpu_blit_gltf_texture_mipmaps(gltf *model, struct gpu_texture *images, VkCommandBuffer graphics)
 {
     VkImageMemoryBarrier2 barr = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
-    barr.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    barr.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    barr.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT_KHR;
-    barr.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR;
-    barr.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT_KHR;
-    barr.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
-    barr.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barr.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barr.subresourceRange = (VkImageSubresourceRange){VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    barr.oldLayout             = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barr.newLayout             = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barr.srcStageMask          = VK_PIPELINE_STAGE_2_TRANSFER_BIT_KHR;
+    barr.dstStageMask          = VK_PIPELINE_STAGE_2_TRANSFER_BIT_KHR;
+    barr.srcAccessMask         = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR;
+    barr.dstAccessMask         = VK_ACCESS_2_TRANSFER_READ_BIT;
+    barr.srcQueueFamilyIndex   = VK_QUEUE_FAMILY_IGNORED;
+    barr.dstQueueFamilyIndex   = VK_QUEUE_FAMILY_IGNORED;
+    barr.subresourceRange      = (VkImageSubresourceRange){VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
     VkImageMemoryBarrier2 barr2 = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
-    barr2.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    barr2.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    barr2.srcStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT;
-    barr2.srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
-    barr2.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-    barr2.dstAccessMask = VK_ACCESS_2_INPUT_ATTACHMENT_READ_BIT | VK_ACCESS_2_SHADER_READ_BIT;
-    barr2.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barr2.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barr2.subresourceRange = (VkImageSubresourceRange){VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    barr2.oldLayout             = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barr2.newLayout             = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    barr2.srcStageMask          = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    barr2.dstStageMask          = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+    barr2.srcAccessMask         = VK_ACCESS_2_TRANSFER_READ_BIT;
+    barr2.dstAccessMask         = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+    barr2.srcQueueFamilyIndex   = VK_QUEUE_FAMILY_IGNORED;
+    barr2.dstQueueFamilyIndex   = VK_QUEUE_FAMILY_IGNORED;
+    barr2.subresourceRange      = (VkImageSubresourceRange){VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
     VkDependencyInfo dep = {VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
     dep.imageMemoryBarrierCount = 1;
@@ -1526,11 +1554,9 @@ void gpu_blit_gltf_texture_mipmaps(gltf *model, struct gpu_texture *images, VkCo
     blit_info.regionCount = 1;
     blit_info.pRegions = &blit;
 
-    uint i,j,x,y,image;
+    uint i,j,image;
     for(i = 0; i < model->image_count; ++i) {
         image = model->textures[i].source;
-        x = images[image].image.x;
-        y = images[image].image.y;
         barr.image = images[image].vkimage;
 
         blit_info.srcImage = images[image].vkimage;
@@ -1544,14 +1570,16 @@ void gpu_blit_gltf_texture_mipmaps(gltf *model, struct gpu_texture *images, VkCo
         vk_cmd_pipeline_barrier2(graphics, &dep);
 
         for(j = 1; j < images[image].image.miplevels; ++j) {
-            x = x > 1 ? x / 2 : 1;
-            y = y > 1 ? y / 2 : 1;
+            uint src_x = images[image].image.x >> (j - 1);
+            uint src_y = images[image].image.y >> (j - 1);
+            uint dst_x = images[image].image.x >> (j);
+            uint dst_y = images[image].image.y >> (j);
 
             blit.srcSubresource.mipLevel = j - 1;
             blit.dstSubresource.mipLevel = j;
 
-            blit.srcOffsets[1] = (VkOffset3D){x,y,1};
-            blit.dstOffsets[1] = (VkOffset3D){x, y, 1};
+            blit.srcOffsets[1] = (VkOffset3D){src_x,src_y,1};
+            blit.dstOffsets[1] = (VkOffset3D){dst_x,dst_y,1};
 
             vk_cmd_blit_image_2(graphics, &blit_info);
 
@@ -1653,6 +1681,7 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
             .descriptorCount = DIR_LIGHT_COUNT * CSM_COUNT,
             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
         };
+        assert(b.descriptorCount == 4);
 
         VkDescriptorSetLayoutCreateInfo ci = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -1738,9 +1767,10 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
             // .minFilter = VK_FILTER_NEAREST,
             .magFilter = VK_FILTER_LINEAR,
             .minFilter = VK_FILTER_LINEAR,
-            .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+            .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
             .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
             .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+            .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
 
             // @CSMChanges.
 
@@ -1837,7 +1867,12 @@ void gpu_create_texture_view(struct gpu *gpu, struct gpu_texture *image)
     view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
     view_info.format = VK_FORMAT_R8G8B8A8_SRGB;
     view_info.subresourceRange = (VkImageSubresourceRange){
-        VK_IMAGE_ASPECT_COLOR_BIT, 0, image->image.miplevels, 0, 1};
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .baseMipLevel   = 0,
+        .baseArrayLayer = 0,
+        .levelCount = 1, // image->image.miplevels, <- @TODO Reset this commented out line.
+        .layerCount = 1
+    };
 
     VkResult check = vk_create_image_view(gpu->device, &view_info, GAC, &image->view);
     DEBUG_VK_OBJ_CREATION(vkCreateImageView, check);
