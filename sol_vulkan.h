@@ -23,6 +23,11 @@ struct vulkan_dispatch_table {
     PFN_vkGetSwapchainImagesKHR get_swapchain_images_khr;
     PFN_vkDestroySwapchainKHR destroy_swapchain_khr;
     PFN_vkGetBufferDeviceAddress get_buffer_device_address;
+    PFN_vkCreateDescriptorPool create_descriptor_pool;
+    PFN_vkDestroyDescriptorPool destroy_descriptor_pool;
+    PFN_vkAllocateDescriptorSets allocate_descriptor_sets;
+    PFN_vkUpdateDescriptorSets update_descriptor_sets;
+    PFN_vkResetDescriptorPool reset_descriptor_pool;
     PFN_vkCreateDescriptorSetLayout create_descriptor_set_layout;
     PFN_vkDestroyDescriptorSetLayout destroy_descriptor_set_layout;
     PFN_vkGetDescriptorEXT get_descriptor_ext;
@@ -172,6 +177,49 @@ static inline void vk_destroy_descriptor_set_layout(
     VkAllocationCallbacks *pAllocator)
 {
     return vulkan_dispatch_table.destroy_descriptor_set_layout(device, setLayout, pAllocator);
+}
+
+static inline VkResult vk_create_descriptor_pool(
+    VkDevice                          device,
+    const VkDescriptorPoolCreateInfo* pCreateInfo,
+    const VkAllocationCallbacks*      pAllocator,
+    VkDescriptorPool*                 pDescriptorPool)
+{
+    return vulkan_dispatch_table.create_descriptor_pool(device, pCreateInfo, pAllocator, pDescriptorPool);
+}
+
+static inline void vk_destroy_descriptor_pool(
+    VkDevice                     device,
+    VkDescriptorPool             descriptorPool,
+    const VkAllocationCallbacks* pAllocator)
+{
+    vulkan_dispatch_table.destroy_descriptor_pool(device, descriptorPool, pAllocator);
+}
+
+static inline VkResult vk_allocate_descriptor_sets(
+    VkDevice                           device,
+    const VkDescriptorSetAllocateInfo* pAllocateInfo,
+    VkDescriptorSet*                   pDescriptorSets)
+{
+    return vulkan_dispatch_table.allocate_descriptor_sets(device, pAllocateInfo, pDescriptorSets);
+}
+
+static inline void vk_update_descriptor_sets(
+    VkDevice                    device,
+    uint32_t                    descriptorWriteCount,
+    const VkWriteDescriptorSet* pDescriptorWrites,
+    uint32_t                    descriptorCopyCount,
+    const VkCopyDescriptorSet*  pDescriptorCopies)
+{
+    vulkan_dispatch_table.update_descriptor_sets(device, descriptorWriteCount, pDescriptorWrites, descriptorCopyCount, pDescriptorCopies);
+}
+
+static inline VkResult vk_reset_descriptor_pool(
+    VkDevice                   device,
+    VkDescriptorPool           descriptorPool,
+    VkDescriptorPoolResetFlags flags)
+{
+    return vulkan_dispatch_table.reset_descriptor_pool(device, descriptorPool, flags);
 }
 
 static inline void vk_get_descriptor_ext(

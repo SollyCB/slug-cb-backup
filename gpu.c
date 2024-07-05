@@ -71,6 +71,7 @@ static void gpu_recreate_swapchain(struct gpu *gpu);
 static void gpu_reset_viewport_and_scissor_to_window_extent(struct gpu *gpu);
 static void gpu_store_pipeline_cache(struct gpu *gpu);
 static void gpu_load_pipeline_cache(struct gpu *gpu);
+static void gpu_init_descriptor_pools(struct gpu *gpu);
 
 void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
     gpu->flags = 0;
@@ -98,6 +99,7 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
     gpu_create_memory_resources(gpu);
 
     gpu_load_pipeline_cache(gpu);
+    gpu_init_descriptor_pools(gpu);
 
     gpu->defaults.dynamic_state_count = 0; // @Unused.
     gpu->defaults.dynamic_states[0] = VK_DYNAMIC_STATE_VIEWPORT;
@@ -153,6 +155,9 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
     check = vk_create_image_view(gpu->device, &view_info, GAC, &gpu->defaults.texture.image.view);
     DEBUG_VK_OBJ_CREATION(vkCreateImageView, check);
 
+    #if NO_DESCRIPTOR_BUFFER
+    // @TODO
+    #else
     VkDescriptorImageInfo img_desc_info = {gpu->defaults.sampler,gpu->defaults.texture.image.view,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
 
     VkDescriptorDataEXT desc_data;
@@ -164,6 +169,7 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
 
     log_print_error_if(gpu->descriptors.props.combinedImageSamplerDescriptorSize > GPU_MAX_DESCRIPTOR_SIZE, "%u, %u",gpu->descriptors.props.combinedImageSamplerDescriptorSize, GPU_MAX_DESCRIPTOR_SIZE);
     vk_get_descriptor_ext(gpu->device, &desc_info, gpu->descriptors.props.combinedImageSamplerDescriptorSize, gpu->defaults.texture.descriptor);
+    #endif
 
     #if SHADER_C
     gpu->shader_dir = load_shader_dir(gpu, gpu->alloc_heap);
@@ -1170,6 +1176,72 @@ static void gpu_store_pipeline_cache(struct gpu *gpu)
     file_write_bin(PL_CACHE_FILE_NAME, size, cache_data);
 
     vkDestroyPipelineCache(gpu->device, gpu->pipeline_cache, GPU_ALLOCATION_CALLBACKS);
+}
+
+#define DESCRIPTOR_POOL_MAX_SETS_RESOURCE 32
+#define DESCRIPTOR_POOL_MAX_SETS_SAMPLER  32
+#define DESCRIPTOR_POOL_MAX_DESCRIPTORS_RESOURCE 32
+#define DESCRIPTOR_POOL_MAX_DESCRIPTORS_SAMPLER  32
+
+static void gpu_init_descriptor_pools(struct gpu *gpu)
+{
+    {
+        VkDescriptorPoolSize sz = {
+            .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount = DESCRIPTOR_POOL_MAX_DESCRIPTORS_RESOURCE,
+        };
+        VkDescriptorPoolCreateInfo ci = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            .maxSets = DESCRIPTOR_POOL_MAX_SETS_RESOURCE,
+            .poolSizeCount = 1,
+            .pPoolSizes = &sz,
+        };
+        for(uint i=0; i < THREAD_COUNT + 1; ++i) { // +1 for main thread
+            VkResult r = vk_create_descriptor_pool(gpu->device, &ci, GAC, &gpu->resource_dp[i]);
+            DEBUG_VK_OBJ_CREATION(vkCreateDescriptorPool, r);
+        }
+    } {
+        VkDescriptorPoolSize sz = {
+            .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount = DESCRIPTOR_POOL_MAX_DESCRIPTORS_SAMPLER,
+        };
+        VkDescriptorPoolCreateInfo ci = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            .maxSets = DESCRIPTOR_POOL_MAX_SETS_SAMPLER,
+            .poolSizeCount = 1,
+            .pPoolSizes = &sz,
+        };
+        for(uint i=0; i < THREAD_COUNT + 1; ++i) { // +1 for main thread
+            VkResult r = vk_create_descriptor_pool(gpu->device, &ci, GAC, &gpu->sampler_dp[i]);
+            DEBUG_VK_OBJ_CREATION(vkCreateDescriptorPool, r);
+        }
+    }
+}
+
+bool resource_dp_allocate(struct gpu *gpu, uint thread_i, uint count,
+        VkDescriptorSetLayout *layouts, VkDescriptorSet *sets)
+{
+    VkDescriptorSetAllocateInfo ai = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = gpu->resource_dp[thread_i+1], // +1 main thread is zero
+        .descriptorSetCount = count,
+        .pSetLayouts = layouts,
+    };
+    VkResult r = vk_allocate_descriptor_sets(gpu->device, &ai, sets);
+    DEBUG_VK_OBJ_CREATION(vkAllocateDescriptorSet, r);
+}
+
+bool sampler_dp_allocate(struct gpu *gpu, uint thread_i, uint count,
+        VkDescriptorSetLayout *layouts, VkDescriptorSet *sets)
+{
+    VkDescriptorSetAllocateInfo ai = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = gpu->sampler_dp[thread_i+1], // +1 main thread is zero
+        .descriptorSetCount = count,
+        .pSetLayouts = layouts,
+    };
+    VkResult r = vk_allocate_descriptor_sets(gpu->device, &ai, sets);
+    DEBUG_VK_OBJ_CREATION(vkAllocateDescriptorSet, r);
 }
 
 void gpu_upload_bind_buffer(

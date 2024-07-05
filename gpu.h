@@ -178,6 +178,11 @@ struct gpu {
 
     uint sampler_count;
 
+    #if NO_DESCRIPTOR_BUFFER
+    VkDescriptorPool resource_dp[THREAD_COUNT + 1]; // +1 for main thread
+    VkDescriptorPool sampler_dp[THREAD_COUNT + 1];
+    #endif
+
 #if DEBUG
     VkDebugUtilsMessengerEXT dbg;
 #endif
@@ -204,6 +209,18 @@ void gpu_bind_image(struct gpu *gpu, VkImage image, size_t ofs);
 void gpu_create_texture_view(struct gpu *gpu, struct gpu_texture *image);
 VkSampler gpu_create_gltf_sampler(struct gpu *gpu, gltf_sampler *info);
 void gpu_destroy_sampler(struct gpu *gpu, VkSampler sampler);
+
+bool resource_dp_allocate(struct gpu *gpu, uint thread_i, uint count, VkDescriptorSetLayout *layouts, VkDescriptorSet *sets);
+bool sampler_dp_allocate(struct gpu *gpu, uint thread_i, uint count, VkDescriptorSetLayout *layouts, VkDescriptorSet *sets);
+
+void resource_dp_reset(struct gpu *gpu, uint thread_i)
+{
+    vk_reset_descriptor_pool(gpu->device, gpu->resource_dp[thread_i + 1], 0x0); // +1 main thread 0
+}
+void sampler_dp_reset(struct gpu *gpu, uint thread_i)
+{
+    vk_reset_descriptor_pool(gpu->device, gpu->sampler_dp[thread_i + 1], 0x0); // +1 main thread 0
+}
 
 #define GPU_BUF_ALLOC_FAIL Max_u64
 size_t gpu_buffer_allocate(struct gpu *gpu, struct gpu_buffer *buf, size_t size);

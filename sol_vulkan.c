@@ -69,6 +69,36 @@ static inline PFN_vkDestroyDescriptorSetLayout sol_vkDestroyDescriptorSetLayout(
     return fn;
 }
 
+static inline PFN_vkCreateDescriptorPool sol_vkCreateDescriptorPool(VkDevice device) {
+    PFN_vkCreateDescriptorPool fn = (PFN_vkCreateDescriptorPool)vkGetDeviceProcAddr(device, "vkCreateDescriptorPool");
+    log_print_error_if(!fn, "PFN_vkCreateDescriptorPool not present");
+    return fn;
+}
+
+static inline PFN_vkDestroyDescriptorPool sol_vkDestroyDescriptorPool(VkDevice device) {
+    PFN_vkDestroyDescriptorPool fn = (PFN_vkDestroyDescriptorPool)vkGetDeviceProcAddr(device, "vkDestroyDescriptorPool");
+    log_print_error_if(!fn, "PFN_vkDestroyDescriptorPool not present");
+    return fn;
+}
+
+static inline PFN_vkAllocateDescriptorSets sol_vkAllocateDescriptorSets(VkDevice device) {
+    PFN_vkAllocateDescriptorSets fn = (PFN_vkAllocateDescriptorSets)vkGetDeviceProcAddr(device, "vkAllocateDescriptorSets");
+    log_print_error_if(!fn, "PFN_vkAllocateDescriptorSets not present");
+    return fn;
+}
+
+static inline PFN_vkUpdateDescriptorSets sol_vkUpdateDescriptorSets(VkDevice device) {
+    PFN_vkUpdateDescriptorSets fn = (PFN_vkUpdateDescriptorSets)vkGetDeviceProcAddr(device, "vkUpdateDescriptorSets");
+    log_print_error_if(!fn, "PFN_vkUpdateDescriptorSets not present");
+    return fn;
+}
+
+static inline PFN_vkResetDescriptorPool sol_vkResetDescriptorPool(VkDevice device) {
+    PFN_vkResetDescriptorPool fn = (PFN_vkResetDescriptorPool)vkGetDeviceProcAddr(device, "vkResetDescriptorPool");
+    log_print_error_if(!fn, "PFN_vkResetDescriptorPool not present");
+    return fn;
+}
+
 static inline PFN_vkGetDescriptorEXT sol_vkGetDescriptorEXT(VkDevice device) {
     PFN_vkGetDescriptorEXT fn = (PFN_vkGetDescriptorEXT)vkGetDeviceProcAddr(device, "vkGetDescriptorEXT");
     log_print_error_if(!fn, "PFN_vkGetDescriptorEXT not present");
@@ -412,6 +442,11 @@ void init_vk_dispatch_table(int stage, VkInstance instance, VkDevice device)
             vulkan_dispatch_table.get_buffer_device_address                    = sol_vkGetBufferDeviceAddress(device);
             vulkan_dispatch_table.create_descriptor_set_layout                 = sol_vkCreateDescriptorSetLayout(device);
             vulkan_dispatch_table.destroy_descriptor_set_layout                = sol_vkDestroyDescriptorSetLayout(device);
+            vulkan_dispatch_table.create_descriptor_pool                       = sol_vkCreateDescriptorPool(device);
+            vulkan_dispatch_table.destroy_descriptor_pool                      = sol_vkDestroyDescriptorPool(device);
+            vulkan_dispatch_table.allocate_descriptor_sets                     = sol_vkAllocateDescriptorSets(device);
+            vulkan_dispatch_table.update_descriptor_sets                       = sol_vkUpdateDescriptorSets(device);
+            vulkan_dispatch_table.reset_descriptor_pool                        = sol_vkResetDescriptorPool(device);
             vulkan_dispatch_table.get_descriptor_ext                           = sol_vkGetDescriptorEXT(device);
             vulkan_dispatch_table.get_descriptor_set_layout_binding_offset_ext = sol_vkGetDescriptorSetLayoutBindingOffsetEXT(device);
             vulkan_dispatch_table.get_descriptor_set_layout_size_ext           = sol_vkGetDescriptorSetLayoutSizeEXT(device);
