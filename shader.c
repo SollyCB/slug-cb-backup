@@ -18,6 +18,8 @@
 
 const char *SHADER_ENTRY_POINT = "main";
 
+#if SHADER_C
+
 // This is a solution to a problem e.g. in gpu_pl_shader_stage(), where modules
 // in shader sets want to be accessed like an array, but keeping module names
 // also has its benefits. I really do not enjoy just casting structs to arrays
@@ -98,12 +100,12 @@ struct attr_map {
 static inline uint attr_map_i(struct attr_map *map, struct attr_map match)
 {
     assert((sizeof(*map) == 2) && ((MAX_ATTRS * 2) % 16 == 0));
-    
+
     __m128i a;
     __m128i b = _mm_set1_epi16(*(int16*)&match);
-    
+
     uint ret = -1;
-    
+
     uint16 mask;
     uint cnt = MAX_ATTRS * sizeof(*map);
     uint i;
@@ -129,10 +131,10 @@ static uint get_attr_info(gltf_mesh_primitive *prim,
                           struct attr_map *am, struct morph_map *mm)
 {
     assert(prim->attribute_count <= MAX_ATTRS);
-    
+
     memset(mm,0,sizeof(*mm));
     memset(am,0,sizeof(*am));
-    
+
     uint uniq = 0;
     uint i,j;
     for(i=0;i<prim->attribute_count;++i) {
@@ -141,12 +143,12 @@ static uint get_attr_info(gltf_mesh_primitive *prim,
         am->attrs[prim->attributes[i].type].i += i & zero_if(uniq & (1<<prim->attributes[i].type));
         uniq |= 1 << prim->attributes[i].type;
     }
-    
+
     for(i=0;i<prim->target_count; ++i)
         for(j=0;j<prim->morph_targets[i].attribute_count;++j) {
             mm->m[ mm->i[prim->morph_targets[i].attributes[j].type] + prim->morph_targets[i].attributes[j].n ] |= 1<<i;
     }
-    
+
     return popcnt(uniq);
 }
 
@@ -299,14 +301,14 @@ static inline void complete_layout_short(
     sb_add(sb, cstr_as_array_len(LAYOUT_0), LAYOUT_0);
     sb_add(sb, len_location, location);
     sb_add(sb, len_name, name);
-    
+
     char morph[] = "_morph_00";
     morph[7] = (mti / 10) + '0';
     morph[8] = (mti % 10) + '0';
     assert((mti < 100 || mti == -1) && "2 digits");
-    
+
     sb_add(sb, 9 & max_if(mti != -1), morph);
-    
+
     sb_addc(sb, ';');
     sb_addnl(sb);
 }
@@ -324,7 +326,7 @@ struct generate_layout_info {
 
 static void generate_position_layout(struct generate_layout_info *info) {
     const char in_name[] = ") in vec3 in_position";
-    
+
     complete_layout_short(info->sb_vert, info->len_location, info->location,
                           cstr_as_array_len(in_name), in_name, info->mti);
 }
@@ -332,7 +334,7 @@ static void generate_position_layout(struct generate_layout_info *info) {
 static void generate_normal_layout(struct generate_layout_info *info) {
     const char in_name[] = ") in vec3 in_normal";
     const char out_name[] = ") out vec3 out_normal";
-    
+
     complete_layout_short(info->sb_vert, info->len_location, info->location,
                           cstr_as_array_len(in_name), in_name, info->mti);
     complete_layout_short(info->sb_vert, info->len_location, info->location,
@@ -343,7 +345,7 @@ static void generate_normal_layout(struct generate_layout_info *info) {
 
 static void generate_tangent_layout(struct generate_layout_info *info) {
     const char in_name[] = ") in vec3 in_tangent";
-    
+
     complete_layout_short(info->sb_vert, info->len_location, info->location,
                           cstr_as_array_len(in_name), in_name, info->mti);
 }
@@ -368,16 +370,16 @@ static void complete_layout_long(struct complete_layout_long_info *info) {
     sb_add(info->sb, info->in_out_len, info->in_out);
     sb_add(info->sb, info->len_type, info->type);
     sb_add(info->sb, info->len_name, info->name);
-    
+
     sb_addc(info->sb, info->n);
-    
+
     char morph[] = "_morph_00";
     morph[7] = (info->mti / 10) + '0';
     morph[8] = (info->mti % 10) + '0';
     assert((info->mti < 100 || info->mti == -1) && "2 digits");
-    
+
     sb_add(info->sb, 9 & max_if(info->mti != -1), morph);
-    
+
     sb_addc(info->sb, ';');
     sb_addnl(info->sb);
 }
@@ -405,7 +407,7 @@ static void generate_texcoord_layout(struct generate_layout_info *info)
     const char types_1[] = "uint";
     const char *type;
     uint len = 4;
-    
+
     switch(info->model->accessors[info->attr->accessor].vkformat) {
         case VK_FORMAT_R32G32_SFLOAT:
         type = types_0;
@@ -430,10 +432,10 @@ static void generate_texcoord_layout(struct generate_layout_info *info)
         log_print_error("invalid vkformat for texcoord");
         return;
     }
-    
+
     const char in_name[] = " in_texcoord_";
     const char out_name[] = " out_texcoord_";
-    
+
     struct complete_layout_long_info cli;
     cli.len_location = info->len_location;
     cli.location = info->location;
@@ -441,15 +443,15 @@ static void generate_texcoord_layout(struct generate_layout_info *info)
     cli.type = type;
     cli.n = (char)(info->attr->n + '0');
     cli.mti = info->mti;
-    
+
     cli.sb = info->sb_vert;
     cli.name = in_name,
     cli.len_name = cstr_as_array_len(in_name);
     complete_layout_in_long(&cli);
-    
+
     cli.sb = info->sb_frag;
     complete_layout_in_long(&cli);
-    
+
     cli.sb = info->sb_vert;
     cli.name = out_name;
     cli.len_name = cstr_as_array_len(out_name);
@@ -461,10 +463,10 @@ static void generate_color_layout(struct generate_layout_info *info) {
     const char types_1[] = "vec4";
     const char types_2[] = "uvec2";
     const char types_3[] = "uint";
-    
+
     const char *type;
     uint len;
-    
+
     switch(info->model->accessors[info->attr->accessor].vkformat) {
         case VK_FORMAT_R32G32B32_SFLOAT:
         type = types_0;
@@ -518,10 +520,10 @@ static void generate_color_layout(struct generate_layout_info *info) {
         log_print_error("invalid vkformat for color");
         return;
     }
-    
+
     const char in_name[] = " in_color_";
     const char out_name[] = " out_color_";
-    
+
     struct complete_layout_long_info cli;
     cli.len_location = info->len_location;
     cli.location = info->location;
@@ -529,15 +531,15 @@ static void generate_color_layout(struct generate_layout_info *info) {
     cli.type = type;
     cli.n = (char)(info->attr->n + '0');
     cli.mti = info->mti;
-    
+
     cli.sb = info->sb_vert;
     cli.name = in_name,
     cli.len_name = cstr_as_array_len(in_name);
     complete_layout_in_long(&cli);
-    
+
     cli.sb = info->sb_frag;
     complete_layout_in_long(&cli);
-    
+
     cli.sb = info->sb_vert;
     cli.name = out_name;
     cli.len_name = cstr_as_array_len(out_name);
@@ -549,7 +551,7 @@ static void generate_joints_layout(struct generate_layout_info *info) {
     const char types_1[] = "uint";
     const char *type;
     uint len;
-    
+
     switch(info->model->accessors[info->attr->accessor].vkformat) {
         case VK_FORMAT_R16G16B16A16_UINT:
         type = types_0;
@@ -565,9 +567,9 @@ static void generate_joints_layout(struct generate_layout_info *info) {
         log_print_error("invalid vkformat for joints");
         return;
     }
-    
+
     const char name[] = " in_joints_";
-    
+
     struct complete_layout_long_info cli;
     cli.len_location = info->len_location;
     cli.location = info->location;
@@ -578,7 +580,7 @@ static void generate_joints_layout(struct generate_layout_info *info) {
     cli.len_name = cstr_as_array_len(name);
     cli.n = (char)(info->attr->n + '0');
     cli.mti = info->mti;
-    
+
     complete_layout_in_long(&cli);
 }
 
@@ -589,7 +591,7 @@ static void generate_weights_layout(struct generate_layout_info *info)
     const char types_2[] = {"uint"};
     const char *type;
     uint len;
-    
+
     switch(info->model->accessors[info->attr->accessor].vkformat) {
         case VK_FORMAT_R32G32B32A32_SFLOAT:
         type = types_0;
@@ -619,9 +621,9 @@ static void generate_weights_layout(struct generate_layout_info *info)
         log_print_error("invalid vkformat for joints");
         return;
     }
-    
+
     const char name[] = " in_weights_";
-    
+
     struct complete_layout_long_info cli;
     cli.len_location = info->len_location;
     cli.location = info->location;
@@ -632,7 +634,7 @@ static void generate_weights_layout(struct generate_layout_info *info)
     cli.len_name = cstr_as_array_len(name);
     cli.n = (char)(info->attr->n + '0');
     cli.mti = info->mti;
-    
+
     complete_layout_in_long(&cli);
 }
 
@@ -684,25 +686,25 @@ static void gen_vsinfo(string_builder *sb, uint dl_cnt, uint pl_cnt)
     const char point_light_count[] = "    uint point_light_count;\n";
     const char point_lights[] = "    In_Point_Light point_lights[";
     const char complete_decl[] = "} vs_info;\n";
-    
+
     char num_buf[8];
     uint num_len;
-    
+
     sb_add(sb, cstr_as_array_len(VS_INFO_DECL), VS_INFO_DECL);
 
     sb_add_if(sb,cstr_as_array_len(dir_light_count),dir_light_count,dl_cnt);
     sb_add_if(sb,cstr_as_array_len(point_light_count),point_light_count,pl_cnt);
-    
+
     num_len = uint_to_ascii(dl_cnt, num_buf);
     sb_add_if(sb,cstr_as_array_len(dir_lights),dir_lights,dl_cnt);
     sb_add_if(sb,num_len,num_buf,dl_cnt);
     sb_add_if(sb,cstr_as_array_len(CLOSE_ARRAY), CLOSE_ARRAY,dl_cnt);
-    
+
     num_len = uint_to_ascii(pl_cnt, num_buf);
     sb_add_if(sb,cstr_as_array_len(point_lights),point_lights,pl_cnt);
     sb_add_if(sb,num_len,num_buf,pl_cnt);
     sb_add_if(sb,cstr_as_array_len(CLOSE_ARRAY), CLOSE_ARRAY,pl_cnt);
-    
+
     sb_add(sb, cstr_as_array_len(complete_decl), complete_decl);
     sb_addnl(sb);
 }
@@ -717,38 +719,38 @@ static void gen_transforms_ubo(string_builder *sb, gltf *model, uint mesh)
     const char j_trs[] = "    mat4 joints_trs[";
     const char j_tbn[] = "    mat4 joints_tbn[";
     const char w[] = "    float morph_weights[";
-    
+
     uint nl;
     char nb[8];
-    
+
     uint jc = model->meshes[mesh].joint_count;
     uint wc = model->meshes[mesh].weight_count;
-    
+
     sb_add(sb,cstr_as_array_len(TRANSFORMS_START),TRANSFORMS_START);
-    
+
     nl = uint_to_ascii(jc,nb);
-    
+
     sb_add_if(sb,cstr_as_array_len(j_trs),j_trs,jc);
     sb_add_if(sb,nl,nb,jc);
     sb_add_if(sb,3,"];\n",jc);
-    
+
     sb_add_if(sb,cstr_as_array_len(j_tbn),j_tbn,jc);
     sb_add_if(sb,nl,nb,jc);
     sb_add_if(sb,3,"];\n",jc);
-    
+
     sb_add_if(sb,cstr_as_array_len(n_trs),n_trs,!jc);
     sb_add_if(sb,cstr_as_array_len(n_tbn),n_tbn,!jc);
-    
+
     nl = uint_to_ascii(wc,nb);
-    
+
     sb_add_if(sb,cstr_as_array_len(w),w,wc);
     sb_add_if(sb,nl,nb,wc);
     sb_add_if(sb,3,"];\n",wc);
-    
+
     sb_add(sb,cstr_as_array_len(TRANSFORMS_END),TRANSFORMS_END);
-    
+
     nl = uint_to_ascii(model->meshes[mesh].max_instance_count,nb);
-    
+
     sb_add(sb,nl,nb);
     sb_add(sb,4,"];\n\n");
 }
@@ -1006,78 +1008,78 @@ static void color_frag(
                        struct shader_config *config)
 {
     uint bi = 0;
-    
+
     sb_add_if(sb_frag, cstr_as_array_len(BRDF_MATERIAL), BRDF_MATERIAL,
               model->meshes[mesh_index].primitives[primitive_index].material != Max_u32);
-    
+
     sb_addnl_if(sb_frag,
                 model->meshes[mesh_index].primitives[primitive_index].material != Max_u32);
-    
+
     sb_insertnum_if(sb_frag,
                     cstr_as_array_len(DIRECTIONAL_SHADOW_MAPS_START), DIRECTIONAL_SHADOW_MAPS_START,
                     cstr_as_array_len(DIRECTIONAL_SHADOW_MAPS_END), DIRECTIONAL_SHADOW_MAPS_END,
                     bi,
                     config->dir_light_count);
     bi += config->dir_light_count != 0;
-    
+
     sb_addarr_if(sb_frag,
                  0, "",
                  0, "",
                  config->dir_light_count,
                  config->dir_light_count);
     sb_endl_if(sb_frag, config->dir_light_count);
-    
+
     sb_insertnum_if(sb_frag,
                     cstr_as_array_len(POINT_SHADOW_MAPS_START), POINT_SHADOW_MAPS_START,
                     cstr_as_array_len(POINT_SHADOW_MAPS_END), POINT_SHADOW_MAPS_END,
                     bi,
                     config->point_light_count);
     bi += config->point_light_count != 0;
-    
+
     sb_addarr_if(sb_frag,
                  0, "",
                  0, "",
                  config->point_light_count,
                  config->point_light_count);
     sb_endl_if(sb_frag, config->point_light_count);
-    
+
     sb_addnl(sb_frag);
-    
+
     // shadow fns
     sb_add_if(sb_frag, cstr_as_array_len(DIRECTIONAL_SHADOW_FUNCTION),
               DIRECTIONAL_SHADOW_FUNCTION, config->dir_light_count);
     sb_add_if(sb_frag, cstr_as_array_len(DIRECTIONAL_SHADOW_FUNCTION_EMPTY),
               DIRECTIONAL_SHADOW_FUNCTION_EMPTY, !(config->dir_light_count));
-    
+
     sb_add_if(sb_frag, cstr_as_array_len(POINT_SHADOW_FUNCTION),
               POINT_SHADOW_FUNCTION,  config->point_light_count);
     sb_add_if(sb_frag, cstr_as_array_len(POINT_SHADOW_FUNCTION_EMPTY),
               POINT_SHADOW_FUNCTION_EMPTY,  !(config->point_light_count));
-    
+
     // using if as indexing gltf.materials is required
     if (model->meshes[mesh_index].primitives[primitive_index].material == Max_u32) {
         log_print_error("@UntestedCodePath");
-        
+
         sb_add(sb_frag, cstr_as_array_len(FRAGMENT_FN_MAIN), FRAGMENT_FN_MAIN);
-        
+
         sb_add_if(sb_frag, cstr_as_array_len(FRAGMENT_MAIN_NO_LIGHTS_NO_MATERIAL),
                   FRAGMENT_MAIN_NO_LIGHTS_NO_MATERIAL,
                   !(config->dir_light_count || config->point_light_count));
-        
+
         sb_add_if(sb_frag, cstr_as_array_len(DIRECTIONAL_LIGHTING_NO_MATERIAL),
                   DIRECTIONAL_LIGHTING_NO_MATERIAL, config->dir_light_count);
         sb_add_if(sb_frag, cstr_as_array_len(POINT_LIGHTING_NO_MATERIAL),
                   POINT_LIGHTING_NO_MATERIAL, max_if(config->point_light_count));
-        
+
         sb_add(sb_frag, cstr_as_array_len(CLOSE_FN), CLOSE_FN);
-        
+
     } else {
         // material uniforms
         sb_add(sb_frag, cstr_as_array_len(MATERIAL_UBO), MATERIAL_UBO);
-        
+
         gltf_material *mat = &model->materials[model->meshes[mesh_index]
                                                .primitives[primitive_index].material];
-        
+
         // texture array
         sb_add_if(sb_frag,cstr_as_array_len(TEX_ARRAY),TEX_ARRAY,
                   mat->flags & GLTF_MATERIAL_TEXTURE_BITS);
@@ -1085,16 +1087,16 @@ static void color_frag(
         sb_add_digit_if(sb_frag,popcnt(mat->flags & GLTF_MATERIAL_TEXTURE_BITS),
                         mat->flags & GLTF_MATERIAL_TEXTURE_BITS);
         sb_close_arr_and_endl_if(sb_frag,mat->flags & GLTF_MATERIAL_TEXTURE_BITS);
-        
+
         sb_addnl_if(sb_frag,mat->flags & GLTF_MATERIAL_TEXTURE_BITS);
         sb_addnl_if(sb_frag,mat->flags & GLTF_MATERIAL_TEXTURE_BITS);
-        
+
         // begin main
         sb_add(sb_frag, cstr_as_array_len(FRAGMENT_FN_MAIN), FRAGMENT_FN_MAIN);
-        
+
         bi = 0;
         uint tmp = sb_frag->used;
-        
+
         assert(mat->base_color.texcoord < 10 || mat->base_color.texcoord == Max_u32);
         sb_add_if(sb_frag,cstr_as_array_len(BASE_COLOR),BASE_COLOR,
                   mat->flags & GLTF_MATERIAL_BASE_COLOR_TEXTURE_BIT);
@@ -1105,9 +1107,9 @@ static void color_frag(
         sb_add_if(sb_frag, cstr_as_array_len(NO_BASE_COLOR), NO_BASE_COLOR,
                   !(mat->flags & GLTF_MATERIAL_BASE_COLOR_TEXTURE_BIT));
         bi += flag_check(mat->flags, GLTF_MATERIAL_BASE_COLOR_TEXTURE_BIT);
-        
+
         tmp = sb_frag->used;
-        
+
         assert(mat->metallic_roughness.texcoord < 10 || mat->metallic_roughness.texcoord == Max_u32);
         sb_add_if(sb_frag,cstr_as_array_len(METALLIC_ROUGHNESS),METALLIC_ROUGHNESS,
                   mat->flags & GLTF_MATERIAL_METALLIC_ROUGHNESS_TEXTURE_BIT);
@@ -1118,9 +1120,9 @@ static void color_frag(
         sb_add_if(sb_frag, cstr_as_array_len(NO_METALLIC_ROUGHNESS), NO_METALLIC_ROUGHNESS,
                   !(mat->flags & GLTF_MATERIAL_METALLIC_ROUGHNESS_TEXTURE_BIT));
         bi += flag_check(mat->flags, GLTF_MATERIAL_METALLIC_ROUGHNESS_TEXTURE_BIT);
-        
+
         tmp = sb_frag->used;
-        
+
         assert(mat->normal.texcoord < 10 || mat->normal.texcoord == Max_u32);
         sb_add_if(sb_frag,cstr_as_array_len(NORMAL),NORMAL,
                   mat->flags & GLTF_MATERIAL_NORMAL_TEXTURE_BIT);
@@ -1131,9 +1133,9 @@ static void color_frag(
         sb_add_if(sb_frag, cstr_as_array_len(NO_NORMAL), NO_NORMAL,
                   !(mat->flags & GLTF_MATERIAL_NORMAL_TEXTURE_BIT));
         bi += flag_check(mat->flags, GLTF_MATERIAL_NORMAL_TEXTURE_BIT);
-        
+
         tmp = sb_frag->used;
-        
+
         assert(mat->occlusion.texcoord < 10 || mat->occlusion.texcoord == Max_u32);
         sb_add_if(sb_frag,cstr_as_array_len(OCCLUSION),OCCLUSION,
                   mat->flags & GLTF_MATERIAL_OCCLUSION_TEXTURE_BIT);
@@ -1144,9 +1146,9 @@ static void color_frag(
         sb_add_if(sb_frag, cstr_as_array_len(NO_OCCLUSION), NO_OCCLUSION,
                   !(mat->flags & GLTF_MATERIAL_OCCLUSION_TEXTURE_BIT));
         bi += flag_check(mat->flags, GLTF_MATERIAL_OCCLUSION_TEXTURE_BIT);
-        
+
         tmp = sb_frag->used;
-        
+
         assert(mat->emissive.texcoord < 10 || mat->emissive.texcoord == Max_u32);
         sb_add_if(sb_frag,cstr_as_array_len(EMISSIVE),EMISSIVE,
                   mat->flags & GLTF_MATERIAL_EMISSIVE_TEXTURE_BIT);
@@ -1157,34 +1159,34 @@ static void color_frag(
         sb_add_if(sb_frag, cstr_as_array_len(NO_EMISSIVE), NO_EMISSIVE,
                   !(mat->flags & GLTF_MATERIAL_EMISSIVE_TEXTURE_BIT));
         bi += flag_check(mat->flags, GLTF_MATERIAL_EMISSIVE_TEXTURE_BIT);
-        
+
         sb_addnl(sb_frag);
         sb_add(sb_frag, 26, "    vec3 light = vec3(0);\n");
         sb_addnl(sb_frag);
-        
+
         // lighting calculations
         sb_add_if(sb_frag, cstr_as_array_len(FRAGMENT_MAIN_NO_LIGHTS_ALPHA_CUTOFF),
                   FRAGMENT_MAIN_NO_LIGHTS_ALPHA_CUTOFF,
                   !(config->dir_light_count || config->point_light_count) &&
                   (mat->flags & GLTF_MATERIAL_ALPHA_MODE_MASK_BIT));
-        
+
         sb_add_if(sb_frag, cstr_as_array_len(FRAGMENT_MAIN_NO_LIGHTS), FRAGMENT_MAIN_NO_LIGHTS,
                   !(config->dir_light_count || config->point_light_count));
-        
+
         sb_add_if(sb_frag, cstr_as_array_len(DIRECTIONAL_LIGHTING), DIRECTIONAL_LIGHTING,
                   config->dir_light_count);
-        
+
         sb_add_if(sb_frag, cstr_as_array_len(POINT_LIGHTING), POINT_LIGHTING,
                   config->point_light_count);
-        
+
         // output
         sb_add_if(sb_frag, cstr_as_array_len(FRAG_COLOR_ALPHA_CUTOFF), FRAG_COLOR_ALPHA_CUTOFF,
                   (config->dir_light_count || config->point_light_count) &&
                   (mat->flags & GLTF_MATERIAL_ALPHA_MODE_MASK_BIT));
-        
+
         sb_add_if(sb_frag, cstr_as_array_len(FRAG_COLOR), FRAG_COLOR,
                   config->dir_light_count || config->point_light_count);
-        
+
         // end main
         sb_add(sb_frag, cstr_as_array_len(CLOSE_FN), CLOSE_FN);
     }
@@ -1194,30 +1196,30 @@ static void gen_fsinfo(string_builder *sb, uint loc, uint dl_cnt, uint pl_cnt, b
 {
     char num_buf[8];
     uint num_len = uint_to_ascii(loc, num_buf);
-    
+
     sb_add_if(sb, cstr_as_array_len(DIRECTIONAL_LIGHT_STRUCT),
               DIRECTIONAL_LIGHT_STRUCT, dl_cnt);
     sb_add_if(sb, cstr_as_array_len(POINT_LIGHT_STRUCT), POINT_LIGHT_STRUCT, pl_cnt);
-    
+
     sb_addnl_if(sb, dl_cnt || pl_cnt);
-    
+
     sb_add(sb, cstr_as_array_len(FRAGMENT_INFO_START), FRAGMENT_INFO_START);
     sb_add(sb, num_len, num_buf);
-    
+
     sb_add(sb, cstr_as_array_len(FRAGMENT_INFO_IN_OUT), FRAGMENT_INFO_IN_OUT);
     sb_add_if(sb, 3, "out", vertex);
     sb_add_if(sb, 2, "in", !vertex);
     sb_add(sb, cstr_as_array_len(FRAGMENT_INFO_DECL), FRAGMENT_INFO_DECL);
-    
+
     sb_insertnum_if(sb, cstr_as_array_len(FS_INFO_DIRECTION_LIGHT_ARRAY_START),
                     FS_INFO_DIRECTION_LIGHT_ARRAY_START, cstr_as_array_len(CLOSE_ARRAY),
                     CLOSE_ARRAY, dl_cnt, dl_cnt);
-    
+
     sb_insertnum_if(sb,
                     cstr_as_array_len(FS_INFO_POINT_LIGHT_ARRAY_START),
                     FS_INFO_POINT_LIGHT_ARRAY_START, cstr_as_array_len(CLOSE_ARRAY),
                     CLOSE_ARRAY, pl_cnt, pl_cnt);
-    
+
     sb_add(sb,cstr_as_array_len(FRAGMENT_INFO_END), FRAGMENT_INFO_END);
     sb_addnl(sb);
 }
@@ -1241,7 +1243,7 @@ static inline void weight_calc_short(string_builder *sb, uint mask,
     for(i=0;i<pc;++i) {
         tz = ctz32(mask);
         mask &= ~(1<<tz);
-        
+
         nl = uint_to_ascii(tz,nb);
         sb_add(sb,cstr_as_array_len(w),w);
         sb_add(sb,nl,nb);
@@ -1283,7 +1285,7 @@ static void gen_pos(string_builder *sb, struct gen_attr_info *info)
 {
     const char pos[] = "    vec3 position = in_position";
     const char m_pos[] = "] * in_position_morph_";
-    
+
     sb_add(sb,cstr_as_array_len(pos),pos);
     weight_calc_short(sb,info->morph_mask,cstr_as_array_len(m_pos),m_pos);
     sb_add_if(sb,cstr_as_array_len(POS_CALC), POS_CALC, !(info->flags & SKIN_BIT));
@@ -1294,7 +1296,7 @@ static void gen_norm(string_builder *sb, struct gen_attr_info *info)
 {
     const char norm[] = "    vec3 normal = in_normal";
     const char m_norm[] = "] * in_normal_morph_";
-    
+
     sb_add(sb,cstr_as_array_len(norm), norm);
     weight_calc_short(sb,info->morph_mask,cstr_as_array_len(m_norm),m_norm);
     sb_add_if(sb,cstr_as_array_len(NORM_CALC), NORM_CALC, !(info->flags & SKIN_BIT));
@@ -1305,7 +1307,7 @@ static void gen_tang(string_builder *sb, struct gen_attr_info *info)
 {
     const char tang[] = "    vec3 tangent = in_tangent";
     const char m_tang[] = "] * in_tangent_morph_";
-    
+
     sb_add(sb,cstr_as_array_len(tang), tang);
     weight_calc_short(sb,info->morph_mask,cstr_as_array_len(m_tang),m_tang);
     sb_add_if(sb,cstr_as_array_len(TANG_CALC), TANG_CALC, !(info->flags & SKIN_BIT));
@@ -1338,38 +1340,38 @@ static void gen_texc(string_builder *sb, struct gen_morphed_attr_info *info)
     char m_tex[] = "    vec2 m_texc_x = ";
     m_tex[16] = info->pa->n + '0';
     sb_add_if(sb,cstr_as_array_len(m_tex),m_tex,info->mm);
-    
+
     char m_tcf[] = "] * in_texcoord_x_morph_";
     char m_tcub[] = "] * u8_to_vec2(in_texcoord_x_morph_";
     char m_tcus[] = "] * u16_to_vec2(in_texcoord_x_morph_";
     char m_tcsb[] = "] * s8_to_vec2(in_texcoord_x_morph_";
     char m_tcss[] = "] * s16_to_vec2(in_texcoord_x_morph_";
-    
+
     m_tcf[16] = info->pa->n + '0';
     m_tcub[27] = info->pa->n + '0';
     m_tcus[28] = info->pa->n + '0';
     m_tcsb[27] = info->pa->n + '0';
     m_tcss[28] = info->pa->n + '0';
-    
+
     char mw[] = "\n        transforms_ubo[gl_InstanceIndex].weights[";
-    
+
     char nb[8];
     uint nl;
-    
+
     uint m = info->mm;
     uint pc = popcnt(m);
     uint i,tz,tmp;
     for(i=0;i<pc;++i) {
         tz = ctz(m);
         m &= (~1<<tz);
-        
+
         sb_add(sb,cstr_as_array_len(mw),mw);
         nl = uint_to_ascii(tz,nb);
         sb_add(sb,nl,nb);
-        
+
         tmp = find_morphed_attr(&info->mt[tz],info->pa->type,info->pa->n);
         tmp = info->ac[info->mt[tz].attributes[tmp].accessor].vkformat;
-        
+
         sb_add_if(sb,cstr_as_array_len(m_tcf),m_tcf,
                   tmp == VK_FORMAT_R32G32_SFLOAT);
         sb_add_if(sb,cstr_as_array_len(m_tcub),m_tcub,
@@ -1380,23 +1382,23 @@ static void gen_texc(string_builder *sb, struct gen_morphed_attr_info *info)
                   tmp == VK_FORMAT_R16G16_UNORM);
         sb_add_if(sb,cstr_as_array_len(m_tcss),m_tcss,
                   tmp == VK_FORMAT_R16G16_SNORM);
-        
+
         nb[nl] = ')';
         sb_add(sb,nl+1,nb);
-        
+
         sb_add_if(sb,2," +",i<pc-1);
     }
     sb_add_if(sb,3,";\n",pc);
-    
+
     char tc[] = "    out_texcoord_x = in_texcoord_x";
     tc[17] = info->pa->n + '0';
     tc[33] = info->pa->n + '0';
-    
+
     sb_add(sb,cstr_as_array_len(tc),tc);
-    
+
     char m_in[] = " + m_texc_x;\n";
     m_in[10] = info->pa->n + '0';
-    
+
     sb_add_if(sb,cstr_as_array_len(m_in),m_in,pc);
     sb_add_if(sb,2,";\n",!pc);
 }
@@ -1409,30 +1411,30 @@ static void gen_jw(string_builder *sb,
     char wf[] = "    vec4 weights_x = in_weights_x;\n";
     char wb[] = "    vec4 weights_x = u8_to_vec4(in_weights_x);\n";
     char ws[] = "    vec4 weights_x = u16_to_vec4(in_weights_x);\n";
-    
+
     jb[17] = attr_n + '0';
     js[17] = attr_n + '0';
     jb[cstr_as_array_len(jb)-4] = attr_n + '0';
     js[cstr_as_array_len(js)-4] = attr_n + '0';
-    
+
     wf[17] = attr_n + '0';
     wb[17] = attr_n + '0';
     ws[17] = attr_n + '0';
     wf[cstr_as_array_len(wf)-3] = attr_n + '0';
     wb[cstr_as_array_len(wb)-4] = attr_n + '0';
     ws[cstr_as_array_len(ws)-4] = attr_n + '0';
-    
+
     uint64 j = (uint64)jb & max_if(j_comp_t == BYTE);
     j += (uint64)js & max_if(j_comp_t == SHORT);
-    
+
     uint64 w = (uint64)wf & max_if(w_comp_t == FLOAT);
     w += (uint64)wb & max_if(w_comp_t == BYTE);
     w += (uint64)ws & max_if(w_comp_t == SHORT);
-    
+
     uint wl = cstr_as_array_len(wf) & max_if(w_comp_t == FLOAT);
     wl += cstr_as_array_len(wb) & max_if(w_comp_t == BYTE);
     wl += cstr_as_array_len(ws) & max_if(w_comp_t == SHORT);
-    
+
     sb_add(sb,cstr_as_array_len(jb) + flag_check(j_comp_t, SHORT),(char*)j);
     sb_add(sb,wl,(char*)w);
 }
@@ -1456,14 +1458,14 @@ static void skin_mat(string_builder *sb, gltf_mesh_primitive *prim, struct attr_
     const char skin[] = "    mat4 skin = \n";
     const char tbn[] = "    mat3 tbn = mat3(\n";
     const char plus[] = " +\n";
-    
+
     uint i,offs;
-    
+
     sb_add(sb,cstr_as_array_len(skin),skin);
     for(i=0;i<am->attrs[JNTS].n;++i) {
         offs = sb->used;
         sb_add(sb,cstr_as_array_len(SKIN_CALC),SKIN_CALC);
-        
+
         sb_replace_digit(sb,offs+16+80*0,i);
         sb_replace_digit(sb,offs+73+80*0,i);
         sb_replace_digit(sb,offs+16+80*1,i);
@@ -1472,16 +1474,16 @@ static void skin_mat(string_builder *sb, gltf_mesh_primitive *prim, struct attr_
         sb_replace_digit(sb,offs+73+80*2,i);
         sb_replace_digit(sb,offs+16+80*3,i);
         sb_replace_digit(sb,offs+73+80*3,i);
-        
+
         sb_add_if(sb,cstr_as_array_len(plus),plus,i<am->attrs[JNTS].n-1);
     }
     sb_add(sb,2,";\n");
-    
+
     sb_add(sb,cstr_as_array_len(tbn),tbn);
     for(i=0;i<am->attrs[JNTS].n;++i) {
         offs = sb->used;
         sb_add(sb,cstr_as_array_len(SKIN_CALC_TBN),SKIN_CALC_TBN);
-        
+
         sb_replace_digit(sb,offs+16+80*0,i);
         sb_replace_digit(sb,offs+73+80*0,i);
         sb_replace_digit(sb,offs+16+80*1,i);
@@ -1490,7 +1492,7 @@ static void skin_mat(string_builder *sb, gltf_mesh_primitive *prim, struct attr_
         sb_replace_digit(sb,offs+73+80*2,i);
         sb_replace_digit(sb,offs+16+80*3,i);
         sb_replace_digit(sb,offs+73+80*3,i);
-        
+
         sb_add_if(sb,cstr_as_array_len(plus),plus,i<am->attrs[JNTS].n-1);
     }
     sb_add(sb,4,");\n\n");
@@ -1549,41 +1551,41 @@ static void vert_main(string_builder *sb, struct vert_main_info *info)
 {
     gltf_mesh_primitive *prim =
         &info->model->meshes[info->mesh_index].primitives[info->primitive_index];
-    
+
     char mainfn[] = "void main() {\n";
     sb_add(sb,cstr_as_array_len(mainfn),mainfn);
-    
+
     uint i;
-    
+
     // @Todo could convert all these 'ifs' to branchless, but I cannot think of
     // a super clean way immediately, so them for now.
-    
+
     if (info->model->meshes[info->mesh_index].joint_count) {
         assert(info->am->attrs[JNTS].n == info->am->attrs[WGHTS].n);
-        
+
         uint j_comp_t,w_comp_t;
         for(i=0;i<info->am->attrs[JNTS].n;++i) {
             j_comp_t = ctz(info->model->accessors[
                                                   prim->attributes[
                                                                    info->am->attrs[JNTS].i+i].accessor].flags &
                            GLTF_ACCESSOR_COMPONENT_TYPE_BITS);
-            
+
             w_comp_t = ctz(info->model->accessors[
                                                   prim->attributes[
                                                                    info->am->attrs[WGHTS].i+i].accessor].flags &
                            GLTF_ACCESSOR_COMPONENT_TYPE_BITS);
-            
+
             gen_jw(sb,i,j_comp_t,w_comp_t);
             sb_addnl(sb);
         }
         skin_mat(sb,prim,info->am);
-        
+
         sb_addnl(sb);
     }
-    
+
     struct gen_attr_info gai;
     gai.flags = SKIN_BIT & max_if(info->model->meshes[info->mesh_index].joint_count);
-    
+
     if (info->am->attrs[POS].n) {
         gai.morph_mask = info->mm->m[info->mm->i[POS]];
         gen_pos(sb,&gai);
@@ -1599,7 +1601,7 @@ static void vert_main(string_builder *sb, struct vert_main_info *info)
         gen_tang(sb,&gai);
         sb_addnl(sb);
     }
-    
+
     struct gen_morphed_attr_info gmai;
     for(i=0;i<info->am->attrs[TEXC].n;++i) {
         gmai.mm = info->mm->m[info->mm->i[TEXC]+i];
@@ -1609,13 +1611,13 @@ static void vert_main(string_builder *sb, struct vert_main_info *info)
         gen_texc(sb,&gmai);
     }
     sb_addnl(sb);
-    
+
     sb_add(sb,cstr_as_array_len(FS_INFO_OUT_BASE),FS_INFO_OUT_BASE);
     sb_add_if(sb,cstr_as_array_len(FS_INFO_OUT_DIR_LIGHTING),
               FS_INFO_OUT_DIR_LIGHTING,info->config->dir_light_count);
     sb_add_if(sb,cstr_as_array_len(FS_INFO_OUT_POINT_LIGHTING),
               FS_INFO_OUT_POINT_LIGHTING,info->config->point_light_count);
-    
+
     char closefn[] = "}\n";
     sb_add(sb,cstr_as_array_len(closefn),closefn);
 }
@@ -1636,31 +1638,31 @@ static void color_vert(
 {
     uint num_len;
     char num_buf[8];
-    
+
     struct generate_layout_info gli;
     gli.mti = -1;
     gli.sb_vert = sb_vert;
     gli.sb_frag = sb_frag;
     gli.model = info->model;
     gli.fn_deps = 0x0;
-    
+
     gltf_mesh_primitive *prim = &info->model->meshes[info->mesh_index]
         .primitives[info->primitive_index];
-    
+
     uint loc = 0;
     uint i,j;
     for(i = 0; i < prim->attribute_count; ++i) {
         num_len = uint_to_ascii(loc, num_buf);
         loc++;
-        
+
         gli.attr = &prim->attributes[i];
         gli.len_location = num_len;
         gli.location = num_buf;
-        
+
         LAYOUT_GENERATOR_FUNCTIONS[prim->attributes[i].type](&gli);
     }
     sb_addnl(sb_vert);
-    
+
     j = popcnt(gli.fn_deps);
     uint tz;
     for(i=0;i<j;++i) {
@@ -1668,7 +1670,7 @@ static void color_vert(
         gli.fn_deps &= ~(1<<tz);
         sb_add(sb_vert,CNVRT_FNS[tz].len,CNVRT_FNS[tz].str);
     }
-    
+
     // @Optimise Current solution to morphing is to loop once for layouts, then
     // again later when calculating. I am sure there is a better way, but my
     // brain is just not great rn. This really seems fine anyway, there cannot
@@ -1677,34 +1679,34 @@ static void color_vert(
         gli.mti = i;
         for(j = 0; j < prim->morph_targets[i].attribute_count; ++j) {
             num_len = uint_to_ascii(loc, num_buf);
-            
+
             gli.attr = &prim->morph_targets[i].attributes[j];
             gli.len_location = num_len;
             gli.location = num_buf;
-            
+
             LAYOUT_GENERATOR_FUNCTIONS[prim->morph_targets[i].attributes[j].type](&gli);
         }
     }
-    
+
     sb_addnl(sb_vert);
     sb_addnl(sb_frag);
-    
+
     sb_add_if(sb_vert,cstr_as_array_len(IN_DIR_LIGHT_STRUCT),
               IN_DIR_LIGHT_STRUCT,info->config->dir_light_count);
     sb_add_if(sb_vert,cstr_as_array_len(IN_POINT_LIGHT_STRUCT),
               IN_POINT_LIGHT_STRUCT,info->config->point_light_count);
     sb_addnl_if(sb_vert,
                 info->config->point_light_count || info->config->dir_light_count);
-    
+
     gen_vsinfo(sb_vert,info->config->dir_light_count,info->config->point_light_count);
-    
+
     gen_transforms_ubo(sb_vert,info->model,info->mesh_index);
-    
+
     gen_fsinfo_vert(sb_vert, loc,
                     info->config->dir_light_count, info->config->point_light_count);
     gen_fsinfo_frag(sb_frag, loc,
                     info->config->dir_light_count, info->config->point_light_count);
-    
+
     struct vert_main_info vmi;
     vmi.config = info->config;
     vmi.model = info->model;
@@ -1782,20 +1784,20 @@ static uint find_or_generate_shader_set(
 {
     gltf_mesh_primitive *prim =
         &model->meshes[mesh_index].primitives[primitive_index];
-    
+
     struct prim_hash phi;
     phi.conf = *conf;
     phi.mat_flags = prim->material+1 ?
         model->materials[prim->material].flags : 0x0;
     phi.joint_cnt = model->meshes[mesh_index].joint_count;
-    
+
     SHDR_BM_HASH_START;
-    
+
     get_attr_info(prim,&phi.am,&phi.mm);
-    
+
     memset(phi.fmts,0,sizeof(phi.fmts));
     uint cnt = 0;
-    
+
     uint i,j;
     for(i=0;i<prim->attribute_count;++i) {
         phi.fmts[cnt++] = model->accessors[
@@ -1808,12 +1810,12 @@ static uint find_or_generate_shader_set(
                                            prim->morph_targets[i].attributes[j].accessor].vkformat;
         assert(cnt <= MAX_ATTRS*2);
     }
-    
+
     uint64 ph = get_hash(sizeof(phi),&phi);
     uint set_i = dir_hash_i(dir,ph);
-    
+
     SHDR_BM_HASH_END;
-    
+
     if (set_i != Max_u32) {
         print_auto_shader("Matched shader set %u with model %s, mesh %u, primitive %u",
                           set_i,model->dir.cstr,mesh_index,primitive_index);
@@ -1822,19 +1824,19 @@ static uint find_or_generate_shader_set(
         print_auto_shader("Generating shader for model %s, mesh %u, primitive %u",
                           model->dir.cstr,mesh_index,primitive_index);
     }
-    
+
     string_builder sb_vert = sb_new(MAX_SHADER_SIZE, allocate(dir->alloc, MAX_SHADER_SIZE));
     string_builder sb_frag = sb_new(MAX_SHADER_SIZE, allocate(dir->alloc, MAX_SHADER_SIZE));
-    
+
     const char glsl_version[] = "#version 450\n";
     uint32 vert_pos = cstr_as_array_len(glsl_version);
     uint32 frag_pos = cstr_as_array_len(glsl_version);
     sb_add(&sb_vert, vert_pos, glsl_version);
     sb_add(&sb_frag, frag_pos, glsl_version);
-    
+
     sb_addnl(&sb_vert);
     sb_addnl(&sb_frag);
-    
+
     struct color_vert_info cvi;
     cvi.model = model;
     cvi.mesh_index = mesh_index;
@@ -1843,27 +1845,27 @@ static uint find_or_generate_shader_set(
     cvi.am = &phi.am;
     cvi.mm = &phi.mm;
     color_vert(&sb_vert, &sb_frag, &cvi);
-    
+
     color_frag(&sb_vert, &sb_frag, model,
                mesh_index, primitive_index, conf);
-    
+
     // @Optimise Lots of the below code uses string_format. This would be a lot
     // faster with a string builder. It is a little more fiddly, so using this
     // for now. (Tbf, I doubt there is much overhead. But still, not a
     // release type vibe.)
-    
+
     char buf[32];
     const uint32 *v_spv,*f_spv;
     uint v_len,f_len;
     shaderc_compilation_result_t vr,fr;
-    
+
     // vert
     string_format(buf,"shaders/auto_%u.vert",array_len(dir->hashes));
     file_write_char(buf, sb_vert.used, sb_vert.data);
-    
+
     vr = shaderc_compile_into_spv(cl->cl,sb_vert.data,sb_vert.used,
                                   shaderc_glsl_vertex_shader,buf,"main",cl->opt);
-    
+
     if (shaderc_result_get_num_errors(vr) || shaderc_result_get_num_warnings(vr)) {
         /*const char *em = shaderc_result_get_error_message(vr);
         print_count_chars(em,strlen(em));*/
@@ -1876,14 +1878,14 @@ static uint find_or_generate_shader_set(
         string_format(buf,"shaders/auto_%u.vert.spv",array_len(dir->hashes));
         file_write_bin(buf,v_len,v_spv);
     }
-    
+
     // frag
     string_format(buf,"shaders/auto_%u.frag",array_len(dir->hashes));
     file_write_char(buf, sb_frag.used, sb_frag.data);
-    
+
     fr = shaderc_compile_into_spv(cl->cl,sb_frag.data,sb_frag.used,
                                   shaderc_glsl_fragment_shader,buf,"main",cl->opt);
-    
+
     if (shaderc_result_get_num_errors(fr) || shaderc_result_get_num_warnings(fr)) {
         /*(const char *em = shaderc_result_get_error_message(fr);
         print_count_chars(em,strlen(em));*/
@@ -1897,21 +1899,21 @@ static uint find_or_generate_shader_set(
     }
     shaderc_result_release(vr);
     shaderc_result_release(fr);
-    
+
     struct shader_set set;
     set.flags = conf->flags;
     VkShaderModuleCreateInfo mod_info = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-    
+
     mod_info.codeSize = v_len;
     mod_info.pCode = v_spv;
     VkResult check = vkCreateShaderModule(dir->gpu->device,&mod_info,GAC,&set.vert);
     DEBUG_VK_OBJ_CREATION(vkCreateShaderModule,check);
-    
+
     mod_info.codeSize = f_len;
     mod_info.pCode = f_spv;
     check = vkCreateShaderModule(dir->gpu->device,&mod_info,GAC,&set.frag);
     DEBUG_VK_OBJ_CREATION(vkCreateShaderModule,check);
-    
+
     return dir_add(dir,ph,&set);
 }
 
@@ -1924,12 +1926,12 @@ uint find_or_generate_primitive_shader_set(struct shader_dir *dir,
     shaderc_compile_options_set_optimization_level(cl.opt,SHDR_OPTIMISATION);
     shaderc_compile_options_set_target_env(cl.opt, shaderc_target_env_vulkan,
                                            shaderc_env_version_vulkan_1_3);
-    
+
     uint ret = find_or_generate_shader_set(dir,&cl,conf,model,mesh_i,prim_i);
-    
+
     shaderc_compile_options_release(cl.opt);
     shaderc_compiler_release(cl.cl);
-    
+
     return ret;
 }
 
@@ -1942,7 +1944,7 @@ void find_or_generate_model_shader_sets(struct shader_dir *dir,
     shaderc_compile_options_set_optimization_level(cl.opt,SHDR_OPTIMISATION);
     shaderc_compile_options_set_target_env(cl.opt, shaderc_target_env_vulkan,
                                            shaderc_env_version_vulkan_1_3);
-    
+
     uint i,j;
     for(i=0;i<model->mesh_count;++i)
         for(j=0;j<model->meshes[i].primitive_count;++j) {
@@ -1950,7 +1952,7 @@ void find_or_generate_model_shader_sets(struct shader_dir *dir,
             find_or_generate_shader_set(dir,&cl,conf,model,i,j);
     }
     model->shader_conf_flags = conf->flags;
-    
+
     shaderc_compile_options_release(cl.opt);
     shaderc_compiler_release(cl.cl);
 }
@@ -1961,7 +1963,7 @@ void find_or_generate_model_shader_sets(struct shader_dir *dir,
 struct shader_dir load_shader_dir(struct gpu *gpu, allocator *alloc)
 {
     struct file f = file_read_bin_all(DIR_INFO_FILE,alloc);
-    
+
     struct shader_dir dir;
     dir.gpu = gpu;
     dir.alloc = alloc;
@@ -1975,38 +1977,38 @@ struct shader_dir load_shader_dir(struct gpu *gpu, allocator *alloc)
         print_auto_shader("Loading shader dir from %s, shader count %u",
                           DIR_INFO_FILE,array_len(dir.hashes));
     }
-    
+
     void *tmp_mem = allocate(alloc,MAX_SPV_SIZE*2);
     allocator tmp = new_linear_allocator(MAX_SPV_SIZE*2,tmp_mem);
-    
+
     VkResult check;
     VkShaderModuleCreateInfo info = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-    
+
     const int buf_len = 32;
     char buf[buf_len];
     struct shader_set set;
     for(uint i=0;i<array_len(dir.hashes);++i) {
         string_format(buf,"shaders/auto_%u.vert.spv",i);
         f = file_read_bin_all(buf,&tmp);
-        
+
         info.codeSize = f.size;
         info.pCode = (const uint32*)f.data;
         check = vk_create_shader_module(gpu->device,&info,GAC,&set.vert);
         DEBUG_VK_OBJ_CREATION(vkCreateShaderModule,check);
-        
+
         string_format(buf,"shaders/auto_%u.frag.spv",i);
         f = file_read_bin_all(buf,&tmp);
-        
+
         info.codeSize = f.size;
         info.pCode = (const uint32*)f.data;
         check = vk_create_shader_module(gpu->device,&info,GAC,&set.frag);
         DEBUG_VK_OBJ_CREATION(vkCreateShaderModule,check);
-        
+
         array_add(dir.sets,set);
         allocator_reset_linear(&tmp);
     }
     deallocate(alloc,tmp_mem);
-    
+
     return dir;
 }
 
@@ -2018,3 +2020,5 @@ void store_shader_dir(struct shader_dir *dir)
     free_array(dir->hashes);
     free_array(dir->sets);
 }
+
+#endif // #if SHADER_C

@@ -16,6 +16,7 @@
 #if DEBUG
 static VKAPI_ATTR VkBool32 VKAPI_CALL gpu_debug_messenger_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
 {
+    // @Validation Layers are controlled by vkconfig now.
     if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
         ;//println("\nValidation Layer: %s", pCallbackData->pMessage);
 
@@ -41,10 +42,11 @@ static void gpu_fill_vk_debug_messenger_info(VkDebugUtilsMessengerCreateInfoEXT 
 
 static void gpu_create_debug_messenger(struct gpu *gpu)
 {
-    VkDebugUtilsMessengerCreateInfoEXT info;
-    gpu_fill_vk_debug_messenger_info(&info);
-    VkResult check = vk_create_debug_utils_messenger_ext(gpu->instance, &info, NULL, &gpu->dbg);
-    DEBUG_VK_OBJ_CREATION(vkCreateDebugUtilsMessengerEXT, check)
+    // @Validation Layers are controlled by vkconfig now.
+    // VkDebugUtilsMessengerCreateInfoEXT info;
+    // gpu_fill_vk_debug_messenger_info(&info);
+    // VkResult check = vk_create_debug_utils_messenger_ext(gpu->instance, &info, NULL, &gpu->dbg);
+    // DEBUG_VK_OBJ_CREATION(vkCreateDebugUtilsMessengerEXT, check)
 }
 #endif
 
@@ -163,10 +165,12 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
     log_print_error_if(gpu->descriptors.props.combinedImageSamplerDescriptorSize > GPU_MAX_DESCRIPTOR_SIZE, "%u, %u",gpu->descriptors.props.combinedImageSamplerDescriptorSize, GPU_MAX_DESCRIPTOR_SIZE);
     vk_get_descriptor_ext(gpu->device, &desc_info, gpu->descriptors.props.combinedImageSamplerDescriptorSize, gpu->defaults.texture.descriptor);
 
+    #if SHADER_C
     gpu->shader_dir = load_shader_dir(gpu, gpu->alloc_heap);
+    #endif
 
-    gpu->settings.shadow_maps.width = 4096 / 2;
-    gpu->settings.shadow_maps.height = 4096 / 2;
+    gpu->settings.shadow_maps.width = 4096 / 8;
+    gpu->settings.shadow_maps.height = 4096 / 8;
 }
 
 void shutdown_gpu(struct gpu *gpu) {
@@ -214,14 +218,14 @@ static void gpu_create_instance(struct gpu *gpu)
 #if DEBUG
     VkDebugUtilsMessengerCreateInfoEXT dbg;
     gpu_fill_vk_debug_messenger_info(&dbg);
-    instance_create_info.pNext = &dbg;
+    instance_create_info.pNext = NULL; // &dbg; <- @Validation Layers handled by vkconfig
 
-    uint enabled_layer_cnt = 1;
+    uint enabled_layer_cnt = 0;
     const char *enabled_layer_names[] = {
         "VK_LAYER_KHRONOS_validation",
     };
 
-    uint enabled_ext_cnt = 2;
+    uint enabled_ext_cnt = 0;
     const char *enabled_ext_names[] = {
         "VK_EXT_validation_features",
         "VK_EXT_debug_utils" // deprecated in header 272, replacement: "VK_EXT_layer_settings",
@@ -1606,13 +1610,11 @@ void gpu_create_texture(struct gpu *gpu, struct image *image, struct gpu_texture
     DEBUG_VK_OBJ_CREATION(vkCreateImage, check);
 }
 
-bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommandBuffer graphics_cmd, uint cascade_count, struct shadow_maps *maps)
+bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommandBuffer graphics_cmd, struct shadow_maps *maps)
 {
-    maps->cascade_count = cascade_count;
-
     maps->images = allocate(gpu->alloc_heap,
-                            sizeof(*maps->images) * maps->count + // NOLINT sizeof(vulkan_handle)
-                            sizeof(*maps->views)  * maps->count * cascade_count); // NOLINT sizeof(vulkan_handle)
+                            sizeof(*maps->images) * maps->count +
+                            sizeof(*maps->views)  * maps->count * CSM_COUNT);
     maps->views = (VkImageView*)(maps->images + maps->count);
 
     VkMemoryRequirements *mr = sallocate(gpu->alloc_temp, *mr, maps->count);
@@ -1624,7 +1626,7 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
             .format = GPU_SHADOW_ATTACHMENT_FORMAT,
             .extent = (VkExtent3D){gpu->settings.shadow_maps.width,gpu->settings.shadow_maps.height,1},
             .mipLevels = 1,
-            .arrayLayers = cascade_count,
+            .arrayLayers = CSM_COUNT,
             .samples = VK_SAMPLE_COUNT_1_BIT,
             .tiling = VK_IMAGE_TILING_OPTIMAL,
             .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -1648,7 +1650,7 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
         VkDescriptorSetLayoutBinding b = {
             .binding = 0,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount = DIR_LIGHT_COUNT * CSM_COUNT, // maps->count * cascade_count,
+            .descriptorCount = DIR_LIGHT_COUNT * CSM_COUNT,
             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
         };
 
@@ -1672,7 +1674,8 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
         return false;
     }
 
-    maps->db_offset = gpu_buffer_allocate(gpu, &gpu->mem.descriptor_buffer_sampler, dsl_sz + gpu->descriptors.props.descriptorBufferOffsetAlignment);
+    maps->db_offset = gpu_buffer_allocate(gpu, &gpu->mem.descriptor_buffer_sampler,
+                                          dsl_sz + gpu->descriptors.props.descriptorBufferOffsetAlignment);
     if (maps->db_offset == GPU_BUF_ALLOC_FAIL) {
         log_print_error("failed to allocate shadow map descriptor memory");
         return false;
@@ -1710,7 +1713,7 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
     }
 
     for(uint i=0; i < maps->count; ++i) {
-        for(uint j=0; j < cascade_count; ++j) {
+        for(uint j=0; j < CSM_COUNT; ++j) {
             VkImageViewCreateInfo ci = {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
                 .viewType = VK_IMAGE_VIEW_TYPE_2D,
@@ -1723,7 +1726,7 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
                     .baseArrayLayer = j,
                 },
             };
-            VkResult check = vk_create_image_view(gpu->device, &ci, GAC, &maps->views[i*CSM_COUNT +j]);
+            VkResult check = vk_create_image_view(gpu->device, &ci, GAC, &maps->views[j + i*CSM_COUNT]);
             DEBUG_VK_OBJ_CREATION(vkCreateImageView, check);
         }
     }
@@ -1731,6 +1734,8 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
     {
         VkSamplerCreateInfo ci = {
             .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            // .magFilter = VK_FILTER_NEAREST,
+            // .minFilter = VK_FILTER_NEAREST,
             .magFilter = VK_FILTER_LINEAR,
             .minFilter = VK_FILTER_LINEAR,
             .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
@@ -1743,7 +1748,7 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
             // especially with regard to shadow mapping.
             .minLod = 0,
             .maxLod = 0, // VK_LOD_CLAMP_NONE,
-            .borderColor = VK_BORDER_COLOR_INT_OPAQUE_WHITE,
+            .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
             .anisotropyEnable = VK_FALSE, // flag_check(gpu->flags, GPU_SAMPLER_ANISOTROPY_ENABLE_BIT),
             .maxAnisotropy = 0, // gpu->defaults.sampler_anisotropy,
 
@@ -1754,7 +1759,7 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
         maps->sampler = create_sampler(gpu, &ci);
     }
 
-    for(uint i=0; i < maps->count * cascade_count; ++i) {
+    for(uint i=0; i < maps->count * CSM_COUNT; ++i) {
         VkDescriptorImageInfo ii = {
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             .imageView = maps->views[i],
@@ -1772,7 +1777,7 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
         uchar d[512];
         vk_get_descriptor_ext(gpu->device, &gi, stride, d);
 
-        ds_cis_arrcpy(gpu, dsl_data, i, maps->count, d);
+        ds_cis_arrcpy(gpu, dsl_data, i, DIR_LIGHT_COUNT * CSM_COUNT, d);
     }
 
     return true;
@@ -1783,7 +1788,7 @@ void free_shadow_maps(struct gpu *gpu, struct shadow_maps *maps)
     for(uint i=0; i < maps->count; ++i)
         vk_destroy_image(gpu->device, maps->images[i], GAC);
 
-    for(uint i=0; i < maps->count * maps->cascade_count; ++i)
+    for(uint i=0; i < maps->count * CSM_COUNT; ++i)
         vk_destroy_image_view(gpu->device, maps->views[i], GAC);
 
     vk_destroy_sampler(gpu->device, maps->sampler, GAC);
@@ -1966,6 +1971,15 @@ void create_color_renderpass(struct gpu *gpu, struct renderpass *rp)
             .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
             .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
         },
+        {
+            .srcSubpass = 1,
+            .dstSubpass = 1,
+            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
+        },
     };
 
     {
@@ -2011,16 +2025,18 @@ void create_shadow_renderpass(struct gpu *gpu, struct shadow_maps *shadow_maps, 
     VkSubpassDependency *dp;
 
     VkAttachmentDescription *ad = allocate(gpu->alloc_temp,
-            sizeof(*ad) * shadow_maps->count * shadow_maps->cascade_count +
-            sizeof(*ar) * shadow_maps->count * shadow_maps->cascade_count +
-            sizeof(*ds) * shadow_maps->count * shadow_maps->cascade_count +
-            sizeof(*dp) * shadow_maps->count * shadow_maps->cascade_count);
+            sizeof(*ad) * shadow_maps->count * CSM_COUNT +
+            sizeof(*ar) * shadow_maps->count * CSM_COUNT +
+            sizeof(*ds) * shadow_maps->count * CSM_COUNT +
+            sizeof(*dp) * shadow_maps->count * CSM_COUNT);
 
-    ar = (VkAttachmentReference*)(ad + shadow_maps->count * shadow_maps->cascade_count);
-    ds =  (VkSubpassDescription*)(ar + shadow_maps->count * shadow_maps->cascade_count);
-    dp =   (VkSubpassDependency*)(ds + shadow_maps->count * shadow_maps->cascade_count);
+    // assert(shadow_maps->count == DIR_LIGHT_COUNT);
 
-    for(uint i=0; i < shadow_maps->count * shadow_maps->cascade_count; ++i) { // @TODO I think I only need one attachment description
+    ar = (VkAttachmentReference*)(ad + shadow_maps->count * CSM_COUNT);
+    ds =  (VkSubpassDescription*)(ar + shadow_maps->count * CSM_COUNT);
+    dp =   (VkSubpassDependency*)(ds + shadow_maps->count * CSM_COUNT);
+
+    for(uint i=0; i < shadow_maps->count * CSM_COUNT; ++i) { // @TODO I think I only need one attachment description
         ad[i] = (VkAttachmentDescription) {
             .format         = GPU_SHADOW_ATTACHMENT_FORMAT,
             .samples        = VK_SAMPLE_COUNT_1_BIT,
@@ -2033,21 +2049,20 @@ void create_shadow_renderpass(struct gpu *gpu, struct shadow_maps *shadow_maps, 
         };
     }
 
-    assert(shadow_maps->count == 1);
-    for(uint i=0;i < shadow_maps->count * shadow_maps->cascade_count; ++i) {
+    for(uint i=0;i < shadow_maps->count * CSM_COUNT; ++i) {
         ar[i] = (VkAttachmentReference) {
             .attachment = i,
             .layout     = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         };
     }
 
-    for(uint i=0; i < shadow_maps->count * shadow_maps->cascade_count; ++i) {
+    for(uint i=0; i < shadow_maps->count * CSM_COUNT; ++i) {
         ds[i] = (VkSubpassDescription) {
             .pDepthStencilAttachment = &ar[i],
         };
     }
 
-    for(uint i=0; i < shadow_maps->count * shadow_maps->cascade_count; ++i) {
+    for(uint i=0; i < shadow_maps->count * CSM_COUNT; ++i) {
         dp[i] = (VkSubpassDependency) {
             .srcSubpass      = VK_SUBPASS_EXTERNAL,
             .dstSubpass      = i,
@@ -2061,11 +2076,11 @@ void create_shadow_renderpass(struct gpu *gpu, struct shadow_maps *shadow_maps, 
 
     VkRenderPassCreateInfo rpci = {
         .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = shadow_maps->count * shadow_maps->cascade_count,
+        .attachmentCount = shadow_maps->count * CSM_COUNT,
         .pAttachments    = ad,
-        .subpassCount    = shadow_maps->count * shadow_maps->cascade_count,
+        .subpassCount    = shadow_maps->count * CSM_COUNT,
         .pSubpasses      = ds,
-        .dependencyCount = shadow_maps->count * shadow_maps->cascade_count,
+        .dependencyCount = shadow_maps->count * CSM_COUNT,
         .pDependencies   = dp,
     };
     {
@@ -2076,11 +2091,11 @@ void create_shadow_renderpass(struct gpu *gpu, struct shadow_maps *shadow_maps, 
     VkFramebufferCreateInfo fbci = {
         .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .renderPass      = rp->rp,
-        .attachmentCount = shadow_maps->count * shadow_maps->cascade_count,
+        .attachmentCount = shadow_maps->count * CSM_COUNT,
         .pAttachments    = shadow_maps->views,
         .width           = gpu->settings.shadow_maps.width,
         .height          = gpu->settings.shadow_maps.height,
-        .layers          = 1, // @Todo Can I use this for rendering to cascades?
+        .layers          = 1,
     };
     {
         VkResult check = vk_create_framebuffer(gpu->device, &fbci, GAC, &rp->fb);
@@ -2153,11 +2168,11 @@ void begin_shadow_renderpass(VkCommandBuffer cmd, struct renderpass *rp, struct 
 
 void do_shadow_pass(VkCommandBuffer cmd, struct shadow_pass_info *info, allocator *alloc)
 {
-    begin_shadow_renderpass(cmd, info->rp, info->gpu, info->maps->count * info->maps->cascade_count, alloc);
+    begin_shadow_renderpass(cmd, info->rp, info->gpu, info->maps->count * CSM_COUNT, alloc);
 
     uint idx = 0;
     for(uint i=0; i < info->maps->count; ++i) {
-        for(uint j=0; j < info->maps->cascade_count; ++j) {
+        for(uint j=0; j < CSM_COUNT; ++j) {
             #if SPLIT_SHADOW_MVP
             vk_cmd_push_constants(cmd,
                                   info->lmr->draw_info->pipeline_layouts[info->lmr->draw_info->prim_count],
@@ -2190,7 +2205,7 @@ void do_shadow_pass(VkCommandBuffer cmd, struct shadow_pass_info *info, allocato
 
             draw_model_depth(cmd, info->lmr->draw_info, idx);
 
-            if (idx < info->maps->cascade_count * info->maps->count - 1)
+            if (idx < CSM_COUNT * info->maps->count - 1)
                 vk_cmd_next_subpass(cmd, VK_SUBPASS_CONTENTS_INLINE);
 
             idx++;

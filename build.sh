@@ -4,22 +4,33 @@
 
 CF="-g -mbmi -msse4.1 -pthread -mlzcnt -fstack-protector-all -O0 -lm"
 
-SHADERC="/home/solly/vulkan/1.3.261.1/x86_64/lib/libshaderc_combined.a"
+LIB_SHADERC=-lshaderc_combined
 L="-lglfw -lvulkan"
 
-if gcc -std=c99 -c source.c -o source.o $CF $L ; then
-    echo "Compiled source"
-else
-    echo "Build failed: compile source"
-    exit 1
-fi
+SHADER_C=0
 
-# omg I want to get rid of this shaderc dependency
-if g++ source.o -o exe $CF $SHADERC $L ; then
-    echo "Linked shaderc"
+if [[ !$SHADER_C ]]; then
+    if gcc -DSHADER_C=0 -I/home/solly/vulkan/1.3.283.0/x86_64/include -std=c99 source.c -o exe $CF $L ; then
+        echo "Compiled source"
+    else
+        echo "Build failed: compile source"
+        exit 1
+    fi
 else
-    echo "Build failed: link shaderc"
-    exit 1
+    if gcc -DSHADER_C=1 -I/home/solly/vulkan/1.3.283.0/x86_64/include -std=c99 -c source.c -o source.o $CF $L ; then
+        echo "Compiled source"
+    else
+        echo "Build failed: compile source"
+        exit 1
+    fi
+
+    # omg I want to get rid of this shaderc dependency
+    if g++ source.o -o exe $CF $LIB_SHADERC $L ; then
+        echo "Linked shaderc"
+    else
+        echo "Build failed: link shaderc"
+        exit 1
+    fi
 fi
 
 if [[ -f source.o ]]; then

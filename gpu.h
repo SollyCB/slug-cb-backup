@@ -116,7 +116,7 @@ struct gpu_texture {
 };
 
 struct shadow_maps {
-    uint count,cascade_count;
+    uint count;
     VkImage *images;
     VkImageView *views;
     VkSampler sampler;
@@ -194,7 +194,7 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args);
 void gpu_poll_hotloader(struct gpu *gpu);
 void shutdown_gpu(struct gpu *gpu);
 
-bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommandBuffer graphics_cmd, uint cascade_count, struct shadow_maps *maps);
+bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommandBuffer graphics_cmd, struct shadow_maps *maps);
 void gpu_create_texture(struct gpu *gpu, struct image *image, struct gpu_texture *ret);
 void gpu_destroy_image(struct gpu *gpu, struct gpu_texture *image);
 void gpu_destroy_image_and_view(struct gpu *gpu, struct gpu_texture *image);

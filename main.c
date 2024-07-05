@@ -197,7 +197,7 @@ int main() {
     uint frame_count = 0;
 
     // for(uint frame_count=0; frame_count < 50; ++frame_count) {
-    for(;;) {
+    for(uint frame_index=0; frame_index < 3; ++frame_index) {
         poll_glfw();
 
         allocator_reset_linear(&pr.allocs.temp);
@@ -244,8 +244,8 @@ int main() {
             struct trs model_trs;
             get_trs(
                 vector3(3, 3, -3),
-                // quaternion(PI/4, vector3(1, 0, 0)),
-                quaternion(0, vector3(1, 0, 0)),
+                quaternion(PI/4, vector3(0, 1, 0)),
+                // quaternion(0, vector3(1, 0, 0)),
                 vector3(1, 1, 1),
                 &model_trs
             );
@@ -291,12 +291,16 @@ int main() {
             for(uint i=0; i < carrlen(ls_bb.p); ++i)
                 ls_bb.p[i] = mul_matrix_vector(&light_view_mat, scene_bb.p[i]);
 
+            // mat clipspace;
+            // mul_matrix(&mat_proj, &mat_view, &clip_space);
+
             for(uint i=0; i < CSM_COUNT; ++i) {
                 light_nearfar_planes[i] = near_far(minmax_frustum_x[i], minmax_frustum_y[i], &ls_bb);
 
                 float *cb = &vs_info->cascade_boundaries.x;
                 // cb[i] = sub_frusta[i].bl_far.z;
                 cb[i] = mul_matrix_vector(&mat_view, sub_frusta[i].bl_far).z;
+                // cb[i] = mul_matrix_vector(&clip_space, sub_frusta[i].bl_far).z;
 
                 ortho_matrix(minmax_frustum_x[i].min, minmax_frustum_x[i].max,
                              minmax_frustum_y[i].max, minmax_frustum_y[i].min,
@@ -341,7 +345,7 @@ int main() {
             return -1;
 
         struct shadow_maps shadow_maps = {.count = 1};
-        if (!create_shadow_maps(&pr.gpu, transfer_cmd, graphics_cmd, CSM_COUNT, &shadow_maps))
+        if (!create_shadow_maps(&pr.gpu, transfer_cmd, graphics_cmd, &shadow_maps))
             return -1;
 
         struct renderpass depth_rp;
@@ -356,7 +360,7 @@ int main() {
             .scene_count = model.scene_count,
             .subpass_mask = LOAD_MODEL_SUBPASS_DRAW,
             .color_subpass = 0,
-            .depth_pass_count = shadow_maps.count * shadow_maps.cascade_count,
+            .depth_pass_count = shadow_maps.count * CSM_COUNT,
             .model = &model,
             .gpu = &pr.gpu,
             .animations = NULL,
@@ -574,6 +578,16 @@ int main() {
 
         frame_count++;
 
+
+        {
+            #if 0 // Throttle frame rate
+            struct timespec rq,rm;
+            rq.tv_sec  = 0;
+            rq.tv_nsec = 10 * 10e6;
+            nanosleep(&rq, &rm);
+            #endif
+        }
+
         while(ONE_FRAME)
             ;
     }
@@ -581,7 +595,10 @@ int main() {
     vk_destroy_command_pool(pr.gpu.device, transfer_pool, GAC);
     vk_destroy_command_pool(pr.gpu.device, graphics_pool, GAC);
 
+    #if SHADER_C
     store_shader_dir(&pr.gpu.shader_dir);
+    #endif
+
     prog_shutdown(&pr);
     return 0;
 }

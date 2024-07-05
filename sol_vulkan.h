@@ -1,11 +1,11 @@
 #ifndef SOL_VULKAN_H_INCLUDE_GUARD_
 #define SOL_VULKAN_H_INCLUDE_GUARD_
 
-#include "/home/solly/vulkan/1.3.261.1/x86_64/include/vk_video/vulkan_video_codec_h264std.h"
-#include "/home/solly/vulkan/1.3.261.1/x86_64/include/vk_video/vulkan_video_codec_h265std.h"
-#include "/home/solly/vulkan/1.3.261.1/x86_64/include/vulkan/vulkan.h"
+#if SHADER_C
+    #include <shaderc/shaderc.h>
+#endif
 
-#include "/home/solly/vulkan/1.3.261.1/x86_64/include/shaderc/shaderc.h"
+#include <vulkan/vulkan.h>
 
 enum {
     SOL_VK_DISPATCH_TABLE_INIT_STAGE_PRE_INSTANCE,

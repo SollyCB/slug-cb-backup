@@ -1,7 +1,7 @@
 #ifndef SHADER_H_GLSL_
 #define SHADER_H_GLSL_
 
-#define DIR_LIGHT_COUNT 2
+#define DIR_LIGHT_COUNT 1
 #define CSM_COUNT 4
 #define CSM_BLEND_BAND 1
 #define JOINT_COUNT 1
@@ -144,6 +144,10 @@ vec3 cascade_i() {
     float fz = fs_info.view_frag_pos.z;
     vec4  d  = vs_info.cascade_boundaries;
 
+    #if 0
+    if (fz < -100 || fz > 0)
+        pv4(fs_info.view_frag_pos);
+
     int  j = 4 - int(dot(vec4(fz > d.x, fz > d.y, fz > d.z, fz > d.w), vec4(1,1,1,1)));
     int  i = max(j - 1, 0);
     vec4 b = vec4(fz-d.x,fz-d.y,fz-d.z,fz-d.w); // positive == before far plane
@@ -156,6 +160,14 @@ vec3 cascade_i() {
     float bf = (sd / CSM_BLEND_BAND) * 0.5 + 0.5;
 
     return vec3(sdi + 1 * int(bf < 0), min(sdi + 1 * int(bf < 1), CSM_COUNT-1), clamp(1 - bf, 0, 1));
+    #endif
+
+    int c0 = 4 - int(dot(vec4(fz > d.x, fz > d.y, fz > d.z, fz > d.w), vec4(1,1,1,1)));
+    float bf = 1 - (abs(fz - d[c0]) / CSM_BLEND_BAND);
+
+    int c1 = c0 + 1 * int(bf > 0);
+
+    return vec3(c0, min(c1, CSM_COUNT-1), clamp(bf, 0, 1));
 }
 
 float in_shadow(uint li) {
@@ -163,7 +175,7 @@ float in_shadow(uint li) {
 
     uint ca = uint(ci.x);
     uint cb = uint(ci.y);
-    float c = ci.z;
+    float c = 0.5; // ci.z;
 
     vec3 p = vec3(vs_info.dir_lights[li].space[ca] * fs_info.world_frag_pos);
     vec3 q = vec3(vs_info.dir_lights[li].space[cb] * fs_info.world_frag_pos);

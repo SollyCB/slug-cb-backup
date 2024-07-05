@@ -49,7 +49,7 @@ void main() {
 
         vec3 matbrdf = spec + diff;
 
-        matbrdf *= 1 - in_shadow(i);
+        matbrdf *= in_shadow(i);
 
         light += fs_info.dir_lights[i].color * matbrdf * max(dot(N, L), 0);
     }

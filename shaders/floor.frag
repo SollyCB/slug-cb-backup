@@ -6,7 +6,6 @@
 #include "../shader.h.glsl"
 
 void main() {
-    // vec3 ci = cascade_i();
 
     uint ci;
 

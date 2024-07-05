@@ -1044,7 +1044,7 @@ model_pipelines_transform_descriptors_and_draw_info(
     VkPipelineRasterizationStateCreateInfo depth_rasterization = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
             .polygonMode = VK_POLYGON_MODE_LINE & maxif(arg->flags & LOAD_MODEL_WIREFRAME_BIT),
-            .cullMode = VK_CULL_MODE_FRONT_BIT,
+            .cullMode = 0, // VK_CULL_MODE_FRONT_BIT,
             .lineWidth = 1.0f,
 
             .depthBiasEnable = VK_TRUE,
@@ -1070,12 +1070,12 @@ model_pipelines_transform_descriptors_and_draw_info(
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
         .depthTestEnable = 1,
         .depthWriteEnable = 1,
-        .depthCompareOp = VK_COMPARE_OP_LESS,
+        .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
     };
 
     // @Optimise These blend attachments are references to globals, idk if that
     // is slow. STB mentioned smtg weird about it...
-    VkPipelineColorBlendStateCreateInfo blend[2] = {
+    VkPipelineColorBlendStateCreateInfo color_blend[2] = {
         {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
             .attachmentCount = 1,
@@ -1087,6 +1087,13 @@ model_pipelines_transform_descriptors_and_draw_info(
             .pAttachments = &COLOR_BLEND_ALPHA,
         }
     };
+
+    VkPipelineColorBlendStateCreateInfo depth_blend = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+        .attachmentCount = 1,
+        .pAttachments = &COLOR_BLEND_NONE,
+    };
+
     VkPipelineDynamicStateCreateInfo dyn = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
         .dynamicStateCount = 0,
@@ -1218,7 +1225,7 @@ model_pipelines_transform_descriptors_and_draw_info(
                 .pRasterizationState = &color_rasterization[flag_check(materials[prim->material].flags, MODEL_MATERIAL_CULL_BACK_BIT)],
                 .pMultisampleState   = &multisample,
                 .pDepthStencilState  = &color_depth,
-                .pColorBlendState    = &blend[flag_check(materials[prim->material].flags, MODEL_MATERIAL_BLEND_BIT)],
+                .pColorBlendState    = &color_blend[flag_check(materials[prim->material].flags, MODEL_MATERIAL_BLEND_BIT)],
                 .pDynamicState       = &dyn,
                 .layout              = resources->pipeline_layouts[pc],
                 .renderPass          = arg->color_renderpass,
@@ -1249,7 +1256,7 @@ model_pipelines_transform_descriptors_and_draw_info(
                 .pRasterizationState = &depth_rasterization, // pipeline_infos[pc - prim_count].pRasterizationState,
                 .pMultisampleState   = &multisample,
                 .pDepthStencilState  = &depth_depth,
-                .pColorBlendState    = pipeline_infos[pc - prim_count].pColorBlendState,
+                .pColorBlendState    = &depth_blend,
                 .pDynamicState       = &dyn,
                 .layout              = resources->pipeline_layouts[prim_count],
                 .renderPass          = arg->depth_renderpass,

@@ -20,7 +20,7 @@
 #include "main.c"
 #include "spirv.c"
 #include "image.c"
-#include "shader.c"
 #include "asset.c"
 #include "blend_types.c"
 #include "shadows.c"
+#include "shader.c"
