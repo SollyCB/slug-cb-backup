@@ -372,7 +372,7 @@ void parse_spirv(size_t byte_count, const uint32 *pcode, allocator *alloc, struc
             tmp = tz + 64 * i;
 
             tz = packed_sparse_array_index_to_bit(types[tmp].location, spirv->location_mask);
-            spirv->attribute_descriptions[tz].location = types[tmp].location; 
+            spirv->attribute_descriptions[tz].location = types[tmp].location;
             spirv->attribute_descriptions[tz].binding = 0;
             spirv->attribute_descriptions[tz].offset = 0;
             spirv->attribute_descriptions[tz].format = spirv_type_flags_to_format(types[types[types[tmp].result_id].result_id].type_flags);
@@ -404,7 +404,7 @@ void parse_spirv(size_t byte_count, const uint32 *pcode, allocator *alloc, struc
         tz = ctz32(set_mask);
         set_mask &= ~(1 << tz);
         spirv->layout_infos[tz] = (VkDescriptorSetLayoutCreateInfo){VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        spirv->layout_infos[tz].flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+        spirv->layout_infos[tz].flags = DESCRIPTOR_BUFFER ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT : 0;
         spirv->layout_infos[tz].bindingCount = 0;
         spirv->layout_infos[tz].pBindings = ptr + binding_offsets[i];
     }

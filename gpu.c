@@ -320,7 +320,7 @@ static void gpu_create_device_and_queues(struct gpu *gpu)
     VkPhysicalDeviceDescriptorBufferFeaturesEXT descriptor_buffer_features = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT,
         .pNext = &mem_priority,
-        .descriptorBuffer = VK_TRUE,
+        .descriptorBuffer = DESCRIPTOR_BUFFER ? VK_TRUE : VK_FALSE,
     };
     VkPhysicalDeviceFeatures2 features_full = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
@@ -777,6 +777,7 @@ static void gpu_create_memory_resources(struct gpu *gpu)
     // optimal code (I if there are inefficiencies) would create the buffer, get the requirements, then destroy
     // it if the flag is unnecessary.
     //
+    #if DESCRIPTOR_BUFFER
     buf_info.size = GPU_DESCRIPTOR_BUFFER_SIZE_RESOURCE;
     buf_info.usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     check = vk_create_buffer(d, &buf_info, GAC, &gpu->mem.descriptor_buffer_resource.buf);
@@ -833,9 +834,11 @@ static void gpu_create_memory_resources(struct gpu *gpu)
 
     assert(gpu->descriptors.props.maxSamplerDescriptorBufferRange > gpu->mem.descriptor_buffer_resource.size);
     assert(gpu->descriptors.props.maxResourceDescriptorBufferRange > gpu->mem.descriptor_buffer_sampler.size);
+
     // @Note I am not sure how to use the address space size variables.
     // assert(gpu->descriptors.props.resourceDescriptorBufferAddressSpaceSize > gpu->mem.descriptor_buffer_resource.address + gpu->mem.descriptor_buffer_resource.size);
     // assert(gpu->descriptors.props.samplerDescriptorBufferAddressSpaceSize > gpu->mem.descriptor_buffer_sampler.address + gpu->mem.descriptor_buffer_sampler.size);
+    #endif
 }
 
 static void gpu_destroy_memory_resources(struct gpu *gpu)
@@ -1068,7 +1071,7 @@ Vertex_Info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vertex
     };
     VkDescriptorSetLayoutCreateInfo ci = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+        .flags = DESCRIPTOR_BUFFER ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT : 0,
         .bindingCount = 1,
         .pBindings = &binding,
     };
@@ -1791,7 +1794,7 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
 
         VkDescriptorSetLayoutCreateInfo ci = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+            .flags = DESCRIPTOR_BUFFER ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT : 0,
             .bindingCount = 1,
             .pBindings = &b,
         };
@@ -2447,6 +2450,7 @@ bool htp_allocate_resources(
     memset(rsc, 0, sizeof(*rsc));
     VkResult check;
     {
+        // @TODO @CurrentTask I think that this is the last descriptor stuff...
         VkDescriptorSetLayoutBinding b = {
             .binding = 0,
             .descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
@@ -2455,7 +2459,7 @@ bool htp_allocate_resources(
         };
         VkDescriptorSetLayoutCreateInfo ci = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+            .flags = DESCRIPTOR_BUFFER ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT : 0,
             .bindingCount = 1,
             .pBindings = &b,
         };
@@ -2654,7 +2658,7 @@ bool htp_allocate_resources(
     {
         VkGraphicsPipelineCreateInfo ci = {
             .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-            .flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+            .flags = DESCRIPTOR_BUFFER ? VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT : 0,
             .stageCount = 2,
             .pStages = shader_stages,
             .pVertexInputState = &vertex_input,
@@ -2818,7 +2822,7 @@ void draw_box(VkCommandBuffer cmd, struct gpu *gpu, struct box *box, bool wirefr
     {
         VkGraphicsPipelineCreateInfo ci = {
             .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-            .flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+            .flags = DESCRIPTOR_BUFFER ? VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT : 0,
             .stageCount = 2,
             .pStages = stages,
             .pVertexInputState = &vi,
@@ -2977,7 +2981,7 @@ static VkShaderModule create_shader_module(VkDevice d, const char *file_name, al
     { \
         VkGraphicsPipelineCreateInfo ci = { \
             .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO, \
-            .flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT, \
+            .flags = DESCRIPTOR_BUFFER ? VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT : 0, \
             .stageCount = 2, \
             .pStages = stages, \
             .pVertexInputState = &vi, \

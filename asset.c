@@ -573,7 +573,7 @@ static uint allocate_model_resources(
         };
         VkDescriptorSetLayoutCreateInfo ci = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+            .flags = DESCRIPTOR_BUFFER ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT : 0,
             .bindingCount = 1,
             .pBindings = &binding,
         };
@@ -948,14 +948,14 @@ static struct model_material* material_descriptors_and_pipeline_info(
         uint64 ofs = offsets->base_bind + offsets->material_ubo + SHADER_MATERIAL_UBO_SIZE*i;
 
         #if NO_DESCRIPTOR_BUFFER
-        memset(&wds_tex[i], 0, sizeof(wds_tex[i]));
-        wds_tex[i].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        wds_tex[i].dstSet          = resources->resource_ds[model->mesh_count + i];
-        wds_tex[i].dstBinding      = 0;
-        wds_tex[i].dstArrayElement = 0;
-        wds_tex[i].descriptorCount = 1;
-        wds_tex[i].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        wds_tex[i].pBufferInfo     = &dbi[i];
+        memset(&wds_ubo[i], 0, sizeof(wds_ubo[i]));
+        wds_ubo[i].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        wds_ubo[i].dstSet          = resources->resource_ds[model->mesh_count + i];
+        wds_ubo[i].dstBinding      = 0;
+        wds_ubo[i].dstArrayElement = 0;
+        wds_ubo[i].descriptorCount = 1;
+        wds_ubo[i].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        wds_ubo[i].pBufferInfo     = &dbi[i];
 
         dbi[i].buffer = gpu->mem.bind_buffer.buf;
         dbi[i].offset = ofs;
@@ -1450,7 +1450,7 @@ model_pipelines_transform_descriptors_and_draw_info(
 
             pipeline_infos[pc] = (VkGraphicsPipelineCreateInfo) {
                 .sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-                .flags               = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+                .flags               = DESCRIPTOR_BUFFER ? VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT : 0,
                 .stageCount          = 2, // @ShaderCount
                 .pStages             = (VkPipelineShaderStageCreateInfo*)&shaders[pc],
                 .pVertexInputState   = &vi[pc],
@@ -1481,7 +1481,7 @@ model_pipelines_transform_descriptors_and_draw_info(
 
             pipeline_infos[pc] = (VkGraphicsPipelineCreateInfo) {
                 .sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-                .flags               = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+                .flags               = DESCRIPTOR_BUFFER ? VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT : 0,
                 .stageCount          = 2, // @ShaderCount
                 .pStages             = depth_shaders,
                 .pVertexInputState   = &vi[pc],
