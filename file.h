@@ -14,8 +14,8 @@ struct file {
 
 // @Note breaks on windows?
 static inline uint get_dir(const char *file_name, char *buf) {
-    int p = 0;
-    int len = strlen(file_name);
+    uint p = 0;
+    uint len = strlen(file_name);
     for(uint i = 0; i < len; ++i) {
         if (file_name[i] == '/')
             p = i;

@@ -1,8 +1,10 @@
 #ifndef SOL_IMAGE_H_INCLUDE_GUARD_
 #define SOL_IMAGE_H_INCLUDE_GUARD_
 
+GCC_IGNORE_WARNINGS_BEGIN
 // @Todo define stb_malloc, realloc, etc.
 #include "external/stb_image.h"
+GCC_IGNORE_WARNINGS_END
 
 #include "defs.h"
 

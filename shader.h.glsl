@@ -173,9 +173,9 @@ vec3 cascade_i() {
 float in_shadow(uint li) {
     vec3 ci = cascade_i();
 
-    uint ca = uint(ci.x);
-    uint cb = uint(ci.y);
-    float c = 0.5; // ci.z;
+    uint ca = 0; // uint(ci.x);
+    uint cb = 0; // uint(ci.y);
+    float c = 0.5;
 
     vec3 p = vec3(vs_info.dir_lights[li].space[ca] * fs_info.world_frag_pos);
     vec3 q = vec3(vs_info.dir_lights[li].space[cb] * fs_info.world_frag_pos);

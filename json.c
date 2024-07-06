@@ -504,7 +504,7 @@ static json_result json_skip_to_equivalent_depth(const char *data, uint32 *pos, 
 {
     *pos += data[*pos] == open;
     *pos += simd_skip_over_whitespace(data + *pos);
-    uint32 stack = 1;
+    int32 stack = 1;
     uint32 i, j, pc0, pc1, tz0, tz1;
     uint16 m0, m1;
     for(i = 0; true; i += 16) {
@@ -566,7 +566,7 @@ const char JSON_PRINT_INDENT_BUFFER[JSON_PRINT_INDENT_BUFFER_SIZE] = "          
 static void json_print_object(json_object *a, int depth)
 {
     println("{");
-    for(int i = 0; i < a->key_count; ++i) {
+    for(uint i = 0; i < a->key_count; ++i) {
         JSON_PRINT_INDENT(depth);
         print("\"");
         print_count_chars(a->keys[i].cstr, a->keys[i].len);
@@ -581,7 +581,7 @@ static void json_print_object(json_object *a, int depth)
 static void json_print_array(json_array *a, int depth)
 {
     println("[");
-    for(int i = 0; i < a->len; ++i) {
+    for(uint i = 0; i < a->len; ++i) {
         JSON_PRINT_INDENT(depth);
         switch(a->elem_type) {
         case JSON_TYPE_OBJECT:

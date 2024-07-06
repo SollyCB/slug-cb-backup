@@ -2,7 +2,8 @@
 
 {set -xe} 2>/dev/null
 
-CF="-g -mbmi -msse4.1 -pthread -mlzcnt -fstack-protector-all -O0 -lm"
+CF="-g -mbmi -msse4.1 -pthread -mlzcnt -fstack-protector-all -O0 -lm -Wall -Wextra -Wnarrowing -Werror \
+    -Wno-unused -Wunused-value -Wno-missing-field-initializers -Wno-cast-function-type"
 
 LIB_SHADERC=-lshaderc_combined
 L="-lglfw -lvulkan"

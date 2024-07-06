@@ -17,8 +17,10 @@
 static VKAPI_ATTR VkBool32 VKAPI_CALL gpu_debug_messenger_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
 {
     // @Validation Layers are controlled by vkconfig now.
+    #if 0
     if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
-        ;//println("\nValidation Layer: %s", pCallbackData->pMessage);
+        println("\nValidation Layer: %s", pCallbackData->pMessage);
+    #endif
 
     return VK_FALSE;
 }

@@ -19,11 +19,12 @@ static inline PFN_vkEnumerateInstanceExtensionProperties sol_vkEnumerateInstance
     return fn;
 }
 
+// @Validation Layers are controlled by vkconfig now.
+#if 0
 static inline PFN_vkCreateDebugUtilsMessengerEXT sol_vkCreateDebugUtilsMessengerEXT(VkInstance instance) {
-    // @Validation Layers are controlled by vkconfig now.
-    // PFN_vkCreateDebugUtilsMessengerEXT fn = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
-    // log_print_error_if(!fn, "PFN_vkCreateDebugUtilsMessengerEXT not present");
-    // return fn;
+    PFN_vkCreateDebugUtilsMessengerEXT fn = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+    log_print_error_if(!fn, "PFN_vkCreateDebugUtilsMessengerEXT not present");
+    return fn;
 }
 
 static inline PFN_vkDestroyDebugUtilsMessengerEXT sol_vkDestroyDebugUtilsMessengerEXT(VkInstance instance) {
@@ -32,6 +33,7 @@ static inline PFN_vkDestroyDebugUtilsMessengerEXT sol_vkDestroyDebugUtilsMesseng
     // log_print_error_if(!fn, "PFN_vkDestroyDebugUtilsMessengerEXT not present");
     // return fn;
 }
+#endif
 
 static inline PFN_vkCreateSwapchainKHR sol_vkCreateSwapchainKHR(VkDevice device) {
     PFN_vkCreateSwapchainKHR fn = (PFN_vkCreateSwapchainKHR)vkGetDeviceProcAddr(device, "vkCreateSwapchainKHR");
@@ -434,7 +436,8 @@ void init_vk_dispatch_table(int stage, VkInstance instance, VkDevice device)
             break;
         case SOL_VK_DISPATCH_TABLE_INIT_STAGE_PRE_DEVICE:
             vulkan_dispatch_table.destroy_instance = sol_vkDestroyInstance(instance);
-            #if DEBUG
+            // @Validation layers are controlled by vkconfig now.
+            #if 0 // DEBUG
             vulkan_dispatch_table.create_debug_utils_messenger_ext = sol_vkCreateDebugUtilsMessengerEXT(instance);
             vulkan_dispatch_table.destroy_debug_utils_messenger_ext = sol_vkDestroyDebugUtilsMessengerEXT(instance);
             #endif

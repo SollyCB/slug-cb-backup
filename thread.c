@@ -145,7 +145,7 @@ static uint thread_work_queue_add(thread_work_queue *queue, uint work_count, str
 }
 
 static inline uint thread_pause(uint pause_mask) {
-    int const max = 64; // MAX_BACKOFF @Test Find a good value.
+    uint max = 64; // MAX_BACKOFF @Test Find a good value.
     for (uint i=pause_mask; i; --i)
         _mm_pause();
 
