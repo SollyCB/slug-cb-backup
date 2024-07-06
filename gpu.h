@@ -121,7 +121,11 @@ struct shadow_maps {
     VkImageView *views;
     VkSampler sampler;
     VkDescriptorSetLayout dsl;
+    #if NO_DESCRIPTOR_BUFFER
+    VkDescriptorSet d_set;
+    #else
     size_t db_offset;
+    #endif
 };
 
 #define GPU_MAX_DESCRIPTOR_SIZE 128

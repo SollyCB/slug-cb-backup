@@ -1084,8 +1084,8 @@ Vertex_Info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vertex
         ai.descriptorSetCount = 1;
         ai.pSetLayouts = &ret->dsl;
 
-        VkResult r = vk_allocate_descriptor_sets(gpu->device, &ai, &ret->d_set);
-        DEBUG_VK_OBJ_CREATION(vkAllocateDescriptorSets, r);
+        if (!resource_dp_allocate(gpu, 0, 1, &ret->dsl, &ret->d_set))
+            return NULL;
 
         VkDescriptorBufferInfo dbi;
         dbi.buffer = gpu->mem.bind_buffer.buf;
@@ -1786,7 +1786,6 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
             .descriptorCount = DIR_LIGHT_COUNT * CSM_COUNT,
             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
         };
-        assert(b.descriptorCount == 4);
 
         VkDescriptorSetLayoutCreateInfo ci = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -1798,8 +1797,10 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
         VkResult check = vk_create_descriptor_set_layout(gpu->device, &ci, GAC, &maps->dsl);
         DEBUG_VK_OBJ_CREATION(vkCreateDescriptorSetLayout, check);
 
+        #if DESCRIPTOR_BUFFER
         vk_get_descriptor_set_layout_size_ext(gpu->device, maps->dsl, &dsl_sz);
         dsl_sz = align(dsl_sz, gpu->descriptors.props.descriptorBufferOffsetAlignment);
+        #endif
     }
 
     size_t img_ofs = gpu_allocate_image_memory(gpu, img_sz);
@@ -1808,6 +1809,12 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
         return false;
     }
 
+    #if NO_DESCRIPTOR_BUFFER
+    {
+        if (!sampler_dp_allocate(gpu, 0, 1, &maps->dsl, &maps->d_set))
+            return false;
+    }
+    #else
     maps->db_offset = gpu_buffer_allocate(gpu, &gpu->mem.descriptor_buffer_sampler,
                                           dsl_sz + gpu->descriptors.props.descriptorBufferOffsetAlignment);
     if (maps->db_offset == GPU_BUF_ALLOC_FAIL) {
@@ -1839,6 +1846,7 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
     } else {
         dsl_data = gpu->mem.descriptor_buffer_sampler.data + maps->db_offset;
     }
+    #endif
 
     for(uint i=0; i < maps->count; ++i) {
         img_ofs = align(img_ofs, mr[i].alignment);
@@ -1894,7 +1902,23 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
         maps->sampler = create_sampler(gpu, &ci);
     }
 
+    #if NO_DESCRIPTOR_BUFFER
+    VkDescriptorImageInfo *ii = sallocate(gpu->alloc_temp, *ii, maps->count * CSM_COUNT);
+    VkWriteDescriptorSet wds = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    wds.dstSet = maps->d_set;
+    wds.dstBinding = 0;
+    wds.dstArrayElement = 0;
+    wds.descriptorCount = DIR_LIGHT_COUNT * CSM_COUNT;
+    wds.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    wds.pImageInfo = ii;
+    #endif
+
     for(uint i=0; i < maps->count * CSM_COUNT; ++i) {
+        #if NO_DESCRIPTOR_BUFFER
+        ii[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        ii[i].imageView = maps->views[i];
+        ii[i].sampler = maps->sampler;
+        #else
         VkDescriptorImageInfo ii = {
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             .imageView = maps->views[i],
@@ -1913,7 +1937,12 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
         vk_get_descriptor_ext(gpu->device, &gi, stride, d);
 
         ds_cis_arrcpy(gpu, dsl_data, i, DIR_LIGHT_COUNT * CSM_COUNT, d);
+        #endif
     }
+
+    #if NO_DESCRIPTOR_BUFFER
+    vk_update_descriptor_sets(gpu->device, 1, &wds, 0, NULL);
+    #endif
 
     return true;
 }

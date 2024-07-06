@@ -368,7 +368,8 @@ int main() {
             .dsls[0] = vs_info_desc.dsl,
             .dsls[1] = shadow_maps.dsl,
             #if NO_DESCRIPTOR_BUFFER
-            // @TODO
+            .d_sets[0] = vs_info_desc.d_set,
+            .d_sets[1] = shadow_maps.d_set,
             #else
             .db_indices[0] = DESCRIPTOR_BUFFER_RESOURCE_BIND_INDEX,
             .db_offsets[0] = vs_info_desc.db_offset,
