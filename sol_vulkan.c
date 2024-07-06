@@ -387,6 +387,12 @@ static inline PFN_vkCmdBindVertexBuffers sol_vkCmdBindVertexBuffers(VkDevice dev
     return fn;
 }
 
+static inline PFN_vkCmdBindDescriptorSets sol_vkCmdBindDescriptorSets(VkDevice device) {
+    PFN_vkCmdBindDescriptorSets fn = (PFN_vkCmdBindDescriptorSets)vkGetDeviceProcAddr(device, "vkCmdBindDescriptorSets");
+    log_print_error_if(!fn, "PFN_vkCmdBindDescriptorSets not present");
+    return fn;
+}
+
 static inline PFN_vkCmdBindDescriptorBuffersEXT sol_vkCmdBindDescriptorBuffersEXT(VkDevice device) {
     PFN_vkCmdBindDescriptorBuffersEXT fn = (PFN_vkCmdBindDescriptorBuffersEXT)vkGetDeviceProcAddr(device, "vkCmdBindDescriptorBuffersEXT");
     log_print_error_if(!fn, "PFN_vkCmdBindDescriptorBuffersEXT not present");
@@ -495,6 +501,7 @@ void init_vk_dispatch_table(int stage, VkInstance instance, VkDevice device)
             vulkan_dispatch_table.cmd_bind_pipeline                            = sol_vkCmdBindPipeline(device);
             vulkan_dispatch_table.cmd_bind_index_buffer                        = sol_vkCmdBindIndexBuffer(device);
             vulkan_dispatch_table.cmd_bind_vertex_buffers                      = sol_vkCmdBindVertexBuffers(device);
+            vulkan_dispatch_table.cmd_bind_descriptor_sets                     = sol_vkCmdBindDescriptorSets(device);
             vulkan_dispatch_table.cmd_bind_descriptor_buffers_ext              = sol_vkCmdBindDescriptorBuffersEXT(device);
             vulkan_dispatch_table.cmd_set_descriptor_buffer_offsets_ext        = sol_vkCmdSetDescriptorBufferOffsetsEXT(device);
             vulkan_dispatch_table.cmd_push_constants                           = sol_vkCmdPushConstants(device);

@@ -252,6 +252,15 @@ void draw_model_color(VkCommandBuffer cmd, struct draw_model_info *info)
                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                     info->pipelines[pc]);
 
+            #if NO_DESCRIPTOR_BUFFER
+            vk_cmd_bind_descriptor_sets(cmd,
+                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    info->pipeline_layouts[pc],
+                    0,
+                    info->primitive_infos[pc].dsl_count,
+                    info->primitive_infos[pc].d_sets,
+                    0, NULL);
+            #else
             // @Optimise It might be inefficient to reset all offsets (or it might be a nop
             // since I am setting offsets to what they already are), but I am not sure about
             // the compatibility of my pipeline layouts, need to check that passage again.
@@ -262,6 +271,7 @@ void draw_model_color(VkCommandBuffer cmd, struct draw_model_info *info)
                     info->primitive_infos[pc].dsl_count,
                     info->primitive_infos[pc].db_indices,
                     info->primitive_infos[pc].db_offsets);
+            #endif
 
             vk_cmd_bind_vertex_buffers(cmd,
                     0,
@@ -1162,7 +1172,6 @@ model_pipelines_transform_descriptors_and_draw_info(
                                       gpu->mem.descriptor_buffer_resource.data + dsl_offset);
             }
             #endif
-
         }
         #if DESCRIPTOR_BUFFER
         // @PotentialError Moving this out of the loop may have broken smtg... I have not tested yet.
@@ -1239,7 +1248,6 @@ model_pipelines_transform_descriptors_and_draw_info(
         .scissorCount = 1,
         .pScissors = &dsci,
     };
-
 
     // @Todo This is supposed to be an 'over' operator blend. I am assuming
     // that that is the same as the vulkan VK_BLEND_OVER.
@@ -1558,9 +1566,13 @@ static uint model_vertex_state_and_draw_info(
     }
 
     for(uint i=0; i < arg->dsl_count; ++i) {
+        #if NO_DESCRIPTOR_BUFFER
+        ret->d_sets[i] = arg->d_sets[i];
+        #else
         ret->db_offsets[i] = arg->db_offsets[i]; // @TODO @DescriptorPool
         ret->db_indices[i] = arg->db_indices[i];
         dsl_buf[i] = arg->dsls[i];
+        #endif
     }
     ret->dsl_count = arg->dsl_count;
 
@@ -1571,24 +1583,36 @@ static uint model_vertex_state_and_draw_info(
     // wrong field. The best thing would be to somehow make this a loop.
     DESCRIPTOR_SET_ORDER_CHECK();
 
+    #if NO_DESCRIPTOR_BUFFER
+    ret->d_sets[ret->dsl_count] = resources->resource_ds[mesh_i];
+    #else
     // @Note dsl offsets have already had their stage offset removed if it was there.
     ret->db_indices[ret->dsl_count] = DESCRIPTOR_BUFFER_RESOURCE_BIND_INDEX;
     ret->db_offsets[ret->dsl_count] = offsets->base_descriptor_resource +
                                       offsets->transforms_ubo_dsls[mesh_i];
-    dsl_buf[ret->dsl_count] = resources->transforms_ubo_dsls[mesh_i];
+    #endif
+    dsl_buf[ret->dsl_count] = resources->resource_dsls[mesh_i];
     ret->dsl_count++;
 
     if (prim->material != Max_u32) {
+        #if NO_DESCRIPTOR_BUFFER
+        ret->d_sets[ret->dsl_count] = resources->resource_ds[model->mesh_count + prim->material];
+        #else
         ret->db_indices[ret->dsl_count] = DESCRIPTOR_BUFFER_RESOURCE_BIND_INDEX;
         ret->db_offsets[ret->dsl_count] = offsets->base_descriptor_resource +
                                           offsets->material_ubo_dsl.b +
                                           offsets->material_ubo_dsl_stride * prim->material;
-        dsl_buf[ret->dsl_count] = resources->material_ubo_dsl;
+        #endif
+        dsl_buf[ret->dsl_count] = resources->resource_dsls[model->mesh_count];
         ret->dsl_count++;
 
+        #if NO_DESCRIPTOR_BUFFER
+        ret->d_sets[ret->dsl_count] = resources->texture_ds[prim->material];
+        #else
         ret->db_indices[ret->dsl_count] = DESCRIPTOR_BUFFER_SAMPLER_BIND_INDEX;
         ret->db_offsets[ret->dsl_count] = offsets->base_descriptor_sampler +
                                           offsets->material_textures_dsls[prim->material];
+        #endif
         // @Note Maybe this can read out of bounds, but I doubt it will ever segfault.
         dsl_buf[ret->dsl_count] = resources->texture_dsls[prim->material];
         ret->dsl_count += flag_check(materials[prim->material].flags, MODEL_MATERIAL_TEXTURED_BIT);

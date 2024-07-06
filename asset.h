@@ -57,7 +57,7 @@ struct load_model_arg {
     uint                  *scenes;
     VkDescriptorSetLayout  dsls[SHADER_MAX_DESCRIPTOR_SET_COUNT_OUTSIDE_MODEL_SCOPE];
     #if NO_DESCRIPTOR_BUFFER
-    VkDescriptorSet        descriptor_sets[SHADER_MAX_DESCRIPTOR_SET_COUNT_OUTSIDE_MODEL_SCOPE];
+    VkDescriptorSet        d_sets[SHADER_MAX_DESCRIPTOR_SET_COUNT_OUTSIDE_MODEL_SCOPE];
     #else
     uint                   db_indices[SHADER_MAX_DESCRIPTOR_SET_COUNT_OUTSIDE_MODEL_SCOPE];
     size_t                 db_offsets[SHADER_MAX_DESCRIPTOR_SET_COUNT_OUTSIDE_MODEL_SCOPE];
@@ -74,10 +74,14 @@ struct model_primitive_draw_info {
     uint         vertex_offset_count;
     uint         dsl_count;
     VkIndexType  index_type;
-    uint         db_indices[SHADER_MAX_DESCRIPTOR_SET_COUNT];
     size_t       index_offset;
-    size_t       db_offsets[SHADER_MAX_DESCRIPTOR_SET_COUNT];
     size_t      *vertex_offsets;
+    #if NO_DESCRIPTOR_BUFFER
+    VkDescriptorSet d_sets[SHADER_MAX_DESCRIPTOR_SET_COUNT];
+    #else
+    uint         db_indices[SHADER_MAX_DESCRIPTOR_SET_COUNT];
+    size_t       db_offsets[SHADER_MAX_DESCRIPTOR_SET_COUNT];
+    #endif
 };
 
 struct draw_model_info {
@@ -97,7 +101,7 @@ struct load_model_ret {
     VkCommandBuffer         cmd_transfer;
     VkCommandBuffer         cmd_graphics;
     struct draw_model_info *draw_info;
-    bool32                 *thread_cleanup_resources; // @Todo Need a way to communicate that clean up completed?
+    bool32                 *thread_cleanup_resources;
 };
 
 struct load_model_info {

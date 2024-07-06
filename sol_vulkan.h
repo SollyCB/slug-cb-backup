@@ -78,6 +78,7 @@ struct vulkan_dispatch_table {
     PFN_vkCmdBindPipeline cmd_bind_pipeline;
     PFN_vkCmdBindIndexBuffer cmd_bind_index_buffer;
     PFN_vkCmdBindVertexBuffers cmd_bind_vertex_buffers;
+    PFN_vkCmdBindDescriptorSets cmd_bind_descriptor_sets;
     PFN_vkCmdBindDescriptorBuffersEXT cmd_bind_descriptor_buffers_ext;
     PFN_vkCmdSetDescriptorBufferOffsetsEXT cmd_set_descriptor_buffer_offsets_ext;
     PFN_vkCmdPushConstants cmd_push_constants;
@@ -620,6 +621,19 @@ static inline void vk_cmd_bind_vertex_buffers(
     const VkDeviceSize *pOffsets)
 {
     return vulkan_dispatch_table.cmd_bind_vertex_buffers(commandBuffer, firstBinding, bindingCount, pBuffers, pOffsets);
+}
+
+static inline void vk_cmd_bind_descriptor_sets(
+    VkCommandBuffer        commandBuffer,
+    VkPipelineBindPoint    pipelineBindPoint,
+    VkPipelineLayout       layout,
+    uint32_t               firstSet,
+    uint32_t               descriptorSetCount,
+    const VkDescriptorSet* pDescriptorSets,
+    uint32_t               dynamicOffsetCount,
+    const uint32_t*        pDynamicOffsets)
+{
+    return vulkan_dispatch_table.cmd_bind_descriptor_sets(commandBuffer, pipelineBindPoint, layout, firstSet, descriptorSetCount, pDescriptorSets, dynamicOffsetCount, pDynamicOffsets);
 }
 
 static inline void vk_cmd_bind_descriptor_buffers_ext(
