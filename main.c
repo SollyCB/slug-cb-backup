@@ -366,11 +366,13 @@ int main() {
             .animations = NULL,
             .scenes = &scene,
             .dsls[0] = vs_info_desc.dsl,
+            .dsls[1] = shadow_maps.dsl,
+            #if DESCRIPTOR_BUFFER
             .db_indices[0] = DESCRIPTOR_BUFFER_RESOURCE_BIND_INDEX,
             .db_offsets[0] = vs_info_desc.db_offset,
-            .dsls[1] = shadow_maps.dsl,
             .db_indices[1] = DESCRIPTOR_BUFFER_SAMPLER_BIND_INDEX,
             .db_offsets[1] = shadow_maps.db_offset,
+            #endif
             .color_renderpass = color_rp.rp,
             .depth_renderpass = depth_rp.rp,
             .viewport = pr.gpu.settings.viewport,

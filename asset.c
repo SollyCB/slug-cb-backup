@@ -206,7 +206,7 @@ void load_model_tf(struct thread_work_arg *arg)
 static void* model_cleanup_tf(struct thread_work_arg *arg)
 {
     struct model_resources *resources = arg->arg;
-    model_cleanup(resources, arg->self->id);
+    model_cleanup(resources);
     return NULL;
 }
 
@@ -227,12 +227,11 @@ static void model_cleanup(struct model_resources *resources)
     for(uint i=0; i < resources->sampler_count; ++i)
         gpu_destroy_sampler(gpu, resources->samplers[i]);
 
-    vk_destroy_descriptor_set_layout(gpu->device, resources->material_ubo_dsl, GAC);
+    for(uint i=0; i < resources->mesh_count + 1; ++i)
+        vk_destroy_descriptor_set_layout(gpu->device, resources->resource_dsls[i], GAC);
+
     for(uint i=0; i < resources->texture_dsl_count; ++i)
         vk_destroy_descriptor_set_layout(gpu->device, resources->texture_dsls[i], GAC);
-
-    for(uint i=0; i < resources->mesh_count; ++i)
-        vk_destroy_descriptor_set_layout(gpu->device, resources->transforms_ubo_dsls[i], GAC);
 
     for(uint i=0; i < resources->pipeline_layout_count; ++i)
         vk_destroy_pipeline_layout(gpu->device, resources->pipeline_layouts[i], GAC);
@@ -349,6 +348,7 @@ material_descriptors_and_pipeline_info(
     struct load_model_arg            *arg,
     struct model_texture_descriptors  textures,
     struct model_memory_offsets      *offsets,
+    struct model_resources           *resources,
     struct allocators                *allocs);
 
 static uint
@@ -393,8 +393,8 @@ static uint load_model(
         get_model_texture_descriptors(arg, resources, allocs);
     #endif
 
-    struct model_material *materials =
-        material_descriptors_and_pipeline_info(arg, texture_descriptors, &offsets, allocs);
+    struct model_material *materials = material_descriptors_and_pipeline_info(
+            arg, texture_descriptors, &offsets, resources, allocs);
 
     model_pipelines_transform_descriptors_and_draw_info(arg, resources, &offsets,
                                                         materials, allocs, draw_info);
@@ -438,8 +438,8 @@ static uint allocate_model_resources(
     offsets->transforms_ubos      = offsets->buffers         + model->buffer_count;
     offsets->mesh_instance_counts = offsets->transforms_ubos + model->mesh_count;
 
-    uint *image_offsets_stage  = offsets->mesh_instance_count + model->mesh_count;
-    uint *image_offsets_device = image_offsets_stage          + model->image_count;
+    uint *image_offsets_stage  = offsets->mesh_instance_counts + model->mesh_count;
+    uint *image_offsets_device = image_offsets_stage           + model->image_count;
 
     temp_rsc_dsls = (VkDescriptorSetLayout*)(image_offsets_device + model->image_count);
     #else
@@ -526,7 +526,8 @@ static uint allocate_model_resources(
             .bindingCount = 1,
             .pBindings = &binding,
         };
-        VkResult check = vk_create_descriptor_set_layout(gpu->device, &ci, GAC, &resources->resource_dsls[model->mesh_count]);
+        VkResult check = vk_create_descriptor_set_layout(gpu->device, &ci, GAC,
+                &resources->resource_dsls[model->mesh_count]);
         DEBUG_VK_OBJ_CREATION(vkCreateDescriptorSetLayout, check);
 
         #if NO_DESCRIPTOR_BUFFER
@@ -862,6 +863,7 @@ static struct model_material* material_descriptors_and_pipeline_info(
     struct load_model_arg            *arg,
     struct model_texture_descriptors  textures,
     struct model_memory_offsets      *offsets,
+    struct model_resources           *resources,
     struct allocators                *allocs)
 {
     struct gpu *gpu = arg->gpu;
@@ -936,7 +938,8 @@ static struct model_material* material_descriptors_and_pipeline_info(
         uint64 ofs = offsets->base_bind + offsets->material_ubo + SHADER_MATERIAL_UBO_SIZE*i;
 
         #if NO_DESCRIPTOR_BUFFER
-        wds_tex[i]                 = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+        memset(&wds_tex[i], 0, sizeof(wds_tex[i]));
+        wds_tex[i].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         wds_tex[i].dstSet          = resources->resource_ds[model->mesh_count + i];
         wds_tex[i].dstBinding      = 0;
         wds_tex[i].dstArrayElement = 0;
@@ -973,10 +976,12 @@ static struct model_material* material_descriptors_and_pipeline_info(
         // field.
         GLTF_MATERIAL_TEXTURE_INFOS_HAVE_NOT_BEEN_REORDERED_CHECK();
 
-        f &= GLTF_MATERIAL_TEXTURE_BITS;
+        uint f = model->materials[i].flags & GLTF_MATERIAL_TEXTURE_BITS;;
         gltf_texture_info *texture_infos = &model->materials[i].base_color;
 
-        wds_tex[i]                 = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+        #if NO_DESCRIPTOR_BUFFER
+        memset(&wds_tex[i], 0, sizeof(wds_tex[i]));
+        wds_tex[i].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         wds_tex[i].dstSet          = resources->texture_ds[i];
         wds_tex[i].dstBinding      = 0;
         wds_tex[i].dstArrayElement = 0;
@@ -984,19 +989,18 @@ static struct model_material* material_descriptors_and_pipeline_info(
         wds_tex[i].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         wds_tex[i].pImageInfo      = &dii[i * GLTF_MAX_MATERIAL_TEXTURE_COUNT];
 
-        #if NO_DESCRIPTOR_BUFFER
         for(uint j=0; j < GLTF_MAX_MATERIAL_TEXTURE_COUNT; ++j) {
 
             uint idx = j + i*GLTF_MAX_MATERIAL_TEXTURE_COUNT;
 
-            dbi[idx].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            dii[idx].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
             if (f & (1<<j)) {
-                dbi[idx].sampler   = resources->samplers[texture_infos[j].sampler];
-                dbi[idx].imageView = resources->views[texture_infos[j].image];
+                dii[idx].sampler   = resources->samplers[model->textures[texture_infos[j].texture].sampler];
+                dii[idx].imageView = resources->images[model->textures[texture_infos[j].texture].source].view;
             } else {
-                dbi[idx].sampler   = gpu->defaults.sampler;
-                dbi[idx].imageView = gpu->defaults.image.view;
+                dii[idx].sampler   = gpu->defaults.sampler;
+                dii[idx].imageView = gpu->defaults.texture.image.view;
             }
         }
         #else
@@ -1080,6 +1084,20 @@ model_pipelines_transform_descriptors_and_draw_info(
 
     draw_info->mesh_count = model->mesh_count;
 
+    #if NO_DESCRIPTOR_BUFFER
+    uint dbi_count = 0;
+    for(uint i=0; i < model->mesh_count; ++i)
+        dbi_count += offsets->mesh_instance_counts[i];
+
+    VkDescriptorBufferInfo *dbi;
+    VkWriteDescriptorSet *wds = allocate(allocs->temp,
+            sizeof(*wds) * model->mesh_count +
+            sizeof(*dbi) * dbi_count);
+    dbi = (VkDescriptorBufferInfo*)(wds + model->mesh_count);
+
+    uint di = 0; // used in below loop;
+    #endif
+
     // @Note The descriptor offset code in the loop is particularly brutal to ensure is correct.
     uint pc = 0;
     uint ac = 0;
@@ -1098,10 +1116,27 @@ model_pipelines_transform_descriptors_and_draw_info(
 
         uint ubo_size = vt_ubo_sz();
 
+        #if NO_DESCRIPTOR_BUFFER
+        memset(&wds[i], 0, sizeof(wds[i]));
+        wds[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        wds[i].dstSet = resources->resource_ds[i];
+        wds[i].dstBinding = 0;
+        wds[i].dstArrayElement = 0;
+        wds[i].descriptorCount = 0;
+        wds[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        wds[i].pBufferInfo = &dbi[di];
+        #endif
+
         // @Optimise Check what this loop compiles to and whether stuff gets lifted out properly.
         for(uint j=0; j < offsets->mesh_instance_counts[i]; ++j) {
             size_t ubo_offset = offsets->base_bind + offsets->transforms_ubos[i] + ubo_size*j;
 
+            #if NO_DESCRIPTOR_BUFFER
+            dbi[di].buffer = gpu->mem.bind_buffer.buf;
+            dbi[di].offset = ubo_offset;
+            dbi[di].range = ubo_size;
+            di++;
+            #else
             VkDescriptorAddressInfoEXT bai = {
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
                 .address = gpu->mem.bind_buffer.address + ubo_offset,
@@ -1126,11 +1161,20 @@ model_pipelines_transform_descriptors_and_draw_info(
                 vk_get_descriptor_ext(gpu->device, &gi, descriptor_size,
                                       gpu->mem.descriptor_buffer_resource.data + dsl_offset);
             }
+            #endif
+
         }
+        #if DESCRIPTOR_BUFFER
+        // @PotentialError Moving this out of the loop may have broken smtg... I have not tested yet.
         // no longer require stage offset if it was there.
-        if (gpu->flags & GPU_DESCRIPTOR_BUFFER_NOT_HOST_VISIBLE_BIT)
+        if ((gpu->flags & GPU_DESCRIPTOR_BUFFER_NOT_HOST_VISIBLE_BIT) && offsets->mesh_instance_counts[i])
             offsets->transforms_ubo_dsls[i] -= offsets->transforms_ubo_dsls[0];
+        #endif
     }
+
+    #if NO_DESCRIPTOR_BUFFER
+    vk_update_descriptor_sets(gpu->device, model->mesh_count, wds, 0, NULL);
+    #endif
 
     draw_info->prim_count = pc;
 
@@ -1276,6 +1320,8 @@ model_pipelines_transform_descriptors_and_draw_info(
         .dynamicStateCount = 0,
     };
 
+    // @Optimise If descriptor buffers are off, this is the second allocation in this function.
+    // Not huge deal as this is a large function and each allocation sizeable but still.
     struct model_shaders *shaders;
     VkPipelineVertexInputStateCreateInfo *vi;
     VkPipelineInputAssemblyStateCreateInfo *ia;
@@ -1381,7 +1427,10 @@ model_pipelines_transform_descriptors_and_draw_info(
             ac += model_vertex_state_and_draw_info(arg, resources, offsets, materials, i, j,
                                                   &draw_info->primitive_infos[pc], dsl_buf,
                                                   vi + pc, ia + pc);
+
+            #if DESCRIPTOR_BUFFER
             assert(dsl_buf[arg->dsl_count] == resources->transforms_ubo_dsls[i]);
+            #endif
 
             VkPipelineLayoutCreateInfo plc = {
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -1509,7 +1558,7 @@ static uint model_vertex_state_and_draw_info(
     }
 
     for(uint i=0; i < arg->dsl_count; ++i) {
-        ret->db_offsets[i] = arg->db_offsets[i];
+        ret->db_offsets[i] = arg->db_offsets[i]; // @TODO @DescriptorPool
         ret->db_indices[i] = arg->db_indices[i];
         dsl_buf[i] = arg->dsls[i];
     }
