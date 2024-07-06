@@ -263,8 +263,12 @@ void htp_commands(VkCommandBuffer cmd, struct gpu *gpu, struct htp_rsc *rsc);
 
 struct vertex_info_descriptor { // @BadName
     VkDescriptorSetLayout dsl;
-    size_t db_offset;
     size_t bb_offset;
+    #if NO_DESCRIPTOR_BUFFER
+    VkDescriptorSet d_set;
+    #else
+    size_t db_offset;
+    #endif
 };
 
 Vertex_Info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vertex_info_descriptor *ret);

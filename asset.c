@@ -568,7 +568,7 @@ static uint allocate_model_resources(
         // outside the loop.
         VkDescriptorSetLayoutBinding binding = {
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount = popcnt(model->materials[i].flags & GLTF_MATERIAL_TEXTURE_BITS),
+            .descriptorCount = GLTF_MAX_MATERIAL_TEXTURE_COUNT, // popcnt(model->materials[i].flags & GLTF_MATERIAL_TEXTURE_BITS),
             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
         };
         VkDescriptorSetLayoutCreateInfo ci = {

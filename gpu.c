@@ -1073,16 +1073,44 @@ Vertex_Info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vertex
     VkResult check = vk_create_descriptor_set_layout(gpu->device, &ci, GAC, &ret->dsl);
     DEBUG_VK_OBJ_CREATION(vkCreateDescriptorSetLayout, check);
 
+    size_t used;
+
+    ret->bb_offset = gpu_buffer_allocate(gpu, &gpu->mem.bind_buffer, vt_ubo_sz());
+
+    #if NO_DESCRIPTOR_BUFFER
+    {
+        VkDescriptorSetAllocateInfo ai = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+        ai.descriptorPool = gpu->resource_dp[0];
+        ai.descriptorSetCount = 1;
+        ai.pSetLayouts = &ret->dsl;
+
+        VkResult r = vk_allocate_descriptor_sets(gpu->device, &ai, &ret->d_set);
+        DEBUG_VK_OBJ_CREATION(vkAllocateDescriptorSets, r);
+
+        VkDescriptorBufferInfo dbi;
+        dbi.buffer = gpu->mem.bind_buffer.buf;
+        dbi.offset = ret->bb_offset;
+        dbi.range  = vt_ubo_sz();
+
+        VkWriteDescriptorSet wds = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+        wds.dstSet = ret->d_set;
+        wds.dstBinding = 0;
+        wds.dstArrayElement = 0;
+        wds.descriptorCount = 1;
+        wds.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        wds.pBufferInfo = &dbi;
+
+        vkUpdateDescriptorSets(gpu->device, 1, &wds, 0, NULL);
+    }
+    #else
+
     size_t sz;
     vk_get_descriptor_set_layout_size_ext(gpu->device, ret->dsl, &sz);
 
-    size_t bb_ofs = gpu_buffer_allocate(gpu, &gpu->mem.bind_buffer, sizeof(Vertex_Info));
-    ret->bb_offset = bb_ofs;
-
     VkDescriptorAddressInfoEXT ub = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
-        .address = gpu->mem.bind_buffer.address + bb_ofs,
-        .range = sizeof(Vertex_Info),
+        .address = gpu->mem.bind_buffer.address + ret->bb_offset,
+        .range = vt_ubo_sz(),
     };
 
     VkDescriptorGetInfoEXT gi = {
@@ -1095,16 +1123,16 @@ Vertex_Info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vertex
     vk_get_descriptor_ext(gpu->device, &gi, gpu->descriptors.props.uniformBufferDescriptorSize,
                           gpu->mem.descriptor_buffer_resource.data + ret->db_offset);
 
-    size_t used;
     atomic_load(&gpu->mem.descriptor_buffer_resource.used, &used);
     if (used > GPU_DESCRIPTOR_BUFFER_RESOURCE_RESERVED_SIZE)
         log_print_error("initializing vs_info overflows descriptor buffer resource's reserved size");
+    #endif
 
     atomic_load(&gpu->mem.bind_buffer.used, &used);
     if (used > GPU_BIND_BUFFER_RESERVED_SIZE)
         log_print_error("initializing vs_info overflows bind buffer's reserved size");
 
-    Vertex_Info *vs = (Vertex_Info*)(gpu->mem.bind_buffer.data + bb_ofs);
+    Vertex_Info *vs = (Vertex_Info*)(gpu->mem.bind_buffer.data + ret->bb_offset);
 
     vs->dlcx[0] = 1;
     vs->dir_lights[0].position = vector4(0, 15, 0,  1);
