@@ -642,9 +642,14 @@ struct draw_floor_rsc {
     VkPipeline pipeline;
 };
 
+#if NO_DESCRIPTOR_BUFFER
+void draw_floor(VkCommandBuffer cmd, struct gpu *gpu, VkRenderPass rp, uint subpass,
+        uint count, VkDescriptorSetLayout *dsls, VkDescriptorSet *sets, struct draw_floor_rsc *rsc);
+#else
 void draw_floor(VkCommandBuffer cmd, struct gpu *gpu, VkRenderPass rp, uint subpass,
                 VkDescriptorSetLayout dsls[2], uint db_indices[2], size_t db_offsets[2],
                 struct draw_floor_rsc *rsc);
+#endif
 void draw_floor_cleanup(struct gpu *gpu, struct draw_floor_rsc *rsc);
 
 #endif // include guard

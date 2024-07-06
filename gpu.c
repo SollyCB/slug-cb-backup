@@ -2837,6 +2837,123 @@ static VkShaderModule create_shader_module(VkDevice d, const char *file_name, al
     return mod;
 }
 
+#if NO_DESCRIPTOR_BUFFER
+void draw_floor(VkCommandBuffer cmd, struct gpu *gpu, VkRenderPass rp, uint subpass,
+        uint count, VkDescriptorSetLayout *dsls, VkDescriptorSet *sets, struct draw_floor_rsc *rsc)
+{
+    VkPipelineShaderStageCreateInfo stages[] = {
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_VERTEX_BIT,
+            .module = create_shader_module(gpu->device, "shaders/floor.vert.spv", gpu->alloc_temp),
+            .pName = SHADER_ENTRY_POINT,
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .module = create_shader_module(gpu->device, "shaders/floor.frag.spv", gpu->alloc_temp),
+            .pName = SHADER_ENTRY_POINT,
+        },
+    };
+    rsc->modules[0] = stages[0].module;
+    rsc->modules[1] = stages[1].module;
+
+    VkPipelineVertexInputStateCreateInfo vi = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+    };
+
+    VkPipelineInputAssemblyStateCreateInfo ia = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+    };
+
+    VkPipelineViewportStateCreateInfo vp = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        .viewportCount = 1,
+        .scissorCount = 1,
+        .pViewports = &gpu->settings.viewport,
+        .pScissors = &gpu->settings.scissor,
+    };
+
+    VkPipelineRasterizationStateCreateInfo ra = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+        .polygonMode = VK_POLYGON_MODE_FILL,
+        .lineWidth = 1,
+    };
+
+    VkPipelineMultisampleStateCreateInfo mu = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+    };
+
+    VkPipelineDepthStencilStateCreateInfo ds = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .minDepthBounds = 0,
+        .maxDepthBounds = 1,
+    };
+
+    VkPipelineColorBlendStateCreateInfo cb = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+        .attachmentCount = 1,
+        .pAttachments = &COLOR_BLEND_NONE,
+        .blendConstants = {1,1,1,1},
+    };
+
+    VkPipelineDynamicStateCreateInfo dn = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+    };
+
+    VkPipelineLayout layout;
+    {
+        VkPipelineLayoutCreateInfo ci = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .setLayoutCount = 2,
+            .pSetLayouts = dsls,
+        };
+
+        VkResult check = vk_create_pipeline_layout(gpu->device, &ci, GAC, &layout);
+        DEBUG_VK_OBJ_CREATION(vkCreatePipelineLayout, check);
+
+        rsc->layout = layout;
+    }
+
+    VkPipeline pl;
+    {
+        VkGraphicsPipelineCreateInfo ci = {
+            .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+            .flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+            .stageCount = 2,
+            .pStages = stages,
+            .pVertexInputState = &vi,
+            .pInputAssemblyState = &ia,
+            .pViewportState = &vp,
+            .pRasterizationState = &ra,
+            .pMultisampleState = &mu,
+            .pDepthStencilState = &ds,
+            .pColorBlendState = &cb,
+            .pDynamicState = &dn,
+            .layout = layout,
+            .renderPass = rp,
+            .subpass = subpass,
+        };
+
+        VkResult check = vk_create_graphics_pipelines(gpu->device, gpu->pipeline_cache, 1, &ci, GAC, &pl);
+        DEBUG_VK_OBJ_CREATION(vkCreateGraphicsPipelines, check);
+
+        rsc->pipeline = pl;
+    }
+
+    vk_cmd_bind_pipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pl);
+    vk_cmd_bind_descriptor_sets(cmd,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            layout,
+            0,
+            count,
+            sets,
+            0, NULL);
+    vk_cmd_draw(cmd, 6, 1, 0, 0);
+}
+#else
 void draw_floor(VkCommandBuffer cmd, struct gpu *gpu, VkRenderPass rp, uint subpass,
                 VkDescriptorSetLayout dsls[2], uint db_indices[2], size_t db_offsets[2],
                 struct draw_floor_rsc *rsc)
@@ -2949,6 +3066,7 @@ void draw_floor(VkCommandBuffer cmd, struct gpu *gpu, VkRenderPass rp, uint subp
                                              0, 2, db_indices, db_offsets);
     vk_cmd_draw(cmd, 6, 1, 0, 0);
 }
+#endif
 
 void draw_floor_cleanup(struct gpu *gpu, struct draw_floor_rsc *rsc)
 {

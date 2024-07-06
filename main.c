@@ -367,7 +367,9 @@ int main() {
             .scenes = &scene,
             .dsls[0] = vs_info_desc.dsl,
             .dsls[1] = shadow_maps.dsl,
-            #if DESCRIPTOR_BUFFER
+            #if NO_DESCRIPTOR_BUFFER
+            // @TODO
+            #else
             .db_indices[0] = DESCRIPTOR_BUFFER_RESOURCE_BIND_INDEX,
             .db_offsets[0] = vs_info_desc.db_offset,
             .db_indices[1] = DESCRIPTOR_BUFFER_SAMPLER_BIND_INDEX,
@@ -420,7 +422,11 @@ int main() {
 
             begin_color_renderpass(draw_cmd, &color_rp, pr.gpu.settings.scissor);
 
+            #if NO_DESCRIPTOR_BUFFER
+            draw_floor(draw_cmd, &pr.gpu, color_rp.rp, 0, 2, lma.dsls, lma.d_sets, &df_rsc);
+            #else
             draw_floor(draw_cmd, &pr.gpu, color_rp.rp, 0, lma.dsls, lma.db_indices, lma.db_offsets, &df_rsc);
+            #endif
 
             draw_model_color(draw_cmd, lmr.draw_info);
 
