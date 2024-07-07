@@ -151,6 +151,8 @@ static inline void update_camera(struct camera *c, struct window *w, float dt)
 
     if (glfwGetKey(w->window, GLFW_KEY_L) == GLFW_PRESS)
         c->mode = CAMERA_MODE_LIGHT;
+    if (glfwGetKey(w->window, GLFW_KEY_Q) == GLFW_PRESS)
+        exit(0);
 
     if (c->mode == CAMERA_MODE_LIGHT) {
         if (glfwGetKey(w->window, GLFW_KEY_1) == GLFW_PRESS)

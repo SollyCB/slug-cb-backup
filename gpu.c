@@ -1784,6 +1784,22 @@ void gpu_blit_gltf_texture_mipmaps(gltf *model, struct gpu_texture *images, VkCo
     }
 }
 
+void insert_memory_barrier(VkCommandBuffer cmd, VkPipelineStageFlags2 src_stage, VkAccessFlags2 src_access,
+        VkPipelineStageFlags2 dst_stage, VkAccessFlags2 dst_access)
+{
+    VkMemoryBarrier2 b = {VK_STRUCTURE_TYPE_MEMORY_BARRIER_2};
+    b.srcStageMask = src_stage;
+    b.srcAccessMask = src_access;
+    b.dstStageMask = dst_stage;
+    b.dstAccessMask = dst_access;
+
+    VkDependencyInfo d = {VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
+    d.memoryBarrierCount = 1;
+    d.pMemoryBarriers = &b;
+
+    vk_cmd_pipeline_barrier2(cmd, &d);
+}
+
 size_t gpu_buffer_allocate(struct gpu *gpu, struct gpu_buffer *buf, size_t size)
 {
     size = gpu_buffer_align(gpu, size);
@@ -1828,12 +1844,14 @@ void gpu_create_texture(struct gpu *gpu, struct image *image, struct gpu_texture
 
 bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommandBuffer graphics_cmd, struct shadow_maps *maps)
 {
-    maps->images = allocate(gpu->alloc_heap,
-                            sizeof(*maps->images) * maps->count +
-                            sizeof(*maps->views)  * maps->count * CSM_COUNT);
-    maps->views = (VkImageView*)(maps->images + maps->count);
+    // @Todo Revert this back to using arrayed images.
 
-    VkMemoryRequirements *mr = sallocate(gpu->alloc_temp, *mr, maps->count);
+    maps->images = allocate(gpu->alloc_heap,
+                            sizeof(*maps->images) * maps->count * CSM_COUNT +
+                            sizeof(*maps->views)  * maps->count * CSM_COUNT);
+    maps->views = (VkImageView*)(maps->images + maps->count * CSM_COUNT);
+
+    VkMemoryRequirements *mr = sallocate(gpu->alloc_temp, *mr, maps->count * CSM_COUNT);
 
     {
         VkImageCreateInfo ci = {
@@ -1842,21 +1860,21 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
             .format = GPU_SHADOW_ATTACHMENT_FORMAT,
             .extent = (VkExtent3D){gpu->settings.shadow_maps.width,gpu->settings.shadow_maps.height,1},
             .mipLevels = 1,
-            .arrayLayers = CSM_COUNT,
+            .arrayLayers = 1,
             .samples = VK_SAMPLE_COUNT_1_BIT,
             .tiling = VK_IMAGE_TILING_OPTIMAL,
             .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
         };
 
-        for(uint i=0; i < maps->count; ++i) {
+        for(uint i=0; i < maps->count * CSM_COUNT; ++i) {
             VkResult check = vk_create_image(gpu->device, &ci, GAC, &maps->images[i]);
             DEBUG_VK_OBJ_CREATION(vkCreateImage, check);
         }
     }
 
     uint img_sz = 0;
-    for(uint i=0; i < maps->count; ++i) {
+    for(uint i=0; i < maps->count * CSM_COUNT; ++i) {
         vk_get_image_memory_requirements(gpu->device, maps->images[i], &mr[i]);
         img_sz += mr[i].size + mr[i].alignment;
     }
@@ -1931,29 +1949,27 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
     }
     #endif
 
-    for(uint i=0; i < maps->count; ++i) {
+    for(uint i=0; i < maps->count * CSM_COUNT; ++i) {
         img_ofs = align(img_ofs, mr[i].alignment);
         gpu_bind_image(gpu, maps->images[i], img_ofs);
         img_ofs += mr[i].size;
     }
 
-    for(uint i=0; i < maps->count; ++i) {
-        for(uint j=0; j < CSM_COUNT; ++j) {
-            VkImageViewCreateInfo ci = {
-                .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-                .viewType = VK_IMAGE_VIEW_TYPE_2D,
-                .format = GPU_SHADOW_ATTACHMENT_FORMAT,
-                .image = maps->images[i],
-                .subresourceRange = {
-                    .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-                    .levelCount = 1,
-                    .layerCount = 1,
-                    .baseArrayLayer = j,
-                },
-            };
-            VkResult check = vk_create_image_view(gpu->device, &ci, GAC, &maps->views[j + i*CSM_COUNT]);
-            DEBUG_VK_OBJ_CREATION(vkCreateImageView, check);
-        }
+    for(uint i=0; i < maps->count * CSM_COUNT; ++i) {
+        VkImageViewCreateInfo ci = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .viewType = VK_IMAGE_VIEW_TYPE_2D,
+            .format = GPU_SHADOW_ATTACHMENT_FORMAT,
+            .image = maps->images[i],
+            .subresourceRange = {
+                .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+                .levelCount = 1,
+                .layerCount = 1,
+                .baseArrayLayer = 0,
+            },
+        };
+        VkResult check = vk_create_image_view(gpu->device, &ci, GAC, &maps->views[i]);
+        DEBUG_VK_OBJ_CREATION(vkCreateImageView, check);
     }
 
     {
@@ -1975,8 +1991,8 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
             .minLod = 0,
             .maxLod = 0, // VK_LOD_CLAMP_NONE,
             .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
-            .anisotropyEnable = VK_FALSE, // flag_check(gpu->flags, GPU_SAMPLER_ANISOTROPY_ENABLE_BIT),
-            .maxAnisotropy = 0, // gpu->defaults.sampler_anisotropy,
+            .anisotropyEnable = VK_FALSE,
+            .maxAnisotropy = 0,
 
             .compareEnable = VK_TRUE,
             .compareOp = VK_COMPARE_OP_LESS,
@@ -1991,7 +2007,7 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
     wds.dstSet = maps->d_set;
     wds.dstBinding = 0;
     wds.dstArrayElement = 0;
-    wds.descriptorCount = DIR_LIGHT_COUNT * CSM_COUNT;
+    wds.descriptorCount = maps->count * CSM_COUNT;
     wds.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     wds.pImageInfo = ii;
     #endif

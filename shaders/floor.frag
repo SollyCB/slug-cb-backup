@@ -7,6 +7,7 @@
 
 void main() {
 
+    #if 0
     uint ci;
 
     if (fs_info.view_frag_pos.z > vs_info.cascade_boundaries[0])
@@ -32,4 +33,11 @@ void main() {
 
     for(uint i=0; i < dir_light_count; ++i)
         fc = vec4(col * in_shadow(i), 1);
+    #endif
+
+    fc = vec4(0);
+
+    vec3 col = vec3(1, 1, 1);
+    for(uint i=0; i < dir_light_count; ++i)
+        fc += vec4(col * in_shadow(i), 1);
 }

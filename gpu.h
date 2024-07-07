@@ -403,6 +403,8 @@ static inline void gpu_upload_descriptor_buffer_sampler(
 }
 
 void gpu_blit_gltf_texture_mipmaps(gltf *model, struct gpu_texture *images, VkCommandBuffer graphics);
+void insert_memory_barrier(VkCommandBuffer cmd, VkPipelineStageFlags2 src_stage, VkAccessFlags2 src_access,
+        VkPipelineStageFlags2 dst_stage, VkAccessFlags2 dst_access);
 
 struct renderpass {
     VkRenderPass  rp;

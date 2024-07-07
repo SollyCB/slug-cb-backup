@@ -262,7 +262,7 @@ int main() {
                 move_to_camera(cam.pos, cam.dir, vector3(0, 1, 0), &fm);
                 transform_frustum(&camera_frustum, &fm);
             }
-            partition_frustum_c(&camera_frustum, carrlen(sub_frusta), sub_frusta);
+            partition_frustum_s(&camera_frustum, carrlen(sub_frusta), sub_frusta);
 
             for(uint i=0; i < CSM_COUNT; ++i) {
                 minmax_frustum_points(&sub_frusta[i], &light_view_mat, &minmax_frustum_x[i], &minmax_frustum_y[i]);
@@ -408,6 +408,12 @@ int main() {
             ;
 
         {
+            #if 0
+            insert_memory_barrier(draw_cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+                    VK_PIPELINE_STAGE_VERTEX_INPUT_BIT|VK_PIPELINE_STAGE_VERTEX_SHADER_BIT|
+                    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT);
+            #endif
+
             if (!FRAMES_ELAPSED) { // upload default texture on first frame
                 uint upload_offset = 0;
 
@@ -452,15 +458,14 @@ int main() {
             draw_model_color(draw_cmd, lmr.draw_info);
 
             {
-                #define DLP 1
-                #define DSB 1
-                #define DLF 1
-                #define DCF 1
+                #define DLP 0
+                #define DSB 0
+                #define DLF 0
+                #define DCF 0
 
                 struct box vfb[CSM_COUNT];
                 for(uint i=0; i < carrlen(sub_frusta); ++i)
                     frustum_to_box(&sub_frusta[i], &vfb[i]);
-                    // frustum_to_box(&camera_frustum, &vfb[i]);
 
                 matrix m;
                 mul_matrix(&vs_info->proj, &vs_info->view, &m);

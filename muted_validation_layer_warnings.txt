@@ -4,3 +4,8 @@
 
 615892639 - gpu av
     gives messages about stuff being disabled but enabled by av which it then turns off itself.
+
+1303270965 - image layout
+    this is one that I would never want to mute, but it is complaining about an image layout that
+    I am so sure is just incorrect.
+

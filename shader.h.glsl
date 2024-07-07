@@ -150,7 +150,7 @@ vec3 cascade_i() {
     float fz = fs_info.view_frag_pos.z;
     vec4  d  = vs_info.cascade_boundaries;
 
-    #if 0
+    #if 0 // My implementation is superior I think.
     if (fz < -100 || fz > 0)
         pv4(fs_info.view_frag_pos);
 
@@ -179,9 +179,10 @@ vec3 cascade_i() {
 float in_shadow(uint li) {
     vec3 ci = cascade_i();
 
-    uint ca = uint(ci.x);
-    uint cb = uint(ci.y);
-    float c = 0.5;
+    // @CSM Mothballed for now...
+    uint ca = 0; // uint(ci.x);
+    uint cb = 0; // uint(ci.y);
+    float c = 0; // ci.z;
 
     vec3 p = vec3(vs_info.dir_lights[li].space[ca] * fs_info.world_frag_pos);
     vec3 q = vec3(vs_info.dir_lights[li].space[cb] * fs_info.world_frag_pos);
