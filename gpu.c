@@ -2223,15 +2223,15 @@ void create_color_renderpass(struct gpu *gpu, struct renderpass *rp)
             .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
             .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
         },
-        {
+        /*{
             .srcSubpass = 1,
             .dstSubpass = 1,
             .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, // VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_NONE, // VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
             .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
-        },
+        },*/
     };
 
     {

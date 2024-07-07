@@ -561,14 +561,9 @@ int main() {
             vertex_input_semaphore_submit_info(sem_transfer_complete, 0, &sem_w[0]);
             color_output_semaphore_submit_info(sem_have_swapchain_image, 0, &sem_w[1]);
 
+            // @Note @Review Why must all_graphics be used in place of color
+            // attachment output in order to avoid validation warnings?
             VkSemaphoreSubmitInfo sem_s;
-            // @Note  @Review all_graphics must be used here to prevent write after write
-            // hazard between cmd_end_renderpass and swapchain images. This seems like a
-            // bug, because the logical or of pl stages supposedly equivalent to all_graphics
-            // gives extra validation warnings than all_graphics, and only color_output stage
-            // should be having any effect on the swapchain images right? Also this does not
-            // seem to give a best practices error, but I have one in other validation logs
-            // when using the same setup: BestPractices-pipeline-stage-flags(WARN / SPEC): msgNum: 1155215370 - Validation Warning: [ BestPractices-pipeline-stage-flags ] Object 0: handle = 0x5b315639cd00, type = VK_OBJECT_TYPE_QUEUE; | MessageID = 0x44db300a | vkQueueSubmit2(): pSubmits[0].pWaitSemaphoreInfos[1].stageMask using VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT_KHR
             all_graphics_semaphore_submit_info(sem_graphics_complete, 0, &sem_s);
 
             VkSubmitInfo2 si;
