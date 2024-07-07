@@ -456,9 +456,11 @@ void init_vk_dispatch_table(int stage, VkInstance instance, VkDevice device)
             vulkan_dispatch_table.allocate_descriptor_sets                     = sol_vkAllocateDescriptorSets(device);
             vulkan_dispatch_table.update_descriptor_sets                       = sol_vkUpdateDescriptorSets(device);
             vulkan_dispatch_table.reset_descriptor_pool                        = sol_vkResetDescriptorPool(device);
+            #if DESCRIPTOR_BUFFER
             vulkan_dispatch_table.get_descriptor_ext                           = sol_vkGetDescriptorEXT(device);
             vulkan_dispatch_table.get_descriptor_set_layout_binding_offset_ext = sol_vkGetDescriptorSetLayoutBindingOffsetEXT(device);
             vulkan_dispatch_table.get_descriptor_set_layout_size_ext           = sol_vkGetDescriptorSetLayoutSizeEXT(device);
+            #endif
             vulkan_dispatch_table.create_shader_module                         = sol_vkCreateShaderModule(device);
             vulkan_dispatch_table.destroy_shader_module                        = sol_vkDestroyShaderModule(device);
             vulkan_dispatch_table.create_buffer                                = sol_vkCreateBuffer(device);
@@ -505,8 +507,10 @@ void init_vk_dispatch_table(int stage, VkInstance instance, VkDevice device)
             vulkan_dispatch_table.cmd_bind_index_buffer                        = sol_vkCmdBindIndexBuffer(device);
             vulkan_dispatch_table.cmd_bind_vertex_buffers                      = sol_vkCmdBindVertexBuffers(device);
             vulkan_dispatch_table.cmd_bind_descriptor_sets                     = sol_vkCmdBindDescriptorSets(device);
+            #if DESCRIPTOR_BUFFER
             vulkan_dispatch_table.cmd_bind_descriptor_buffers_ext              = sol_vkCmdBindDescriptorBuffersEXT(device);
             vulkan_dispatch_table.cmd_set_descriptor_buffer_offsets_ext        = sol_vkCmdSetDescriptorBufferOffsetsEXT(device);
+            #endif
             vulkan_dispatch_table.cmd_push_constants                           = sol_vkCmdPushConstants(device);
             vulkan_dispatch_table.cmd_draw_indexed                             = sol_vkCmdDrawIndexed(device);
             vulkan_dispatch_table.cmd_draw                                     = sol_vkCmdDraw(device);

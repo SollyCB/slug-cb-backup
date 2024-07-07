@@ -2,6 +2,7 @@
 #define SOL_DEFS_H_INCLUDE_GUARD_
 
 extern int FRAME_I;
+extern int FRAMES_ELAPSED;
 extern int SCR_H;
 extern int SCR_W;
 extern float ASPECT_RATIO;
@@ -37,6 +38,7 @@ extern float FOV;
 #define MULTITHREADED 1
 #define GPU 1
 #define CHECK_END_STATE 1
+
 #define NO_DESCRIPTOR_BUFFER 1
 #define DESCRIPTOR_BUFFER (!NO_DESCRIPTOR_BUFFER)
 

@@ -8,6 +8,12 @@
 #define MORPH_WEIGHT_COUNT 1
 #define SPLIT_SHADOW_MVP 1
 
+#ifdef GL_core_profile
+#extension GL_GOOGLE_include_directive : require
+#endif
+
+#include "gltf_limits.h"
+
 #ifndef GL_core_profile // C code invisible to glsl
 
 typedef struct In_Directional_Light In_Directional_Light;
@@ -133,7 +139,7 @@ layout(location = 1) out Fragment_Info fs_info;
 
 layout(set = 1, binding = 0) uniform sampler2DShadow shadow_maps[DIR_LIGHT_COUNT * CSM_COUNT];
 layout(set = 3, binding = 0) uniform UBO_Material_Uniforms { Material_Uniforms material_ubo; };
-layout(set = 4, binding = 0) uniform sampler2D material_textures[2];
+layout(set = 4, binding = 0) uniform sampler2D material_textures[GLTF_MAX_MATERIAL_TEXTURE_COUNT];
 
 layout(location = 0) out vec4 fc;
 

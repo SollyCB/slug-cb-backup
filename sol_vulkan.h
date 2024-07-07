@@ -197,12 +197,26 @@ static inline void vk_destroy_descriptor_pool(
     vulkan_dispatch_table.destroy_descriptor_pool(device, descriptorPool, pAllocator);
 }
 
+#if PRINT_DESCRIPTOR_INFO
+#define PRINT_DESCRIPTOR_SET_ALLOCATIONS 1
+#define PRINT_DESCRIPTOR_SET_UPDATES     1
+#endif
+
 static inline VkResult vk_allocate_descriptor_sets(
     VkDevice                           device,
     const VkDescriptorSetAllocateInfo* pAllocateInfo,
     VkDescriptorSet*                   pDescriptorSets)
 {
+    #if PRINT_DESCRIPTOR_SET_ALLOCATIONS
+    VkResult r = vulkan_dispatch_table.allocate_descriptor_sets(device, pAllocateInfo, pDescriptorSets);
+
+    for(uint i=0; i < pAllocateInfo->descriptorSetCount; ++i)
+        println("allocate sets[%u] %uh", i, pDescriptorSets[i]);
+
+    return r;
+    #else
     return vulkan_dispatch_table.allocate_descriptor_sets(device, pAllocateInfo, pDescriptorSets);
+    #endif
 }
 
 static inline void vk_update_descriptor_sets(
@@ -213,6 +227,11 @@ static inline void vk_update_descriptor_sets(
     const VkCopyDescriptorSet*  pDescriptorCopies)
 {
     vulkan_dispatch_table.update_descriptor_sets(device, descriptorWriteCount, pDescriptorWrites, descriptorCopyCount, pDescriptorCopies);
+
+    #if PRINT_DESCRIPTOR_SET_UPDATES
+    for(uint i=0; i < descriptorWriteCount; ++i)
+        println("update sets [%u] %uh", i, pDescriptorWrites[i].dstSet);
+    #endif
 }
 
 static inline VkResult vk_reset_descriptor_pool(
@@ -633,7 +652,8 @@ static inline void vk_cmd_bind_descriptor_sets(
     uint32_t               dynamicOffsetCount,
     const uint32_t*        pDynamicOffsets)
 {
-    return vulkan_dispatch_table.cmd_bind_descriptor_sets(commandBuffer, pipelineBindPoint, layout, firstSet, descriptorSetCount, pDescriptorSets, dynamicOffsetCount, pDynamicOffsets);
+    return vulkan_dispatch_table.cmd_bind_descriptor_sets(commandBuffer, pipelineBindPoint, layout,
+            firstSet, descriptorSetCount, pDescriptorSets, dynamicOffsetCount, pDynamicOffsets);
 }
 
 static inline void vk_cmd_bind_descriptor_buffers_ext(

@@ -32,6 +32,8 @@ int SCR_W = 640 * 2;
 int SCR_H = 480 * 2;
 float FOV = PI / 4;
 
+int FRAMES_ELAPSED = 0;
+
 #define MAIN_HEAP_ALLOCATOR_SIZE (48 * 1024 * 1024)
 #define MAIN_TEMP_ALLOCATOR_SIZE (8 * 1024 * 1024)
 
@@ -194,9 +196,7 @@ int main() {
     struct frustum sub_frusta[CSM_COUNT];
     struct minmax minmax_frustum_x[CSM_COUNT],minmax_frustum_y[CSM_COUNT], light_nearfar_planes[CSM_COUNT];
 
-    uint frame_count = 0;
-
-    // for(uint frame_index=0; frame_index < 3; ++frame_index) {
+    // for(uint frame_index=0; frame_index < 2; ++frame_index) {
     while(1) {
         poll_glfw();
 
@@ -354,7 +354,11 @@ int main() {
         uint scene = 0;
 
         struct load_model_arg lma = {
-            .flags = 0, // LOAD_MODEL_BLIT_MIPMAPS_BIT,
+            #if 1
+            .flags = LOAD_MODEL_BLIT_MIPMAPS_BIT,
+            #else
+            .flags = 0,
+            #endif
             .dsl_count = 2,
             .animation_count = 0,
             .scene_count = model.scene_count,
@@ -404,6 +408,20 @@ int main() {
             ;
 
         {
+            if (!FRAMES_ELAPSED) { // upload default texture on first frame
+                uint upload_offset = 0;
+
+                gpu_upload_images_with_base_offset(&pr.gpu, 1, &pr.gpu.defaults.texture.image,
+                        0, &upload_offset, lmr.cmd_transfer, lmr.cmd_graphics);
+
+                transition_texture_layouts(
+                        draw_cmd,
+                        false, // only 1px image anyway...
+                        1,
+                        &pr.gpu.defaults.texture.image,
+                        &pr.allocs.temp);
+            }
+
             struct shadow_pass_info spi = {
                 .gpu = &pr.gpu,
                 .rp = &depth_rp,
@@ -419,7 +437,9 @@ int main() {
             };
             do_shadow_pass(draw_cmd, &spi, &pr.allocs.temp);
 
+            #if DESCRIPTOR_BUFFER
             bind_descriptor_buffers(draw_cmd, &pr.gpu);
+            #endif
 
             begin_color_renderpass(draw_cmd, &color_rp, pr.gpu.settings.scissor);
 
@@ -591,9 +611,8 @@ int main() {
         reset_command_pool(&pr.gpu, transfer_pool);
         reset_command_pool(&pr.gpu, graphics_pool);
 
-        FRAME_I = (FRAME_I + 1) & 1;
-
-        frame_count++;
+        FRAMES_ELAPSED++;
+        FRAME_I = FRAMES_ELAPSED & 1;
 
         {
             #if 0 // Throttle frame rate
@@ -607,6 +626,7 @@ int main() {
         while(ONE_FRAME)
             ;
     }
+    exit(0);
 
     vk_destroy_command_pool(pr.gpu.device, transfer_pool, GAC);
     vk_destroy_command_pool(pr.gpu.device, graphics_pool, GAC);

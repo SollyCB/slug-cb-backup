@@ -74,6 +74,8 @@ static void gpu_reset_viewport_and_scissor_to_window_extent(struct gpu *gpu);
 static void gpu_store_pipeline_cache(struct gpu *gpu);
 static void gpu_load_pipeline_cache(struct gpu *gpu);
 static void gpu_init_descriptor_pools(struct gpu *gpu);
+bool resource_dp_allocate_persist(struct gpu *gpu, uint count, VkDescriptorSetLayout *layouts, VkDescriptorSet *sets);
+bool sampler_dp_allocate_persist(struct gpu *gpu, uint count, VkDescriptorSetLayout *layouts, VkDescriptorSet *sets);
 
 void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
     gpu->flags = 0;
@@ -124,6 +126,13 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
 
     gpu->defaults.texture.image.image = load_image("models/default/texture.png");
 
+    {
+        uint64 ofs = gpu_buffer_allocate(gpu, &gpu->mem.transfer_buffer, image_size(&gpu->defaults.texture.image.image));
+        log_print_error_if(ofs, "At the moment of writing this, this should be the first thing in the transfer buffer");
+        memcpy(gpu->mem.transfer_buffer.data, gpu->defaults.texture.image.image.data,
+                image_size(&gpu->defaults.texture.image.image));
+    }
+
     VkImageCreateInfo image_info = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
     image_info.imageType = VK_IMAGE_TYPE_2D;
     image_info.format = VK_FORMAT_R8G8B8A8_SRGB;
@@ -132,7 +141,7 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
     image_info.arrayLayers = 1;
     image_info.samples = VK_SAMPLE_COUNT_1_BIT;
     image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
-    image_info.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+    image_info.usage = VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
     check = vk_create_image(gpu->device, &image_info, GAC, &gpu->defaults.texture.image.vkimage);
@@ -157,9 +166,7 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
     check = vk_create_image_view(gpu->device, &view_info, GAC, &gpu->defaults.texture.image.view);
     DEBUG_VK_OBJ_CREATION(vkCreateImageView, check);
 
-    #if NO_DESCRIPTOR_BUFFER
-    // I don't think that anything needs to be handled here with regards to descriptors.
-    #else
+    #if DESCRIPTOR_BUFFER
     VkDescriptorImageInfo img_desc_info = {gpu->defaults.sampler,gpu->defaults.texture.image.view,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
 
     VkDescriptorDataEXT desc_data;
@@ -288,7 +295,7 @@ static void gpu_create_device_and_queues(struct gpu *gpu)
     const char *ext_names[] = {
         "VK_KHR_swapchain",
         "VK_EXT_memory_priority",
-        "VK_EXT_descriptor_buffer",
+        // "VK_EXT_descriptor_buffer",
     };
 
     VkPhysicalDeviceFeatures vk1_features = {
@@ -320,11 +327,15 @@ static void gpu_create_device_and_queues(struct gpu *gpu)
     VkPhysicalDeviceDescriptorBufferFeaturesEXT descriptor_buffer_features = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT,
         .pNext = &mem_priority,
-        .descriptorBuffer = DESCRIPTOR_BUFFER ? VK_TRUE : VK_FALSE,
+        .descriptorBuffer = VK_TRUE,
     };
     VkPhysicalDeviceFeatures2 features_full = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+        #if NO_DESCRIPTOR_BUFFER
+        .pNext = &mem_priority,
+        #else
         .pNext = &descriptor_buffer_features,
+        #endif
         .features = vk1_features,
     };
 
@@ -341,7 +352,11 @@ static void gpu_create_device_and_queues(struct gpu *gpu)
     descriptor_buffer_empty.pNext = &mem_priority_empty;
 
     VkPhysicalDeviceFeatures2 features_full_unfilled = features_full;
+    #if NO_DESCRIPTOR_BUFFER
+    features_full_unfilled.pNext = &mem_priority_empty;
+    #else
     features_full_unfilled.pNext = &descriptor_buffer_empty;
+    #endif
 
     features_full_unfilled.features = vk1_features_unfilled;
 
@@ -480,7 +495,7 @@ static void gpu_create_device_and_queues(struct gpu *gpu)
     device_create_info.pNext                   = &features_full_unfilled;
     device_create_info.queueCreateInfoCount    = queue_info_count;
     device_create_info.pQueueCreateInfos       = queue_infos;
-    device_create_info.enabledExtensionCount   = ext_count;
+    device_create_info.enabledExtensionCount   = carrlen(ext_names);
     device_create_info.ppEnabledExtensionNames = ext_names;
     device_create_info.pEnabledFeatures        = NULL;
 
@@ -1080,22 +1095,19 @@ Vertex_Info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vertex
 
     size_t used;
 
-    ret->bb_offset = gpu_buffer_allocate(gpu, &gpu->mem.bind_buffer, vt_ubo_sz());
+    ret->bb_offset = gpu_buffer_allocate(gpu, &gpu->mem.bind_buffer, sizeof(Vertex_Info));
 
     #if NO_DESCRIPTOR_BUFFER
     {
-        VkDescriptorSetAllocateInfo ai = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
-        ai.descriptorPool = gpu->resource_dp[0];
-        ai.descriptorSetCount = 1;
-        ai.pSetLayouts = &ret->dsl;
-
-        if (!resource_dp_allocate(gpu, 0, 1, &ret->dsl, &ret->d_set))
+        if (!resource_dp_allocate_persist(gpu, 1, &ret->dsl, &ret->d_set)) {
+            log_print_error("unable to allocate resource descriptors for vs_info");
             return NULL;
+        }
 
         VkDescriptorBufferInfo dbi;
         dbi.buffer = gpu->mem.bind_buffer.buf;
         dbi.offset = ret->bb_offset;
-        dbi.range  = vt_ubo_sz();
+        dbi.range  = sizeof(Vertex_Info);
 
         VkWriteDescriptorSet wds = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
         wds.dstSet = ret->d_set;
@@ -1105,17 +1117,16 @@ Vertex_Info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vertex
         wds.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         wds.pBufferInfo = &dbi;
 
-        vkUpdateDescriptorSets(gpu->device, 1, &wds, 0, NULL);
+        vk_update_descriptor_sets(gpu->device, 1, &wds, 0, NULL);
     }
     #else
-
     size_t sz;
     vk_get_descriptor_set_layout_size_ext(gpu->device, ret->dsl, &sz);
 
     VkDescriptorAddressInfoEXT ub = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT,
         .address = gpu->mem.bind_buffer.address + ret->bb_offset,
-        .range = vt_ubo_sz(),
+        .range = sizeof(Vertex_Info),
     };
 
     VkDescriptorGetInfoEXT gi = {
@@ -1217,6 +1228,11 @@ static void gpu_store_pipeline_cache(struct gpu *gpu)
 #define DESCRIPTOR_POOL_MAX_DESCRIPTORS_RESOURCE 32
 #define DESCRIPTOR_POOL_MAX_DESCRIPTORS_SAMPLER  32
 
+#define DESCRIPTOR_POOL_MAX_SETS_RESOURCE_PERSIST 16
+#define DESCRIPTOR_POOL_MAX_SETS_SAMPLER_PERSIST  16
+#define DESCRIPTOR_POOL_MAX_DESCRIPTORS_RESOURCE_PERSIST 16
+#define DESCRIPTOR_POOL_MAX_DESCRIPTORS_SAMPLER_PERSIST  16
+
 static void gpu_init_descriptor_pools(struct gpu *gpu)
 {
     {
@@ -1250,6 +1266,63 @@ static void gpu_init_descriptor_pools(struct gpu *gpu)
             DEBUG_VK_OBJ_CREATION(vkCreateDescriptorPool, r);
         }
     }
+    {
+        VkDescriptorPoolSize sz = {
+            .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount = DESCRIPTOR_POOL_MAX_DESCRIPTORS_RESOURCE_PERSIST,
+        };
+        VkDescriptorPoolCreateInfo ci = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            .maxSets = DESCRIPTOR_POOL_MAX_SETS_RESOURCE_PERSIST,
+            .poolSizeCount = 1,
+            .pPoolSizes = &sz,
+        };
+        VkResult r = vk_create_descriptor_pool(gpu->device, &ci, GAC, &gpu->resource_dp_persist);
+        DEBUG_VK_OBJ_CREATION(vkCreateDescriptorPool, r);
+    } {
+        VkDescriptorPoolSize sz = {
+            .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount = DESCRIPTOR_POOL_MAX_DESCRIPTORS_SAMPLER_PERSIST,
+        };
+        VkDescriptorPoolCreateInfo ci = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            .maxSets = DESCRIPTOR_POOL_MAX_SETS_SAMPLER_PERSIST,
+            .poolSizeCount = 1,
+            .pPoolSizes = &sz,
+        };
+        VkResult r = vk_create_descriptor_pool(gpu->device, &ci, GAC, &gpu->sampler_dp_persist);
+        DEBUG_VK_OBJ_CREATION(vkCreateDescriptorPool, r);
+    }
+}
+
+bool resource_dp_allocate_persist(struct gpu *gpu, uint count,
+        VkDescriptorSetLayout *layouts, VkDescriptorSet *sets)
+{
+    VkDescriptorSetAllocateInfo ai = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = gpu->resource_dp_persist,
+        .descriptorSetCount = count,
+        .pSetLayouts = layouts,
+    };
+    VkResult r = vk_allocate_descriptor_sets(gpu->device, &ai, sets);
+    DEBUG_VK_OBJ_CREATION(vkAllocateDescriptorSet, r);
+
+    return r == VK_SUCCESS;
+}
+
+bool sampler_dp_allocate_persist(struct gpu *gpu, uint count,
+        VkDescriptorSetLayout *layouts, VkDescriptorSet *sets)
+{
+    VkDescriptorSetAllocateInfo ai = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = gpu->sampler_dp_persist,
+        .descriptorSetCount = count,
+        .pSetLayouts = layouts,
+    };
+    VkResult r = vk_allocate_descriptor_sets(gpu->device, &ai, sets);
+    DEBUG_VK_OBJ_CREATION(vkAllocateDescriptorSet, r);
+
+    return r == VK_SUCCESS;
 }
 
 bool resource_dp_allocate(struct gpu *gpu, uint thread_i, uint count,
@@ -1598,11 +1671,10 @@ void gpu_upload_images_with_base_offset(
     }
 }
 
-// @Todo Does not respect mip levels
-void transition_texture_layouts(VkCommandBuffer cmd, uint count, struct gpu_texture *textures, allocator *alloc)
+void transition_texture_layouts(VkCommandBuffer cmd, bool mipmaps, uint count,
+        struct gpu_texture *textures, allocator *alloc)
 {
     VkImageMemoryBarrier2 *b = sallocate(alloc, *b, count);
-
     for(uint i=0; i < count; ++i) {
         b[i] = (VkImageMemoryBarrier2) {
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -1615,7 +1687,13 @@ void transition_texture_layouts(VkCommandBuffer cmd, uint count, struct gpu_text
             .srcQueueFamilyIndex   = VK_QUEUE_FAMILY_IGNORED,
             .dstQueueFamilyIndex   = VK_QUEUE_FAMILY_IGNORED,
             .image                 = textures[i].vkimage,
-            .subresourceRange      = (VkImageSubresourceRange){VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+            .subresourceRange      = (VkImageSubresourceRange){
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = mipmaps ? textures[i].image.miplevels : 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1
+            },
         };
     }
 
@@ -1999,7 +2077,7 @@ void gpu_bind_image(struct gpu *gpu, VkImage image, size_t ofs)
     DEBUG_VK_OBJ_CREATION(vkBindImageMemory, check);
 }
 
-void gpu_create_texture_view(struct gpu *gpu, struct gpu_texture *image)
+void gpu_create_texture_view(struct gpu *gpu, struct gpu_texture *image, bool mipmaps)
 {
     VkImageViewCreateInfo view_info = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
     view_info.image = image->vkimage;
@@ -2009,7 +2087,7 @@ void gpu_create_texture_view(struct gpu *gpu, struct gpu_texture *image)
         .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
         .baseMipLevel   = 0,
         .baseArrayLayer = 0,
-        .levelCount = 1, // image->image.miplevels, <- @TODO Reset this commented out line.
+        .levelCount = mipmaps ? image->image.miplevels : 1,
         .layerCount = 1
     };
 
@@ -2189,7 +2267,6 @@ void create_color_renderpass(struct gpu *gpu, struct renderpass *rp)
     VkResult check = vk_create_framebuffer(gpu->device, &ci, GAC, &rp->fb);
     DEBUG_VK_OBJ_CREATION(vkCreateFrameBuffer, check);
 }
-
 
 // @Optimise Move to thread fn
 void create_shadow_renderpass(struct gpu *gpu, struct shadow_maps *shadow_maps, struct renderpass *rp)
@@ -2466,9 +2543,11 @@ bool htp_allocate_resources(
         check = vk_create_descriptor_set_layout(gpu->device, &ci, GAC, &rsc->dsl);
         DEBUG_VK_OBJ_CREATION(vkCreateDescriptorSetLayout, check);
 
+        #if DESCRIPTOR_BUFFER
         size_t dsl_sz;
         vk_get_descriptor_set_layout_size_ext(gpu->device, rsc->dsl, &dsl_sz);
         dsl_sz = align(dsl_sz, gpu->descriptors.props.descriptorBufferOffsetAlignment);
+        #endif
 
         float vertices[] = {
         // Triangle 1
@@ -2487,6 +2566,12 @@ bool htp_allocate_resources(
         if (!(gpu->flags & GPU_UMA_BIT))
             stage_sz = vert_sz;
 
+        #if NO_DESCRIPTOR_BUFFER
+        if (!sampler_dp_allocate(gpu, 0, 1, &rsc->dsl, &rsc->d_set)) {
+            log_print_error("Failed to allocate hdr to present descriptors.");
+            goto fail;
+        }
+        #else
         size_t db_src_ofs;
         if (gpu->flags & GPU_DESCRIPTOR_BUFFER_NOT_HOST_VISIBLE_BIT) {
             // descriptor will be buffer copied from the offset defined by vert size
@@ -2495,6 +2580,13 @@ bool htp_allocate_resources(
             stage_sz += dsl_sz;
         }
 
+        rsc->db_offset = gpu_buffer_allocate(gpu, &gpu->mem.descriptor_buffer_sampler, dsl_sz);
+        if (rsc->db_offset == GPU_BUF_ALLOC_FAIL) {
+            log_print_error("Failed to allocate hdr to present descriptors.");
+            goto fail;
+        }
+        #endif
+
         size_t vert_src_ofs;
         if (stage_sz) {
             vert_src_ofs = gpu_buffer_allocate(gpu, &gpu->mem.transfer_buffer, stage_sz);
@@ -2502,18 +2594,14 @@ bool htp_allocate_resources(
                 log_print_error("Failed to allocate staging memory for hdr resources");
                 goto fail;
             }
+            #if DESCRIPTOR_BUFFER
             db_src_ofs += vert_src_ofs;
+            #endif
         }
 
         rsc->vertex_offset = gpu_buffer_allocate(gpu, &gpu->mem.bind_buffer, vert_sz);
         if (rsc->vertex_offset == GPU_BUF_ALLOC_FAIL) {
             log_print_error("Failed to allocate bind memory for hdr to present vertices");
-            goto fail;
-        }
-
-        rsc->db_offset = gpu_buffer_allocate(gpu, &gpu->mem.descriptor_buffer_sampler, dsl_sz);
-        if (rsc->db_offset == GPU_BUF_ALLOC_FAIL) {
-            log_print_error("Failed to allocate hdr to present descriptors.");
             goto fail;
         }
 
@@ -2535,12 +2623,22 @@ bool htp_allocate_resources(
             .imageView = gpu->mem.hdr_color_views[FRAME_I],
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         };
+        #if NO_DESCRIPTOR_BUFFER
+        VkWriteDescriptorSet wds = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+        wds.dstSet = rsc->d_set;
+        wds.dstBinding = 0;
+        wds.dstArrayElement = 0;
+        wds.descriptorCount = 1;
+        wds.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+        wds.pImageInfo = &ii;
+
+        vk_update_descriptor_sets(gpu->device, 1, &wds, 0, NULL);
+        #else
         VkDescriptorGetInfoEXT gi = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
             .type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
             .data.pInputAttachmentImage = &ii,
         };
-
         if (gpu->flags & GPU_DESCRIPTOR_BUFFER_NOT_HOST_VISIBLE_BIT) {
             VkBufferCopy bc = {
                 .size = dsl_sz,
@@ -2558,6 +2656,7 @@ bool htp_allocate_resources(
                                   gpu->descriptors.props.inputAttachmentDescriptorSize,
                                   gpu->mem.descriptor_buffer_sampler.data + rsc->db_offset);
         }
+        #endif
     }
     {
         VkPushConstantRange pc = {
@@ -2701,8 +2800,13 @@ void htp_commands(VkCommandBuffer cmd, struct gpu *gpu, struct htp_rsc *rsc)
     vector exposure = get_vector(1, 0, 0, 0); // so dumb that I have to do it like this...
     vk_cmd_bind_pipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, rsc->pipeline);
     vk_cmd_bind_vertex_buffers(cmd, 0, 1, &gpu->mem.bind_buffer.buf, &rsc->vertex_offset);
+    #if NO_DESCRIPTOR_BUFFER
+    vk_cmd_bind_descriptor_sets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+            rsc->pipeline_layout, 0, 1, &rsc->d_set, 0, NULL);
+    #else
     vk_cmd_set_descriptor_buffer_offsets_ext(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, rsc->pipeline_layout,
                                              0, 1, &db_i, &rsc->db_offset);
+    #endif
     vk_cmd_push_constants(cmd, rsc->pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, 16, &exposure);
     vk_cmd_draw(cmd, 6, 1, 0, 0);
 }
@@ -3017,6 +3121,7 @@ void draw_floor(VkCommandBuffer cmd, struct gpu *gpu, VkRenderPass rp, uint subp
             count,
             sets,
             0, NULL);
+    assert(count == 2); // @RemoveMe
     vk_cmd_draw(cmd, 6, 1, 0, 0);
 }
 #else

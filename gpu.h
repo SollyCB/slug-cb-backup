@@ -130,7 +130,7 @@ struct shadow_maps {
 
 #define GPU_MAX_DESCRIPTOR_SIZE 128
 
-struct gpu_texture_deprecated {
+struct gpu_default_texture {
     struct gpu_texture image;
     #if DESCRIPTOR_BUFFER
     uchar descriptor[GPU_MAX_DESCRIPTOR_SIZE];
@@ -138,7 +138,7 @@ struct gpu_texture_deprecated {
 };
 
 struct gpu_defaults {
-    struct gpu_texture_deprecated texture;
+    struct gpu_default_texture texture;
     VkSampler          sampler;
     uint32             dynamic_state_count;
     VkDynamicState     dynamic_states[2];
@@ -187,6 +187,10 @@ struct gpu {
     #if NO_DESCRIPTOR_BUFFER
     VkDescriptorPool resource_dp[THREAD_COUNT + 1]; // +1 for main thread
     VkDescriptorPool sampler_dp[THREAD_COUNT + 1];
+
+    // not wiped each frame
+    VkDescriptorPool resource_dp_persist;
+    VkDescriptorPool sampler_dp_persist;
     #endif
 
 #if DEBUG
@@ -212,7 +216,7 @@ void gpu_destroy_image_and_view(struct gpu *gpu, struct gpu_texture *image);
 struct memreq gpu_texture_memreq(struct gpu *gpu, struct gpu_texture *image);
 size_t gpu_allocate_image_memory(struct gpu *gpu, size_t size);
 void gpu_bind_image(struct gpu *gpu, VkImage image, size_t ofs);
-void gpu_create_texture_view(struct gpu *gpu, struct gpu_texture *image);
+void gpu_create_texture_view(struct gpu *gpu, struct gpu_texture *image, bool mipmaps);
 VkSampler gpu_create_gltf_sampler(struct gpu *gpu, gltf_sampler *info);
 void gpu_destroy_sampler(struct gpu *gpu, VkSampler sampler);
 
@@ -249,7 +253,11 @@ struct htp_rsc { // hdr_to_present_resources silly name, but others are too long
     VkDescriptorSetLayout dsl;
     VkPipelineLayout      pipeline_layout;
     VkPipeline            pipeline;
+    #if NO_DESCRIPTOR_BUFFER
+    VkDescriptorSet       d_set;
+    #else
     size_t                db_offset;
+    #endif
     size_t                vertex_offset;
 };
 
@@ -347,6 +355,13 @@ void gpu_upload_images_with_base_offset(
     uint             *offsets,
     VkCommandBuffer   transfer,
     VkCommandBuffer   graphics);
+
+void transition_texture_layouts(
+    VkCommandBuffer     cmd,
+    bool                mipmaps,
+    uint                count,
+    struct gpu_texture *textures,
+    allocator          *alloc);
 
 void gpu_upload_bind_buffer(
     struct gpu      *gpu,

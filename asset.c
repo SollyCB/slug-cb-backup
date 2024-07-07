@@ -248,10 +248,6 @@ void draw_model_color(VkCommandBuffer cmd, struct draw_model_info *info)
     uint pc = 0;
     for(uint i=0; i < info->mesh_count; ++i)
         for(uint j=0; j < info->mesh_primitive_counts[i]; ++j) {
-            vk_cmd_bind_pipeline(cmd,
-                    VK_PIPELINE_BIND_POINT_GRAPHICS,
-                    info->pipelines[pc]);
-
             #if NO_DESCRIPTOR_BUFFER
             vk_cmd_bind_descriptor_sets(cmd,
                     VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -272,6 +268,12 @@ void draw_model_color(VkCommandBuffer cmd, struct draw_model_info *info)
                     info->primitive_infos[pc].db_indices,
                     info->primitive_infos[pc].db_offsets);
             #endif
+
+            vk_cmd_bind_pipeline(cmd,
+                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    info->pipelines[pc]);
+
+            assert(info->primitive_infos[pc].dsl_count);
 
             vk_cmd_bind_vertex_buffers(cmd,
                     0,
@@ -497,6 +499,7 @@ static uint allocate_model_resources(
             .descriptorCount = offsets->mesh_instance_counts[i],
             .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
         };
+        assert(binding.descriptorCount);
         VkDescriptorSetLayoutCreateInfo ci = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
             .flags = DESCRIPTOR_BUFFER ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT : 0,
@@ -571,6 +574,7 @@ static uint allocate_model_resources(
             .descriptorCount = GLTF_MAX_MATERIAL_TEXTURE_COUNT, // popcnt(model->materials[i].flags & GLTF_MATERIAL_TEXTURE_BITS),
             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
         };
+        assert(binding.descriptorCount);
         VkDescriptorSetLayoutCreateInfo ci = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
             .flags = DESCRIPTOR_BUFFER ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT : 0,
@@ -772,8 +776,10 @@ static uint allocate_model_resources(
         memcpy((char*)gpu->mem.transfer_buffer.data + offsets->base_stage + image_offsets_stage[i],
                 resources->images[i].image.data, image_size(&resources->images[i].image));
         gpu_bind_image(gpu, resources->images[i].vkimage, base_image_device_offset + image_offsets_device[i]);
-        gpu_create_texture_view(gpu, &resources->images[i]);
+
+        gpu_create_texture_view(gpu, &resources->images[i], arg->flags & LOAD_MODEL_BLIT_MIPMAPS_BIT);
     }
+
     gpu_upload_images_with_base_offset(gpu, model->image_count, resources->images,
             offsets->base_stage, image_offsets_stage, ret->cmd_transfer, ret->cmd_graphics);
 
@@ -781,7 +787,7 @@ static uint allocate_model_resources(
         // This also transfers the image layout to shader read only.
         gpu_blit_gltf_texture_mipmaps(model, resources->images, ret->cmd_graphics);
     } else {
-        transition_texture_layouts(ret->cmd_graphics, model->image_count, resources->images, allocs->temp);
+        transition_texture_layouts(ret->cmd_graphics, false, model->image_count, resources->images, allocs->temp);
     }
 
     for(uint i=0; i < model->sampler_count; ++i) {
@@ -1132,9 +1138,10 @@ model_pipelines_transform_descriptors_and_draw_info(
         wds[i].dstSet = resources->resource_ds[i];
         wds[i].dstBinding = 0;
         wds[i].dstArrayElement = 0;
-        wds[i].descriptorCount = 0;
+        wds[i].descriptorCount = offsets->mesh_instance_counts[i];
         wds[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         wds[i].pBufferInfo = &dbi[di];
+        assert(wds[i].descriptorCount);
         #endif
 
         // @Optimise Check what this loop compiles to and whether stuff gets lifted out properly.
@@ -1435,10 +1442,7 @@ model_pipelines_transform_descriptors_and_draw_info(
             ac += model_vertex_state_and_draw_info(arg, resources, offsets, materials, i, j,
                                                   &draw_info->primitive_infos[pc], dsl_buf,
                                                   vi + pc, ia + pc);
-
-            #if DESCRIPTOR_BUFFER
-            assert(dsl_buf[arg->dsl_count] == resources->transforms_ubo_dsls[i]);
-            #endif
+            assert(dsl_buf[arg->dsl_count] == resources->resource_dsls[i]);
 
             VkPipelineLayoutCreateInfo plc = {
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -1569,10 +1573,10 @@ static uint model_vertex_state_and_draw_info(
         #if NO_DESCRIPTOR_BUFFER
         ret->d_sets[i] = arg->d_sets[i];
         #else
-        ret->db_offsets[i] = arg->db_offsets[i]; // @TODO @DescriptorPool
+        ret->db_offsets[i] = arg->db_offsets[i];
         ret->db_indices[i] = arg->db_indices[i];
-        dsl_buf[i] = arg->dsls[i];
         #endif
+        dsl_buf[i] = arg->dsls[i];
     }
     ret->dsl_count = arg->dsl_count;
 
@@ -1617,6 +1621,11 @@ static uint model_vertex_state_and_draw_info(
         dsl_buf[ret->dsl_count] = resources->texture_dsls[prim->material];
         ret->dsl_count += flag_check(materials[prim->material].flags, MODEL_MATERIAL_TEXTURED_BIT);
     }
+
+    // @Note I am hard setting this for now, as I am always using this many. I previously planned to
+    // use different shaders all the time, but using just a couple of more versatile shaders is proving
+    // better for now.
+    ret->dsl_count = 5;
 
     *ia = (VkPipelineInputAssemblyStateCreateInfo) {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,

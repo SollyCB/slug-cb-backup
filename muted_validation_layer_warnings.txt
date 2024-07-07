@@ -1,0 +1,6 @@
+1544472022 - write after write in blitting mipmaps:
+    As far as I can tell my implementation is exactly the same as the documented implementations online and
+    I cannot see any visible issue when rendering. I am not sure how to fix and I cannot see artifacts.
+
+615892639 - gpu av
+    gives messages about stuff being disabled but enabled by av which it then turns off itself.
