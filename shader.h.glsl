@@ -9,6 +9,7 @@
 #define SPLIT_SHADOW_MVP 1
 
 #ifdef GL_core_profile
+#extension GL_EXT_nonuniform_qualifier : require
 #extension GL_GOOGLE_include_directive : require
 #endif
 
@@ -180,17 +181,17 @@ float in_shadow(uint li) {
     vec3 ci = cascade_i();
 
     // @CSM Mothballed for now...
-    uint ca = 0; // uint(ci.x);
-    uint cb = 0; // uint(ci.y);
-    float c = 0; // ci.z;
+    uint ca = uint(ci.x);
+    uint cb = uint(ci.y);
+    float c = ci.z;
 
     vec3 p = vec3(vs_info.dir_lights[li].space[ca] * fs_info.world_frag_pos);
     vec3 q = vec3(vs_info.dir_lights[li].space[cb] * fs_info.world_frag_pos);
     p.xy = p.xy * 0.5 + 0.5;
     q.xy = q.xy * 0.5 + 0.5;
 
-    float a = texture(shadow_maps[li * CSM_COUNT + ca], p);
-    float b = texture(shadow_maps[li * CSM_COUNT + cb], q);
+    float a = texture(nonuniformEXT(shadow_maps[li * CSM_COUNT + ca]), p);
+    float b = texture(nonuniformEXT(shadow_maps[li * CSM_COUNT + cb]), q);
 
     return mix(a, b, c);
 }

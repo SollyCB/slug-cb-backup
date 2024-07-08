@@ -184,8 +184,8 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
     gpu->shader_dir = load_shader_dir(gpu, gpu->alloc_heap);
     #endif
 
-    gpu->settings.shadow_maps.width = 4096 / 8;
-    gpu->settings.shadow_maps.height = 4096 / 8;
+    gpu->settings.shadow_maps.width = 4096 / 4;
+    gpu->settings.shadow_maps.height = 4096 / 4;
 }
 
 void shutdown_gpu(struct gpu *gpu) {
