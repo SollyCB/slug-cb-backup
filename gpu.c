@@ -1152,9 +1152,9 @@ Vertex_Info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vertex
 
     vs->dlcx[0] = 1;
     vs->dir_lights[0].position = vector4(0, 15, 0,  1);
-    vs->dir_lights[0].color    = scale_vector(vector4(10.0, 10.0, 10.0, 0), 0.5);
+    vs->dir_lights[0].color    = scale_vector(vector4(20.0, 20.0, 20.0, 0), 0.5);
 
-    vs->ambient = scale_vector(vector3(1, 1, 1), 2.3);
+    vs->ambient = scale_vector(vector3(1, 1, 1), 1.3);
 
     matrix model;
     identity_matrix(&model);

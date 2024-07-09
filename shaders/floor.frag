@@ -1,4 +1,4 @@
-#version 450
+#version 460
 
 #extension GL_GOOGLE_include_directive : require
 
@@ -7,7 +7,7 @@
 
 void main() {
 
-    #if 0
+    #if 1
     uint ci;
 
     if (fs_info.view_frag_pos.z > vs_info.cascade_boundaries[0])
@@ -22,22 +22,23 @@ void main() {
         ci = 4;
 
     vec3 cols[] = {
-        vec3(1, 0, 1),
-        vec3(0, 1, 0),
-        vec3(0, 0, 1),
-        vec3(1, 1, 0),
-        vec3(1, 1, 1),
+        vec3(1, 1, 1) * 1,
+        vec3(1, 1, 1) * 0.5,
+        vec3(1, 1, 1) * 0.25,
+        vec3(1, 1, 1) * 0.1,
+        vec3(1, 1, 1) * 0,
     };
 
     vec3 col = cols[ci]; // mix(cols[uint(ci.x)], cols[uint(ci.y)], ci.z);
 
     for(uint i=0; i < dir_light_count; ++i)
         fc = vec4(col * in_shadow(i), 1);
-    #endif
+    #else
 
     fc = vec4(0);
 
     vec3 col = vec3(1, 1, 1);
     for(uint i=0; i < dir_light_count; ++i)
         fc += vec4(col * in_shadow(i), 1);
+    #endif
 }

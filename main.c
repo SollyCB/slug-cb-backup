@@ -244,7 +244,7 @@ int main() {
             struct trs model_trs;
             get_trs(
                 vector3(3, 3, -3),
-                quaternion(PI/4, vector3(0, 1, 0)),
+                quaternion(t, vector3(1, 1, 0)),
                 // quaternion(0, vector3(1, 0, 0)),
                 vector3(1, 1, 1),
                 &model_trs

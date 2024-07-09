@@ -500,8 +500,12 @@ static inline vector mul_matrix_vector(matrix *m, vector p)
     a = _mm_mul_ps(a, b);
     c = _mm_add_ps(a, c);
 
-    float *f = (float*)&c;
-    return get_vector(f[0], f[1], f[2], f[3]);
+    // float *f = (float*)&c;
+    // return get_vector(f[0], f[1], f[2], f[3]);
+    vector v;
+    _mm_store_ps(&v.x, c);
+
+    return v;
 }
 
 static inline void transpose(matrix *m)
@@ -744,5 +748,40 @@ static inline vector intersect_two_planes_point(vector l1, vector l2, vector q1,
 
     return add_vector(q, scale_vector(v, -dot(v, q) / dot(v, v)));
 }
+
+static inline vector gram_schmidt(vector n, vector t)
+{
+    float d = dot(n,t);
+    __m128 a = _mm_load_ps(&n.x);
+    __m128 b = _mm_load_ps(&t.x);
+    __m128 c = _mm_set1_ps(d);
+    a = _mm_mul_ps(a,c);
+    a = _mm_sub_ps(b,a);
+    vector r;
+    _mm_store_ps(&r.x, a);
+    return r;
+}
+
+static inline float tangent_handedness(vector n, vector t1, vector t2)
+{
+    return dot(cross(n,t1),t2) > 0 ? 1 : -1;
+}
+
+void calc_vertex_tangents(
+    uint         index_count,
+    uint        *indices,
+    uint         vertex_count,
+    float       *vertices,
+    float       *normals,
+    float       *texcoords,
+    allocator   *alloc,
+    vector      *ret_tangents);
+
+void calc_vertex_normals(
+    uint         index_count,
+    uint        *indices,
+    uint         vertex_count,
+    float       *vertices,
+    float       *ret_normals);
 
 #endif // include guard

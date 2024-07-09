@@ -3,7 +3,7 @@
 
 #define DIR_LIGHT_COUNT 1
 #define CSM_COUNT 4
-#define CSM_BLEND_BAND 1
+#define CSM_BLEND_BAND (25/2)
 #define JOINT_COUNT 1
 #define MORPH_WEIGHT_COUNT 1
 #define SPLIT_SHADOW_MVP 1
@@ -151,10 +151,7 @@ vec3 cascade_i() {
     float fz = fs_info.view_frag_pos.z;
     vec4  d  = vs_info.cascade_boundaries;
 
-    #if 0 // My implementation is superior I think.
-    if (fz < -100 || fz > 0)
-        pv4(fs_info.view_frag_pos);
-
+    #if 1 // My implementation is superior I think.
     int  j = 4 - int(dot(vec4(fz > d.x, fz > d.y, fz > d.z, fz > d.w), vec4(1,1,1,1)));
     int  i = max(j - 1, 0);
     vec4 b = vec4(fz-d.x,fz-d.y,fz-d.z,fz-d.w); // positive == before far plane
@@ -167,7 +164,7 @@ vec3 cascade_i() {
     float bf = (sd / CSM_BLEND_BAND) * 0.5 + 0.5;
 
     return vec3(sdi + 1 * int(bf < 0), min(sdi + 1 * int(bf < 1), CSM_COUNT-1), clamp(1 - bf, 0, 1));
-    #endif
+    #else
 
     int c0 = 4 - int(dot(vec4(fz > d.x, fz > d.y, fz > d.z, fz > d.w), vec4(1,1,1,1)));
     float bf = 1 - (abs(fz - d[c0]) / CSM_BLEND_BAND);
@@ -175,12 +172,18 @@ vec3 cascade_i() {
     int c1 = c0 + 1 * int(bf > 0);
 
     return vec3(c0, min(c1, CSM_COUNT-1), clamp(bf, 0, 1));
+    #endif
 }
 
 float in_shadow(uint li) {
     vec3 ci = cascade_i();
 
-    // @CSM Mothballed for now...
+    // GLSL 4.6 Spec - Section 4.1.7:
+    // "Texture (e.g., texture2D), sampler, and samplerShadow types are opaque types, declared and
+    // behaving as described above for opaque types. These types are only available when targeting
+    // Vulkan. When aggregated into arrays within a shader, these types can only be indexed with a
+    // dynamically uniform expression, or texture lookup will result in undefined values."
+
     uint ca = uint(ci.x);
     uint cb = uint(ci.y);
     float c = ci.z;
