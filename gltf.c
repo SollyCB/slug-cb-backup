@@ -4,6 +4,100 @@
 #include "shader.h"
 #include "timer.h"
 
+#define PROCESSED_GLTF_FILE_EXTENSION ".sol"
+
+void store_gltf(gltf *model, const char *file_name, allocator *alloc)
+{
+    assert(strlen(file_name) < 150);
+
+    char buf[128];
+    uint len = strlen(file_name);
+    memcpy(buf, file_name, len);
+    memcpy(buf + len, PROCESSED_GLTF_FILE_EXTENSION, 5);
+
+    char *data = allocate(alloc, sizeof(*model) + model->meta.size);
+    memcpy(data, model, sizeof(*model));
+    memcpy(data + sizeof(*model), model->meta.data, model->meta.size);
+
+    file_write_bin(buf, sizeof(*model) + model->meta.size, data);
+}
+
+void load_gltf(const char *file_name, struct shader_dir *dir, struct shader_config *conf,
+        allocator *temp, allocator *persistent, gltf *g)
+{
+    char buf[128];
+    uint len = strlen(file_name);
+    memcpy(buf, file_name, len);
+    memcpy(buf + len, PROCESSED_GLTF_FILE_EXTENSION, 5);
+
+    if (!file_exists(buf)) {
+        parse_gltf(file_name, dir, conf, temp, persistent, g);
+        store_gltf(g, file_name, temp); // to create file_name.gltf.out
+        return;
+    }
+
+    // @Optimise I do not love this, as it is uses a potentially unnecessary copy,
+    // but I do not want to store pointers to gltf structures, but the structures
+    // themselves, and I do not want fragmented memory.
+    struct file file = file_read_bin_all(buf, temp);
+    memcpy(g, file.data, sizeof(*g));
+    g->meta.data = allocate(persistent, g->meta.size);
+    memcpy(g->meta.data, file.data + sizeof(*g), g->meta.size);
+
+    char *b = ((gltf*)file.data)->meta.data;
+    char *d = g->meta.data;
+
+    g->accessors = ptrinc(d, ptrdiff(g->accessors, b));
+    g->animations = ptrinc(d, ptrdiff(g->animations, b));
+    g->buffers = ptrinc(d, ptrdiff(g->buffers, b));
+    g->buffer_views = ptrinc(d, ptrdiff(g->buffer_views, b));
+    g->cameras = ptrinc(d, ptrdiff(g->cameras, b));
+    g->images = ptrinc(d, ptrdiff(g->images, b));
+    g->materials = ptrinc(d, ptrdiff(g->materials, b));
+    g->meshes = ptrinc(d, ptrdiff(g->meshes, b));
+    g->nodes = ptrinc(d, ptrdiff(g->nodes, b));
+    g->samplers = ptrinc(d, ptrdiff(g->samplers, b));
+    g->scenes = ptrinc(d, ptrdiff(g->scenes, b));
+    g->skins = ptrinc(d, ptrdiff(g->skins, b));
+    g->textures = ptrinc(d, ptrdiff(g->textures, b));
+    g->dir.cstr = ptrinc(d, ptrdiff(g->dir.cstr, b));
+
+    for(uint i=0; i < g->animation_count; ++i) {
+        g->animations[i].targets  = ptrinc(d, ptrdiff(g->animations[i].targets, b));
+        g->animations[i].samplers = ptrinc(d, ptrdiff(g->animations[i].samplers, b));
+    }
+    for(uint i=0; i < g->buffer_count; ++i) {
+        g->buffers[i].uri.cstr  = ptrinc(d, ptrdiff(g->buffers[i].uri.cstr, b));
+    }
+    for(uint i=0; i < g->image_count; ++i) {
+        g->images[i].uri.cstr  = ptrinc(d, ptrdiff(g->images[i].uri.cstr, b));
+    }
+    for(uint i=0; i < g->mesh_count; ++i) {
+        g->meshes[i].primitives = ptrinc(d, ptrdiff(g->meshes[i].primitives, b));
+        for(uint j=0; j < g->meshes[i].primitive_count; ++j) {
+            g->meshes[i].primitives[j].attributes =
+                ptrinc(d, ptrdiff(g->meshes[i].primitives[j].attributes, b));
+            g->meshes[i].primitives[j].morph_targets =
+                ptrinc(d, ptrdiff(g->meshes[i].primitives[j].morph_targets, b));
+            for(uint k=0; k < g->meshes[i].primitives[j].target_count; ++k)
+                g->meshes[i].primitives[j].morph_targets[k].attributes =
+                    ptrinc(d, ptrdiff(g->meshes[i].primitives[j].morph_targets[k].attributes, b));
+        }
+        g->meshes[i].weights = ptrinc(d, ptrdiff(g->meshes[i].weights, b));
+    }
+    for(uint i=0; i < g->node_count; ++i) {
+        g->nodes[i].children = ptrinc(d, ptrdiff(g->nodes[i].children, b));
+        g->nodes[i].weights  = ptrinc(d, ptrdiff(g->nodes[i].weights, b));
+    }
+    for(uint i=0; i < g->scene_count; ++i) {
+        g->scenes[i].name.cstr = ptrinc(d, ptrdiff(g->scenes[i].name.cstr, b));
+        g->scenes[i].nodes = ptrinc(d, ptrdiff(g->scenes[i].nodes, b));
+    }
+    for(uint i=0; i < g->node_count; ++i) {
+        g->skins[i].joints = ptrinc(d, ptrdiff(g->skins[i].joints, b));
+    }
+}
+
 #define GLTF_PROPERTY_COUNT 13
 #define GLTF_MAX_URI_LEN 64
 
@@ -27,12 +121,12 @@ typedef enum {
     GLTF_PROPERTY_INDEX_TEXTURES     = 12,
 } gltf_property_index;
 
-struct gltf_required_size_ret {
+struct gltf_required_size {
     size_t size;
     uint *anim_target_counts;
 };
 
-static struct gltf_required_size_ret gltf_required_size(json *j, allocator *temp, uint *indices);
+static struct gltf_required_size gltf_required_size(json *j, allocator *temp, uint *indices);
 static size_t gltf_required_size_accessors(json *j, uint *index);
 static size_t gltf_required_size_animations(json *j, uint *index, allocator *temp, uint **anim_target_counts);
 static size_t gltf_required_size_buffers(json *j, uint *index);
@@ -66,8 +160,8 @@ static void gltf_parse_scenes(uint index, json *j, allocator *alloc, gltf *g);
 static void gltf_parse_skins(uint index, json *j, allocator *alloc, gltf *g);
 static void gltf_parse_textures(uint index, json *j, allocator *alloc, gltf *g);
 
-gltf parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_config *conf,
-        allocator *temp, allocator *persistent, struct allocation *mem_used)
+void parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_config *conf,
+        allocator *temp, allocator *persistent, gltf *ret)
 {
     struct file f = file_read_char_all(file_name, temp);
     struct allocation json_allocation;
@@ -75,55 +169,47 @@ gltf parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_con
     // print_json(&j);
 
     uint indices[GLTF_PROPERTY_COUNT];
-    struct gltf_required_size_ret req_size_ret = gltf_required_size(&j, temp, indices);
+    struct gltf_required_size req_size = gltf_required_size(&j, temp, indices);
 
-    mem_used->size = req_size_ret.size;
-    mem_used->data = allocate(persistent, mem_used->size);
+    ret->meta.size = req_size.size;
+    ret->meta.data = allocate(persistent, ret->meta.size);
 
-    allocator gltf_alloc = new_linear_allocator(mem_used->size + strlen(file_name),
-            mem_used->data);
+    allocator gltf_alloc = new_linear_allocator(ret->meta.size + strlen(file_name), ret->meta.data);
 
-    gltf ret;
-    ret.dir.cstr = allocate(&gltf_alloc, strlen(file_name));
-    ret.dir.len = get_dir(file_name, (char*)ret.dir.cstr);
+    ret->dir.cstr = allocate(&gltf_alloc, strlen(file_name));
+    ret->dir.len = file_dir_name(file_name, (char*)ret->dir.cstr);
 
-    gltf_parse_accessors(indices[GLTF_PROPERTY_INDEX_ACCESSORS], &j, &gltf_alloc, &ret);
-    gltf_parse_animations(indices[GLTF_PROPERTY_INDEX_ANIMATIONS], &j, &gltf_alloc, req_size_ret.anim_target_counts, &ret);
-    gltf_parse_buffers(indices[GLTF_PROPERTY_INDEX_BUFFERS], &j, &gltf_alloc, &ret);
-    gltf_parse_buffer_views(indices[GLTF_PROPERTY_INDEX_BUFFER_VIEWS], &j, &gltf_alloc, &ret);
-    gltf_parse_cameras(indices[GLTF_PROPERTY_INDEX_CAMERAS], &j, &gltf_alloc, &ret);
-    gltf_parse_images(indices[GLTF_PROPERTY_INDEX_IMAGES], &j, &gltf_alloc, &ret);
-    gltf_parse_materials(indices[GLTF_PROPERTY_INDEX_MATERIALS], &j, &gltf_alloc, &ret);
-    gltf_parse_meshes(indices[GLTF_PROPERTY_INDEX_MESHES], &j, &gltf_alloc, &ret);
-    gltf_parse_samplers(indices[GLTF_PROPERTY_INDEX_SAMPLERS], &j, &gltf_alloc, &ret);
-    gltf_parse_scenes(indices[GLTF_PROPERTY_INDEX_SCENES], &j, &gltf_alloc, &ret);
-    gltf_parse_skins(indices[GLTF_PROPERTY_INDEX_SKINS], &j, &gltf_alloc, &ret);
-    gltf_parse_textures(indices[GLTF_PROPERTY_INDEX_TEXTURES], &j, &gltf_alloc, &ret);
+    gltf_parse_accessors(indices[GLTF_PROPERTY_INDEX_ACCESSORS], &j, &gltf_alloc, ret);
+    gltf_parse_animations(indices[GLTF_PROPERTY_INDEX_ANIMATIONS], &j, &gltf_alloc, req_size.anim_target_counts, ret);
+    gltf_parse_buffers(indices[GLTF_PROPERTY_INDEX_BUFFERS], &j, &gltf_alloc, ret);
+    gltf_parse_buffer_views(indices[GLTF_PROPERTY_INDEX_BUFFER_VIEWS], &j, &gltf_alloc, ret);
+    gltf_parse_cameras(indices[GLTF_PROPERTY_INDEX_CAMERAS], &j, &gltf_alloc, ret);
+    gltf_parse_images(indices[GLTF_PROPERTY_INDEX_IMAGES], &j, &gltf_alloc, ret);
+    gltf_parse_materials(indices[GLTF_PROPERTY_INDEX_MATERIALS], &j, &gltf_alloc, ret);
+    gltf_parse_meshes(indices[GLTF_PROPERTY_INDEX_MESHES], &j, &gltf_alloc, ret);
+    gltf_parse_samplers(indices[GLTF_PROPERTY_INDEX_SAMPLERS], &j, &gltf_alloc, ret);
+    gltf_parse_scenes(indices[GLTF_PROPERTY_INDEX_SCENES], &j, &gltf_alloc, ret);
+    gltf_parse_skins(indices[GLTF_PROPERTY_INDEX_SKINS], &j, &gltf_alloc, ret);
+    gltf_parse_textures(indices[GLTF_PROPERTY_INDEX_TEXTURES], &j, &gltf_alloc, ret);
 
     // must happen after skins and meshes, as mesh.joint_count is filled in here.
-    gltf_parse_nodes(indices[GLTF_PROPERTY_INDEX_NODES], &j, &gltf_alloc, &ret);
+    gltf_parse_nodes(indices[GLTF_PROPERTY_INDEX_NODES], &j, &gltf_alloc, ret);
 
-#if !TEST
-    assert(ret.mesh_count < 32);
+#if !TEST // test.gltf uses a bogus file which would not make sense to run this on.
+    assert(ret->mesh_count < 32);
     uint instance_counts[32] = {};
-    for(uint i=0; i < ret.scene_count; ++i)
-        for(uint j=0; j < ret.scenes[i].node_count; ++j)
-            gltf_count_mesh_instances(ret.nodes, ret.scenes[i].nodes[j],
+    for(uint i=0; i < ret->scene_count; ++i)
+        for(uint j=0; j < ret->scenes[i].node_count; ++j)
+            gltf_count_mesh_instances(ret->nodes, ret->scenes[i].nodes[j],
                                       instance_counts);
-    for(uint i=0; i < ret.mesh_count; ++i)
-        ret.meshes[i].max_instance_count = instance_counts[i];
+    for(uint i=0; i < ret->mesh_count; ++i)
+        ret->meshes[i].max_instance_count = instance_counts[i];
 #endif
-
-    #if !TEST
-    // find_or_generate_model_shader_sets(dir, conf, &ret);
-    #endif
-
-    return ret;
 }
 
-static struct gltf_required_size_ret gltf_required_size(json *j, allocator *temp, uint *indices)
+static struct gltf_required_size gltf_required_size(json *j, allocator *temp, uint *indices)
 {
-    struct gltf_required_size_ret ret = {};
+    struct gltf_required_size ret = {};
 
     ret.size += gltf_required_size_accessors(j, &indices[GLTF_PROPERTY_INDEX_ACCESSORS]);
     ret.size += gltf_required_size_animations(j, &indices[GLTF_PROPERTY_INDEX_ANIMATIONS], temp, &ret.anim_target_counts);

@@ -393,8 +393,14 @@ typedef struct {
     gltf_scene       *scenes;
     gltf_skin        *skins;
     gltf_texture     *textures;
+
     string            dir;
-    uint              shader_conf_flags;
+
+    struct {
+        uint  size;
+        void *data;
+    } meta;
+
 } gltf;
 
 static inline void
@@ -428,9 +434,11 @@ static inline void gltf_read_buffer(gltf *model, uint buf_i, char *to)
     file_read_bin_size(uri, model->buffers[buf_i].byte_length, to);
 }
 
-struct shader_dir;
+struct shader_dir; // @Review I do want to reimplement these better...
 struct shader_config;
-gltf parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_config *conf, allocator *temp, allocator *persistent, struct allocation *mem_used);
+void parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_config *conf, allocator *temp, allocator *persistent, gltf *ret);
+void load_gltf(const char *file_name, struct shader_dir *dir, struct shader_config *conf, allocator *temp, allocator *persistent, gltf *g);
+void store_gltf(gltf *model, const char *file_name, allocator *alloc);
 
 #if TEST
 void test_gltf(test_suite *suite);

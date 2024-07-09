@@ -12,17 +12,38 @@ struct file {
     size_t size;
 };
 
+#ifdef WIN32
+    #include <io.h> // access()
+#endif
+
+static inline bool file_exists(const char *file_name)
+{
+    return access(file_name, R_OK|W_OK) == 0; // 0 is success code
+}
+
 // @Note breaks on windows?
-static inline uint get_dir(const char *file_name, char *buf) {
+static inline uint file_dir_name(const char *file_name, char *buf)
+{
     uint p = 0;
     uint len = strlen(file_name);
     for(uint i = 0; i < len; ++i) {
-        if (file_name[i] == '/')
-            p = i;
+        p = file_name[i] == '/' ? i : p;
         buf[i] = file_name[i];
     }
     buf[p+1] = 0;
-    return (uint)p+1;
+    return p+1;
+}
+
+static inline uint file_extension(const char *file_name, char *buf)
+{
+    uint p = 0;
+    uint len = strlen(file_name);
+    for(uint i = 0; i < len; ++i) {
+        buf[p] = file_name[i];
+        p = file_name[i] == '.' ? 0 : p + 1;
+    }
+    buf[p] = 0;
+    return p;
 }
 
 static inline void file_last_modified(const char *path, struct timespec *ts) {

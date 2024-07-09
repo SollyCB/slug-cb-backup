@@ -125,6 +125,9 @@ typedef uint32 bool32;
 
 #define count_enum_flags(last_member) (ctz(last_member - 1) + 1)
 
+#define ptrdiff(a,b) ((uint64)((char*)(a) - (char*)(b)))
+#define ptrinc(a,b)  ((void*)((char*)(a) + b))
+
 const uint64 one64 = 1;
 
 struct memreq {
