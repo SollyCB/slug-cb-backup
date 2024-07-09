@@ -141,9 +141,6 @@ int main() {
     load_gltf("models/cube-static/Cube.gltf", &pr.gpu.shader_dir,
             &conf, &pr.allocs.temp, &pr.allocs.heap, &model);
 
-    // parse_gltf("models/cube-static/Cube.gltf", &pr.gpu.shader_dir,
-    //         &conf, &pr.allocs.temp, &pr.allocs.heap, &model);
-
     struct vertex_info_descriptor vs_info_desc;
     Vertex_Info *vs_info = init_vs_info(&pr.gpu, cam.pos, cam.dir, &vs_info_desc);
 
@@ -246,9 +243,8 @@ int main() {
 
             struct trs model_trs;
             get_trs(
-                vector3(3, 3, -3),
-                quaternion(t, vector3(1, 1, 0)),
-                // quaternion(0, vector3(1, 0, 0)),
+                vector3(0, 3, 0),
+                quaternion(sinf(t), vector3(0, 1, 1)),
                 vector3(1, 1, 1),
                 &model_trs
             );
@@ -294,16 +290,11 @@ int main() {
             for(uint i=0; i < carrlen(ls_bb.p); ++i)
                 ls_bb.p[i] = mul_matrix_vector(&light_view_mat, scene_bb.p[i]);
 
-            // mat clipspace;
-            // mul_matrix(&mat_proj, &mat_view, &clip_space);
-
             for(uint i=0; i < CSM_COUNT; ++i) {
                 light_nearfar_planes[i] = near_far(minmax_frustum_x[i], minmax_frustum_y[i], &ls_bb);
 
                 float *cb = &vs_info->cascade_boundaries.x;
-                // cb[i] = sub_frusta[i].bl_far.z;
                 cb[i] = mul_matrix_vector(&mat_view, sub_frusta[i].bl_far).z;
-                // cb[i] = mul_matrix_vector(&clip_space, sub_frusta[i].bl_far).z;
 
                 ortho_matrix(minmax_frustum_x[i].min, minmax_frustum_x[i].max,
                              minmax_frustum_y[i].max, minmax_frustum_y[i].min,
@@ -311,12 +302,6 @@ int main() {
 
                 mul_matrix(&light_proj[i], &light_view_mat, &vs_info->dir_lights[0].space[i]);
             }
-
-            #if 0
-            update_vs_info_mat_model(&pr.gpu, vs_info_desc.bb_offset, &mat_model);
-            update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &light_view_mat);
-            memcpy(&vs_info->proj, &light_proj[cam.csi], sizeof(light_proj[0]));
-            #endif
 
             if (cam.mode == CAMERA_MODE_LIGHT) {
                 vs_info->dlcx[1] = true;
@@ -357,11 +342,7 @@ int main() {
         uint scene = 0;
 
         struct load_model_arg lma = {
-            #if 1
             .flags = LOAD_MODEL_BLIT_MIPMAPS_BIT,
-            #else
-            .flags = 0,
-            #endif
             .dsl_count = 2,
             .animation_count = 0,
             .scene_count = model.scene_count,
@@ -411,12 +392,6 @@ int main() {
             ;
 
         {
-            #if 0
-            insert_memory_barrier(draw_cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-                    VK_PIPELINE_STAGE_VERTEX_INPUT_BIT|VK_PIPELINE_STAGE_VERTEX_SHADER_BIT|
-                    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT);
-            #endif
-
             if (!FRAMES_ELAPSED) { // upload default texture on first frame
                 uint upload_offset = 0;
 

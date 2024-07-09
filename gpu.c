@@ -184,8 +184,8 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
     gpu->shader_dir = load_shader_dir(gpu, gpu->alloc_heap);
     #endif
 
-    gpu->settings.shadow_maps.width = 4096 / 4;
-    gpu->settings.shadow_maps.height = 4096 / 4;
+    gpu->settings.shadow_maps.width = 4096 / 8;
+    gpu->settings.shadow_maps.height = 4096 / 8;
 }
 
 void shutdown_gpu(struct gpu *gpu) {
@@ -3068,6 +3068,9 @@ static VkShaderModule create_shader_module(VkDevice d, const char *file_name, al
  \
     VkPipelineDepthStencilStateCreateInfo ds = { \
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO, \
+        .depthTestEnable = 1, \
+        .depthWriteEnable = 1, \
+        .depthCompareOp = VK_COMPARE_OP_LESS, \
         .minDepthBounds = 0, \
         .maxDepthBounds = 1, \
     }; \

@@ -243,6 +243,7 @@ static inline vector lerp_vector(vector a, vector b, float c) {
 // angle in radians
 static inline vector quaternion(float angle, vector v)
 {
+    v = normalize(v);
     float f = angle/2;
     float sf = sinf(f);
     vector r;
