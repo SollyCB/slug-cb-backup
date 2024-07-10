@@ -122,8 +122,16 @@ typedef enum {
 } gltf_property_index;
 
 struct gltf_required_size {
+    uint extra_mesh_attrs;
     size_t size;
     uint *anim_target_counts;
+};
+
+struct gltf_extra_attrs {
+    uint mesh;
+    uint prim;
+    bool norm;
+    bool tang;
 };
 
 static struct gltf_required_size gltf_required_size(json *j, allocator *temp, uint *indices);
@@ -151,9 +159,9 @@ static void gltf_camera_parse_orthographic(json_object *json_orthographic, gltf_
 static void gltf_camera_parse_perspective(json_object *json_perspective, gltf_camera_perspective *perspective);
 static void gltf_parse_images(uint index, json *j, allocator *alloc, gltf *g);
 static void gltf_parse_materials(uint index, json *j, allocator *alloc, gltf *g);
-static void gltf_parse_meshes(uint index, json *j, allocator *alloc, gltf *g);
-static void gltf_mesh_parse_primitives(json_array *j_prim_array, gltf_accessor *accessors, allocator *alloc, gltf_mesh *mesh);
-static void gltf_mesh_parse_primitive_attributes(json_object *j_attribs, gltf_accessor *accessors, gltf_mesh_primitive_attribute *attribs);
+static void gltf_parse_meshes(uint index, json *j, struct gltf_extra_attr *extra_attrs, allocator *alloc, gltf *g);
+static uint gltf_mesh_parse_primitives(json_array *j_prim_array, struct gltf_extra_attr *extra_attrs, allocator *alloc, gltf_mesh *mesh);
+static uint gltf_mesh_parse_primitive_attributes(json_object *j_attribs, struct gltf_extra_attr *extra_attrs, gltf_mesh_primitive_attribute *attribs);
 static void gltf_parse_nodes(uint index, json *j, allocator *alloc, gltf *g);
 static void gltf_parse_samplers(uint index, json *j, allocator *alloc, gltf *g);
 static void gltf_parse_scenes(uint index, json *j, allocator *alloc, gltf *g);
@@ -171,6 +179,11 @@ void parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_con
     uint indices[GLTF_PROPERTY_COUNT];
     struct gltf_required_size req_size = gltf_required_size(&j, temp, indices);
 
+    // Ik this will allocate more than necessary because each gltf_extra_attrs
+    // stores both normal and tangent info. No point in calculating overlap.
+    struct gltf_extra_attrs *extra_attrs = sallocate(temp, *extra_attrs,
+            req_size.extra_mesh_attrs);
+
     ret->meta.size = req_size.size;
     ret->meta.data = allocate(persistent, ret->meta.size);
 
@@ -186,7 +199,7 @@ void parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_con
     gltf_parse_cameras(indices[GLTF_PROPERTY_INDEX_CAMERAS], &j, &gltf_alloc, ret);
     gltf_parse_images(indices[GLTF_PROPERTY_INDEX_IMAGES], &j, &gltf_alloc, ret);
     gltf_parse_materials(indices[GLTF_PROPERTY_INDEX_MATERIALS], &j, &gltf_alloc, ret);
-    gltf_parse_meshes(indices[GLTF_PROPERTY_INDEX_MESHES], &j, &gltf_alloc, ret);
+    gltf_parse_meshes(indices[GLTF_PROPERTY_INDEX_MESHES], &j, extra_attrs, &gltf_alloc, ret);
     gltf_parse_samplers(indices[GLTF_PROPERTY_INDEX_SAMPLERS], &j, &gltf_alloc, ret);
     gltf_parse_scenes(indices[GLTF_PROPERTY_INDEX_SCENES], &j, &gltf_alloc, ret);
     gltf_parse_skins(indices[GLTF_PROPERTY_INDEX_SKINS], &j, &gltf_alloc, ret);
@@ -218,12 +231,15 @@ static struct gltf_required_size gltf_required_size(json *j, allocator *temp, ui
     ret.size += gltf_required_size_cameras(j, &indices[GLTF_PROPERTY_INDEX_CAMERAS]);
     ret.size += gltf_required_size_images(j, &indices[GLTF_PROPERTY_INDEX_IMAGES]);
     ret.size += gltf_required_size_materials(j, &indices[GLTF_PROPERTY_INDEX_MATERIALS]);
-    ret.size += gltf_required_size_meshes(j, &indices[GLTF_PROPERTY_INDEX_MESHES]);
+    ret.size += gltf_required_size_meshes(j, &indices[GLTF_PROPERTY_INDEX_MESHES], &ret);
     ret.size += gltf_required_size_nodes(j, &indices[GLTF_PROPERTY_INDEX_NODES]);
     ret.size += gltf_required_size_samplers(j, &indices[GLTF_PROPERTY_INDEX_SAMPLERS]);
     ret.size += gltf_required_size_scenes(j, &indices[GLTF_PROPERTY_INDEX_SCENES]);
     ret.size += gltf_required_size_skins(j, &indices[GLTF_PROPERTY_INDEX_SKINS]);
     ret.size += gltf_required_size_textures(j, &indices[GLTF_PROPERTY_INDEX_TEXTURES]);
+
+    ret.size += sizeof(gltf_accessor)                 * ret.extra_mesh_attrs +
+                sizeof(gltf_mesh_primitive_attribute) * ret.extra_mesh_attrs;
 
     return ret;
 }
@@ -327,7 +343,7 @@ static size_t gltf_required_size_materials(json *j, uint *index)
     return cnt * align(sizeof(gltf_material), ALLOCATOR_ALIGNMENT);
 }
 
-static size_t gltf_required_size_meshes(json *j, uint *index)
+static size_t gltf_required_size_meshes(json *j, uint *index, struct gltf_required_size *extra_info)
 {
     uint tmp = json_find_key(&j->obj, "meshes");
     uint ki = tmp & max64_if_true(tmp != Max_u32);
@@ -358,6 +374,9 @@ static size_t gltf_required_size_meshes(json *j, uint *index)
             log_print_error_if(ki == Max_u32,"mesh.primitives.attributes must be defined");
             attrib_cnt = j_prims[i1].values[ki].obj.key_count;
             total_attrib_cnt += attrib_cnt;
+
+            extra_info->extra_mesh_attrs += json_find_key(&j_prims[i1].values[ki].obj,"TANGENT") == Max_u32;
+            extra_info->extra_mesh_attrs += json_find_key(&j_prims[i1].values[ki].obj,"NORMAL") == Max_u32;
 
             tmp = json_find_key(&j_prims[i1],"targets");
             ki = tmp & max32_if_true(tmp != Max_u32);
@@ -1283,9 +1302,9 @@ const int ATTR_KEY_LENS[] = {
     GLTF_MESH_PRIMITIVE_ATTRIBUTE_KEY_LEN_WEIGHTS,
 };
 
-static void gltf_mesh_parse_primitive_attributes(json_object *j_attribs, gltf_accessor *accessors, gltf_mesh_primitive_attribute *attribs)
+static uint gltf_mesh_parse_primitive_attributes(json_object *j_attribs, struct gltf_extra_attr *extra_attrs, gltf_mesh_primitive_attribute *attribs)
 {
-    assert(j_attribs->key_count < 32);
+    assert(j_attribs->key_count < 32); // @Todo I think this assert is doing nothing.
     uint attr_m[7];
     memset(attr_m,0,sizeof(attr_m));
     uint i;
@@ -1305,6 +1324,11 @@ static void gltf_mesh_parse_primitive_attributes(json_object *j_attribs, gltf_ac
         attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_WEIGHTS] |= (1<<i) &
             max_if(memcmp(j_attribs->keys[i].cstr, "WEIGHTS", GLTF_MESH_PRIMITIVE_ATTRIBUTE_KEY_LEN_WEIGHTS) == 0);
     }
+
+    extra_attrs->norm = !attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_NORMAL];
+    extra_attrs->tang = !attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_TANGENT];
+    uint extra_attr_cnt = extra_attrs->norm || extra_attrs->tang;
+
     uint cnt = 0;
     uint tz,pc,j,idx;
     for(i=0;i<7;++i) {
@@ -1325,7 +1349,7 @@ static void gltf_mesh_parse_primitive_attributes(json_object *j_attribs, gltf_ac
     }
 }
 
-static void gltf_mesh_parse_primitives(json_array *j_prim_array, gltf_accessor *accessors, allocator *alloc, gltf_mesh *mesh)
+static uint gltf_mesh_parse_primitives(json_array *j_prim_array, struct gltf_extra_attr *extra_attrs, allocator *alloc, gltf_mesh *mesh)
 {
     json_object *j_prims = j_prim_array->objs;
     json_object *j_attribs;
@@ -1333,13 +1357,16 @@ static void gltf_mesh_parse_primitives(json_array *j_prim_array, gltf_accessor *
     mesh->primitive_count = cnt;
     mesh->primitives = sallocate(alloc, *mesh->primitives, cnt);
     gltf_mesh_primitive *prims = mesh->primitives;
+    uint extra_attr_cnt = 0;
     uint i,j,ki,tmp,cnt2;
     for(i = 0; i < cnt; ++i) {
         ki = json_find_key(&j_prims[i], "attributes");
         log_print_error_if(ki == Max_u32, "mesh.primitives.attributes must be defined");
         prims[i].attribute_count = j_prims[i].values[ki].obj.key_count;
         prims[i].attributes = sallocate(alloc, *prims[i].attributes, prims[i].attribute_count);
-        gltf_mesh_parse_primitive_attributes(&j_prims[i].values[ki].obj, accessors, prims[i].attributes);
+        tmp = gltf_mesh_parse_primitive_attributes(&j_prims[i].values[ki].obj, false, prims[i].attributes);
+        extra_attrs[extra_attr_cnt].prim = tmp ? i : extra_attrs[extra_attr_cnt].prim;
+        extra_attr_cnt += tmp;
 
         tmp = json_find_key(&j_prims[i], "indices");
         ki = tmp & max32_if_true(tmp != Max_u32);
@@ -1365,12 +1392,12 @@ static void gltf_mesh_parse_primitives(json_array *j_prim_array, gltf_accessor *
             prims[i].morph_targets[j].attribute_count = j_attribs->key_count;
             prims[i].morph_targets[j].attributes =
                 sallocate(alloc, *prims[i].morph_targets[j].attributes, j_attribs->key_count);
-            gltf_mesh_parse_primitive_attributes(j_attribs, accessors, prims[i].morph_targets[j].attributes);
+            gltf_mesh_parse_primitive_attributes(j_attribs, true, prims[i].morph_targets[j].attributes);
         }
     }
 }
 
-static void gltf_parse_meshes(uint index, json *j, allocator *alloc, gltf *g)
+static void gltf_parse_meshes(uint index, json *j, struct gltf_extra_attr *extra_attrs, allocator *alloc, gltf *g)
 {
     uint tmp = index;
     tmp = max64_if_false(tmp == Max_u32);
@@ -1384,6 +1411,8 @@ static void gltf_parse_meshes(uint index, json *j, allocator *alloc, gltf *g)
     g->meshes = sallocate(alloc, *g->meshes, cnt);
     gltf_mesh *meshes = g->meshes;
 
+    uint eac = 0;
+
     uint i, ki;
     for(i = 0; i < cnt; ++i) {
         meshes[i].joint_count = 0;
@@ -1391,7 +1420,7 @@ static void gltf_parse_meshes(uint index, json *j, allocator *alloc, gltf *g)
 
         ki = json_find_key(&json_meshes[i], "primitives");
         log_print_error_if(ki == Max_u32, "mesh.primitives must be defined");
-        gltf_mesh_parse_primitives(&json_meshes[i].values[ki].arr, g->accessors, alloc, &meshes[i]);
+        eac += gltf_mesh_parse_primitives(&json_meshes[i].values[ki].arr, alloc, &meshes[i]);
 
         tmp = json_find_key(&json_meshes[i], "weights");
         ki = tmp & max32_if_true(tmp != Max_u32);

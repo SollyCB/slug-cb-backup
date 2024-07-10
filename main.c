@@ -483,33 +483,20 @@ int main() {
                     #endif
 
                     #if DLF
-
                     matrix il;
                     invert(&light_view_mat, &il);
                     il.m[15] = 1;
                     mul_matrix(&m, &il, &il);
 
-                    vector col = vector4(0, 0, 0, 1);
+                    vector cols[] = {
+                        vector4(1, 1, 0, 1),
+                        vector4(1, 0, 1, 1),
+                        vector4(0, 1, 1, 1),
+                        vector4(0, 0, 1, 1),
+                    };
                     for(uint i=0; i < CSM_COUNT; ++i) {
-                        switch(i) {
-                            case 0:
-                                col = vector4(1, 1, 0, 1);
-                                break;
-                            case 1:
-                                col = vector4(1, 0, 1, 1);
-                                break;
-                            case 2:
-                                col = vector4(0, 1, 1, 1);
-                                break;
-                            case 3:
-                                col = vector4(0, 0, 1, 1);
-                                break;
-                            defauilt:
-                                break;
-                        }
-                        draw_box(draw_cmd, &pr.gpu, &lfb[i], true, color_rp.rp, 0, &lf_rsc[i], &il, col);
+                        draw_box(draw_cmd, &pr.gpu, &lfb[i], true, color_rp.rp, 0, &lf_rsc[i], &il, cols[i]);
                     }
-
                     #endif
                 }
             }

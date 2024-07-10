@@ -1,0 +1,10 @@
+1. Req size
+    gltf req size needs to account for the extra primitive attributes if they are missing.
+
+2. Accessors
+    I would assume that all accessors used by primitive attributes would be close together,
+    so I would rather not just append the tang and normal accessors, so I will have to insert
+    them. So extra space needs to be left in accessors for moving shit around.
+
+3. Primitives
+    When parsing these, this is where the insertions should happen.
