@@ -138,8 +138,13 @@ int main() {
     struct shader_config conf = {0};
 
     gltf model;
+    #if 0
     load_gltf("models/cube-static/Cube.gltf", &pr.gpu.shader_dir,
             &conf, &pr.allocs.temp, &pr.allocs.heap, &model);
+    #else
+    load_gltf("models/cube-static-testing/Cube.gltf", &pr.gpu.shader_dir,
+            &conf, &pr.allocs.temp, &pr.allocs.heap, &model);
+    #endif
 
     struct vertex_info_descriptor vs_info_desc;
     Vertex_Info *vs_info = init_vs_info(&pr.gpu, cam.pos, cam.dir, &vs_info_desc);

@@ -3,7 +3,9 @@
 
 #include "defs.h"
 #include "allocator.h"
+#include <sys/types.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include "log.h"
 
@@ -59,6 +61,36 @@ static inline bool has_file_changed(const char *path, struct timespec *then) {
     return now.tv_sec != then->tv_sec || now.tv_nsec != then->tv_nsec;
 }
 
+enum {
+    READ = O_RDONLY,
+    WRITE = O_WRONLY,
+    CREATE = O_CREAT,
+};
+#define check_file_result(r) (r != -1)
+#define FILE_READ_ALL Max_u64
+
+int file_open(const char *path, int flags);
+int64 file_write(int fd, uint64 offset, uint64 count, void *data);
+int64 file_read(int fd, uint64 offset, uint64 count, void *data);
+bool file_close(int fd);
+
+static inline int64 file_open_write(const char *path, uint64 offset, uint64 count, void *data)
+{
+    int fd = file_open(path, O_WRONLY);
+    uint64 r = file_write(fd, offset, count, data);
+    file_close(fd);
+    return r;
+}
+
+static inline int64 file_open_read(const char *path, uint64 offset, uint64 count, void *data)
+{
+    int fd = file_open(path, O_RDONLY);
+    int64 r = file_read(fd, offset, count, data);
+    file_close(fd);
+    return r;
+}
+
+// @Deprecated
 struct file file_read_bin_all(const char *file_name, allocator *alloc);
 struct file file_read_char_all(const char *file_name, allocator *alloc);
 void file_read_bin_size(const char *file_name, size_t size, void *buffer);

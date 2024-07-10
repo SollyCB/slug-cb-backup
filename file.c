@@ -1,5 +1,43 @@
 #include "file.h"
 
+int file_open(const char *path, int flags)
+{
+    if ((flags & (O_RDONLY|O_WRONLY)) == (O_RDONLY|O_WRONLY))
+        flags = (flags & ~(O_RDONLY|O_WRONLY)) | O_RDWR;
+    int e = open(path, flags);
+    log_print_error_if(!check_file_result(e), "failed to open file %s with perms %u: %s", path, flags, strerror(errno));
+    return e;
+}
+
+bool file_close(int fd)
+{
+    int e = close(fd);
+    log_print_error_if(!check_file_result(e), "failed to close file %i: %s", fd, strerror(errno));
+    return check_file_result(e);
+}
+
+int64 file_write(int fd, uint64 offset, uint64 count, void *data)
+{
+    int64 sz = pwrite(fd, data, count, offset);
+    log_print_error_if(!check_file_result(sz), "failed to write file %i: %s", fd, strerror(errno));
+    log_print_error_if((uint64)sz != count,
+            "failed to write all data requested to file %i: requested %u, written %u",
+            fd, count, sz);
+    return sz;
+}
+
+int64 file_read(int fd, uint64 offset, uint64 count, void *data)
+{
+    int64 sz = pread(fd, data, count, offset);
+    log_print_error_if(!check_file_result(sz), "failed to read file %i: %s", fd, strerror(errno));
+    log_print_error_if((uint64)sz != count && count != FILE_READ_ALL,
+            "failed to read all data requested from file %i: requested %u, written %u",
+            fd, count, sz);
+    return sz;
+}
+
+/*--------------------------------------------------------------------------------*/
+// @Deprecated
 struct file file_read_bin_all(const char *file_name, allocator *alloc)
 {
     FILE *f = fopen(file_name, "rb");

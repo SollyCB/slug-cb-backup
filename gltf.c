@@ -32,7 +32,7 @@ void load_gltf(const char *file_name, struct shader_dir *dir, struct shader_conf
 
     if (!file_exists(buf)) {
         parse_gltf(file_name, dir, conf, temp, persistent, g);
-        store_gltf(g, file_name, temp); // to create file_name.gltf.out
+        // store_gltf(g, file_name, temp); <- @Uncomment // to create file_name.gltf.out
         return;
     }
 
@@ -134,6 +134,48 @@ struct gltf_extra_attrs {
     bool tang;
 };
 
+struct gltf_index_data {
+    uint count;
+    uint offset;
+    uint buffer;
+    bool type_u16;
+};
+
+struct gltf_attr_data {
+    uint stride;
+    uint count;
+    uint offset;
+    uint buffer;
+};
+
+static struct gltf_index_data gltf_index_data(gltf *g, uint mesh, uint prim)
+{
+    gltf_accessor *pa = &g->accessors[g->meshes[mesh].primitives[prim].indices];
+    gltf_buffer_view *pb = &g->buffer_views[pa->buffer_view];
+
+    struct gltf_index_data r;
+    uint index_stride = pb->byte_stride ? pb->byte_stride : pa->byte_stride; // assert purposes only.
+    r.count    = pa->count;
+    r.offset   = pa->byte_offset + pb->byte_offset;
+    r.buffer   = pb->buffer;
+    r.type_u16 = pa->flags & GLTF_ACCESSOR_COMPONENT_TYPE_UNSIGNED_SHORT_BIT;
+    assert((index_stride == 2 && r.type_u16) || (index_stride == 4 && !r.type_u16));
+    return r;
+}
+
+static struct gltf_attr_data gltf_attr_data(gltf *g, uint mesh, uint prim, gltf_mesh_primitive_attribute_type type)
+{
+    gltf_accessor *pa = &g->accessors[g->meshes[mesh].primitives[prim].attributes[type].accessor];
+    gltf_buffer_view *pb = &g->buffer_views[pa->buffer_view];
+
+    struct gltf_attr_data r;
+    r.stride = pb->byte_stride ? pb->byte_stride : pa->byte_stride;
+    r.count  = pa->count;
+    r.offset = pa->byte_offset + pb->byte_offset;
+    r.buffer = pb->buffer;
+    return r;
+}
+
 static struct gltf_required_size gltf_required_size(json *j, allocator *temp, uint *indices);
 static size_t gltf_required_size_accessors(json *j, uint *index);
 static size_t gltf_required_size_animations(json *j, uint *index, allocator *temp, uint **anim_target_counts);
@@ -142,26 +184,26 @@ static size_t gltf_required_size_buffer_views(json *j, uint *index);
 static size_t gltf_required_size_cameras(json *j, uint *index);
 static size_t gltf_required_size_images(json *j, uint *index);
 static size_t gltf_required_size_materials(json *j, uint *index);
-static size_t gltf_required_size_meshes(json *j, uint *index);
+static size_t gltf_required_size_meshes(json *j, uint *index, struct gltf_required_size *extra_sz);
 static size_t gltf_required_size_nodes(json *j, uint *index);
 static size_t gltf_required_size_samplers(json *j, uint *index);
 static size_t gltf_required_size_scenes(json *j, uint *index);
 static size_t gltf_required_size_skins(json *j, uint *index);
 static size_t gltf_required_size_textures(json *j, uint *index);
-static void gltf_parse_accessors(uint index, json *j, allocator *alloc, gltf *g);
+static void gltf_parse_accessors(uint index, json *j, uint extra_attrs, allocator *alloc, gltf *g);
 static void gltf_parse_animations(uint index, json *j, allocator *alloc, uint *anim_target_counts, gltf *g);
 static uint gltf_parse_animation_targets(uint count, json_object *channel_objs, gltf_animation_target *targets);
 static void gltf_parse_animation_samplers(uint count, json_object *sampler_objs, gltf_animation_sampler *samplers);
 static void gltf_parse_buffers(uint index, json *j, allocator *alloc, gltf *g);
-static void gltf_parse_buffer_views(uint index, json *j, allocator *alloc, gltf *g);
+static void gltf_parse_buffer_views(uint index, json *j, bool extra_attrs, allocator *alloc, gltf *g);
 static void gltf_parse_cameras(uint index, json *j, allocator *alloc, gltf *g);
 static void gltf_camera_parse_orthographic(json_object *json_orthographic, gltf_camera_orthographic *orthographic);
 static void gltf_camera_parse_perspective(json_object *json_perspective, gltf_camera_perspective *perspective);
 static void gltf_parse_images(uint index, json *j, allocator *alloc, gltf *g);
 static void gltf_parse_materials(uint index, json *j, allocator *alloc, gltf *g);
-static void gltf_parse_meshes(uint index, json *j, struct gltf_extra_attr *extra_attrs, allocator *alloc, gltf *g);
-static uint gltf_mesh_parse_primitives(json_array *j_prim_array, struct gltf_extra_attr *extra_attrs, allocator *alloc, gltf_mesh *mesh);
-static uint gltf_mesh_parse_primitive_attributes(json_object *j_attribs, struct gltf_extra_attr *extra_attrs, gltf_mesh_primitive_attribute *attribs);
+static void gltf_parse_meshes(uint index, json *j, struct gltf_extra_attrs *extra_attrs, allocator *alloc, gltf *g);
+static uint gltf_mesh_parse_primitives(json_array *j_prim_array, struct gltf_extra_attrs *extra_attrs, allocator *alloc, gltf_mesh *mesh);
+static uint gltf_mesh_parse_primitive_attributes(json_object *j_attribs, struct gltf_extra_attrs *extra_attrs, gltf_mesh_primitive_attribute *attribs);
 static void gltf_parse_nodes(uint index, json *j, allocator *alloc, gltf *g);
 static void gltf_parse_samplers(uint index, json *j, allocator *alloc, gltf *g);
 static void gltf_parse_scenes(uint index, json *j, allocator *alloc, gltf *g);
@@ -169,7 +211,7 @@ static void gltf_parse_skins(uint index, json *j, allocator *alloc, gltf *g);
 static void gltf_parse_textures(uint index, json *j, allocator *alloc, gltf *g);
 
 void parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_config *conf,
-        allocator *temp, allocator *persistent, gltf *ret)
+        allocator *temp, allocator *persistent, gltf *g)
 {
     struct file f = file_read_char_all(file_name, temp);
     struct allocation json_allocation;
@@ -179,45 +221,167 @@ void parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_con
     uint indices[GLTF_PROPERTY_COUNT];
     struct gltf_required_size req_size = gltf_required_size(&j, temp, indices);
 
-    // Ik this will allocate more than necessary because each gltf_extra_attrs
-    // stores both normal and tangent info. No point in calculating overlap.
-    struct gltf_extra_attrs *extra_attrs = sallocate(temp, *extra_attrs,
-            req_size.extra_mesh_attrs);
+    // Ik this may allocate more than necessary because each gltf_extra_attrs
+    // stores both normal and tangent info. I allocate +1 still to ensure that
+    // I can do an out of bounds write later, even if there is no missing
+    // tangent/normal overlap.
+    struct gltf_extra_attrs *extra_attrs = sallocate(temp, *extra_attrs, req_size.extra_mesh_attrs + 1);
+    memset(extra_attrs, 0, sizeof(*extra_attrs) * req_size.extra_mesh_attrs);
 
-    ret->meta.size = req_size.size;
-    ret->meta.data = allocate(persistent, ret->meta.size);
+    g->meta.size = req_size.size;
+    g->meta.data = allocate(persistent, g->meta.size);
 
-    allocator gltf_alloc = new_linear_allocator(ret->meta.size + strlen(file_name), ret->meta.data);
+    allocator gltf_alloc = new_linear_allocator(g->meta.size + strlen(file_name), g->meta.data);
 
-    ret->dir.cstr = allocate(&gltf_alloc, strlen(file_name));
-    ret->dir.len = file_dir_name(file_name, (char*)ret->dir.cstr);
+    g->dir.cstr = allocate(&gltf_alloc, strlen(file_name));
+    g->dir.len = file_dir_name(file_name, (char*)g->dir.cstr);
 
-    gltf_parse_accessors(indices[GLTF_PROPERTY_INDEX_ACCESSORS], &j, &gltf_alloc, ret);
-    gltf_parse_animations(indices[GLTF_PROPERTY_INDEX_ANIMATIONS], &j, &gltf_alloc, req_size.anim_target_counts, ret);
-    gltf_parse_buffers(indices[GLTF_PROPERTY_INDEX_BUFFERS], &j, &gltf_alloc, ret);
-    gltf_parse_buffer_views(indices[GLTF_PROPERTY_INDEX_BUFFER_VIEWS], &j, &gltf_alloc, ret);
-    gltf_parse_cameras(indices[GLTF_PROPERTY_INDEX_CAMERAS], &j, &gltf_alloc, ret);
-    gltf_parse_images(indices[GLTF_PROPERTY_INDEX_IMAGES], &j, &gltf_alloc, ret);
-    gltf_parse_materials(indices[GLTF_PROPERTY_INDEX_MATERIALS], &j, &gltf_alloc, ret);
-    gltf_parse_meshes(indices[GLTF_PROPERTY_INDEX_MESHES], &j, extra_attrs, &gltf_alloc, ret);
-    gltf_parse_samplers(indices[GLTF_PROPERTY_INDEX_SAMPLERS], &j, &gltf_alloc, ret);
-    gltf_parse_scenes(indices[GLTF_PROPERTY_INDEX_SCENES], &j, &gltf_alloc, ret);
-    gltf_parse_skins(indices[GLTF_PROPERTY_INDEX_SKINS], &j, &gltf_alloc, ret);
-    gltf_parse_textures(indices[GLTF_PROPERTY_INDEX_TEXTURES], &j, &gltf_alloc, ret);
+    gltf_parse_accessors(indices[GLTF_PROPERTY_INDEX_ACCESSORS], &j, req_size.extra_mesh_attrs, &gltf_alloc, g);
+    gltf_parse_animations(indices[GLTF_PROPERTY_INDEX_ANIMATIONS], &j, &gltf_alloc, req_size.anim_target_counts, g);
+    gltf_parse_buffers(indices[GLTF_PROPERTY_INDEX_BUFFERS], &j, &gltf_alloc, g);
+    gltf_parse_buffer_views(indices[GLTF_PROPERTY_INDEX_BUFFER_VIEWS], &j, req_size.extra_mesh_attrs > 0, &gltf_alloc, g);
+    gltf_parse_cameras(indices[GLTF_PROPERTY_INDEX_CAMERAS], &j, &gltf_alloc, g);
+    gltf_parse_images(indices[GLTF_PROPERTY_INDEX_IMAGES], &j, &gltf_alloc, g);
+    gltf_parse_materials(indices[GLTF_PROPERTY_INDEX_MATERIALS], &j, &gltf_alloc, g);
+    gltf_parse_meshes(indices[GLTF_PROPERTY_INDEX_MESHES], &j, extra_attrs, &gltf_alloc, g);
+    gltf_parse_samplers(indices[GLTF_PROPERTY_INDEX_SAMPLERS], &j, &gltf_alloc, g);
+    gltf_parse_scenes(indices[GLTF_PROPERTY_INDEX_SCENES], &j, &gltf_alloc, g);
+    gltf_parse_skins(indices[GLTF_PROPERTY_INDEX_SKINS], &j, &gltf_alloc, g);
+    gltf_parse_textures(indices[GLTF_PROPERTY_INDEX_TEXTURES], &j, &gltf_alloc, g);
 
     // must happen after skins and meshes, as mesh.joint_count is filled in here.
-    gltf_parse_nodes(indices[GLTF_PROPERTY_INDEX_NODES], &j, &gltf_alloc, ret);
+    gltf_parse_nodes(indices[GLTF_PROPERTY_INDEX_NODES], &j, &gltf_alloc, g);
 
 #if !TEST // test.gltf uses a bogus file which would not make sense to run this on.
-    assert(ret->mesh_count < 32);
+    assert(g->mesh_count < 32);
     uint instance_counts[32] = {};
-    for(uint i=0; i < ret->scene_count; ++i)
-        for(uint j=0; j < ret->scenes[i].node_count; ++j)
-            gltf_count_mesh_instances(ret->nodes, ret->scenes[i].nodes[j],
+    for(uint i=0; i < g->scene_count; ++i)
+        for(uint j=0; j < g->scenes[i].node_count; ++j)
+            gltf_count_mesh_instances(g->nodes, g->scenes[i].nodes[j],
                                       instance_counts);
-    for(uint i=0; i < ret->mesh_count; ++i)
-        ret->meshes[i].max_instance_count = instance_counts[i];
+    for(uint i=0; i < g->mesh_count; ++i)
+        g->meshes[i].max_instance_count = instance_counts[i];
 #endif
+
+    if (!req_size.extra_mesh_attrs)
+        return;
+
+    uint eac = req_size.extra_mesh_attrs;
+
+    uint bv = g->buffer_view_count;
+    uint ac = g->accessor_count;
+    g->buffer_view_count++;
+    g->accessor_count += eac;
+    {
+        // @Optimise @Test I might want to find a way to store the data closer
+        // to the other primitive data... Since individual elements are already
+        // technically sparse (unless the data is being interleaved), and the
+        // GPU does large gathers anyway, idk what kind of performance impact
+        // this would really have.
+        g->buffer_views[bv].flags = GLTF_BUFFER_VIEW_VERTEX_BUFFER_BIT;
+        g->buffer_views[bv].buffer = g->buffer_views[bv-1].buffer;
+        g->buffer_views[bv].byte_stride = 0;
+        g->buffer_views[bv].byte_offset = align(g->buffer_views[bv-1].byte_offset +
+                                                g->buffer_views[bv-1].byte_length, 16);
+    }
+
+    int fd;
+    {
+        char buf[128];
+        memcpy(buf, g->dir.cstr, g->dir.len);
+        memcpy(buf + g->dir.len, g->buffers[g->buffer_views[bv].buffer].uri.cstr,
+                                 g->buffers[g->buffer_views[bv].buffer].uri.len + 1);
+        fd = file_open(buf, WRITE);
+    }
+
+    char *bufs[8]; assert(g->buffer_count <= carrlen(bufs));
+    for(uint i=0; i < g->buffer_count; ++i) {
+        bufs[i] = allocate(temp, g->buffers[i].byte_length);
+        gltf_read_buffer(g, i, bufs[i]);
+    }
+
+    uint bc = 0;
+    for(uint i=0; i < eac; ++i) {
+        uint m = extra_attrs[i].mesh;
+        uint p = extra_attrs[i].prim;
+
+        // @Unimplemented @Todo
+        log_print_error_if(g->meshes[m].primitives[p].indices == Max_u32,
+                "@Unimplemented I do not have non-indexed tang/norm attribute generation functions yet lol");
+
+        struct gltf_index_data index = gltf_index_data(g, m, p);
+        struct gltf_attr_data vert = gltf_attr_data(g, m, p, GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_POSITION);
+
+        if (extra_attrs[i].norm) {
+            g->accessors[ac].flags = GLTF_ACCESSOR_COMPONENT_TYPE_FLOAT_BIT|GLTF_ACCESSOR_TYPE_VEC3_BIT;
+            g->accessors[ac].vkformat = VK_FORMAT_R32G32B32_SFLOAT;
+            g->accessors[ac].byte_stride = 16;
+            g->accessors[ac].count = g->accessors[g->meshes[m].primitives[p]
+                .attributes[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_POSITION].accessor].count;
+            g->accessors[ac].buffer_view = bv;
+            g->accessors[ac].byte_offset = bc;
+            ac++;
+
+            uint64 alloc_pos = allocator_used(temp);
+            vector *normals = sallocate(temp, *normals, vert.count);
+
+            if (index.type_u16)
+                calc_vertex_normals16(index.count, (uint16*)(bufs[index.buffer] + index.offset),
+                                      vert.count, vert.stride, (float*)(bufs[vert.buffer] + vert.offset), normals);
+            else
+                calc_vertex_normals(index.count, (uint*)(bufs[index.buffer] + index.offset),
+                                    vert.count, vert.stride, (float*)(bufs[vert.buffer] + vert.offset), normals);
+
+            uint sz = sizeof(*normals) * vert.count;
+            file_write(fd, g->buffer_views[bv].byte_offset + bc, sz, normals);
+            bc += sz;
+
+            g->meshes[m].primitives[p].attributes[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_NORMAL].accessor = ac-1;
+
+            allocator_reset_linear_to(temp, alloc_pos);
+        }
+        if (extra_attrs[i].tang) {
+            struct gltf_attr_data norm = gltf_attr_data(g, m, p, GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_NORMAL);
+            struct gltf_attr_data texcoord = gltf_attr_data(g, m, p, GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_TEXCOORD);
+
+            g->accessors[ac].flags = GLTF_ACCESSOR_COMPONENT_TYPE_FLOAT_BIT|GLTF_ACCESSOR_TYPE_VEC4_BIT;
+            g->accessors[ac].vkformat = VK_FORMAT_R32G32B32A32_SFLOAT;
+            g->accessors[ac].byte_stride = 16;
+            g->accessors[ac].count = g->accessors[g->meshes[m].primitives[p]
+                .attributes[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_POSITION].accessor].count;
+            g->accessors[ac].buffer_view = bv;
+            g->accessors[ac].byte_offset = bc;
+            ac++;
+
+            uint64 alloc_pos = allocator_used(temp);
+            vector *tangents = sallocate(temp, *tangents, vert.count);
+
+            if (index.type_u16)
+                calc_vertex_tangents16(index.count, (uint16*)(bufs[index.buffer] + index.offset),
+                                      vert.count, vert.stride, (float*)(bufs[vert.buffer] + vert.offset),
+                                      norm.stride == 4, norm.stride, (float*)(bufs[norm.buffer] + norm.offset),
+                                      texcoord.stride, (float*)(bufs[texcoord.buffer] + texcoord.offset),
+                                      temp, tangents);
+            else
+                calc_vertex_tangents(index.count, (uint*)(bufs[index.buffer] + index.offset),
+                                      vert.count, vert.stride, (float*)(bufs[vert.buffer] + vert.offset),
+                                      norm.stride == 4, norm.stride, (float*)(bufs[norm.buffer] + norm.offset),
+                                      texcoord.stride, (float*)(bufs[texcoord.buffer] + texcoord.offset),
+                                      temp, tangents);
+
+            uint sz = sizeof(*tangents) * vert.count;
+            file_write(fd, g->buffer_views[bv].byte_offset + bc, sz, tangents);
+            bc += sz;
+
+            g->meshes[m].primitives[p].attributes[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_NORMAL].accessor = ac-1;
+
+            allocator_reset_linear_to(temp, alloc_pos);
+        }
+    }
+    g->buffer_views[bv].byte_length = bc;
+    g->buffers[g->buffer_views[bv].buffer].byte_length += bc;
+
+    file_close(fd);
 }
 
 static struct gltf_required_size gltf_required_size(json *j, allocator *temp, uint *indices)
@@ -238,8 +402,9 @@ static struct gltf_required_size gltf_required_size(json *j, allocator *temp, ui
     ret.size += gltf_required_size_skins(j, &indices[GLTF_PROPERTY_INDEX_SKINS]);
     ret.size += gltf_required_size_textures(j, &indices[GLTF_PROPERTY_INDEX_TEXTURES]);
 
-    ret.size += sizeof(gltf_accessor)                 * ret.extra_mesh_attrs +
-                sizeof(gltf_mesh_primitive_attribute) * ret.extra_mesh_attrs;
+    ret.size += sizeof(gltf_accessor)                 *  ret.extra_mesh_attrs +
+                sizeof(gltf_mesh_primitive_attribute) *  ret.extra_mesh_attrs +
+                sizeof(gltf_buffer_view)              * (ret.extra_mesh_attrs > 0);
 
     return ret;
 }
@@ -672,7 +837,7 @@ static VkFormat gltf_accessor_flags_to_vkformat(uint flags, uint *byte_stride)
     }
 }
 
-static void gltf_parse_accessors(uint index, json *j, allocator *alloc, gltf *g)
+static void gltf_parse_accessors(uint index, json *j, uint extra_attrs, allocator *alloc, gltf *g)
 {
     uint tmp = index;
     tmp = max64_if_false(tmp == Max_u32);
@@ -682,7 +847,7 @@ static void gltf_parse_accessors(uint index, json *j, allocator *alloc, gltf *g)
 
     uint cnt = json_accessor_array->len & tmp;
     g->accessor_count = cnt;
-    g->accessors = sallocate(alloc, *g->accessors, cnt);
+    g->accessors = sallocate(alloc, *g->accessors, cnt + extra_attrs);
     gltf_accessor *accessor;
     uint i, ki, tmp_cnt;
     for(i = 0; i < cnt; ++i) {
@@ -716,6 +881,8 @@ static void gltf_parse_accessors(uint index, json *j, allocator *alloc, gltf *g)
 
         ki = json_find_key(accessor_obj, "max");
         if (ki != Max_u32) {
+            accessor->flags |= GLTF_ACCESSOR_MINMAX_BIT;
+
             // Cannot just memcpy, as the json_nums are stored as doubles not floats.
             tmp_cnt = accessor_obj->values[ki].arr.len;
             for(tmp = 0; tmp < tmp_cnt; ++tmp)
@@ -725,9 +892,6 @@ static void gltf_parse_accessors(uint index, json *j, allocator *alloc, gltf *g)
             log_print_error_if(ki == Max_u32, "if accessors.max is defined, accessors.min must also be defined");
             for(tmp = 0; tmp < tmp_cnt; ++tmp)
                 accessor->max_min.min[tmp] = accessor_obj->values[ki].arr.nums[tmp];
-        } else {
-            accessor->max_min.max[0] = Max_f32;
-            accessor->max_min.min[0] = Max_f32;
         }
 
         ki = json_find_key(accessor_obj, "sparse");
@@ -944,7 +1108,7 @@ static inline gltf_buffer_view_flag_bits gltf_buffer_view_translate_target(uint 
     }
 }
 
-static void gltf_parse_buffer_views(uint index, json *j, allocator *alloc, gltf *g)
+static void gltf_parse_buffer_views(uint index, json *j, bool extra_attrs, allocator *alloc, gltf *g)
 {
     uint tmp = index;
     tmp = max64_if_false(tmp == Max_u32);
@@ -953,7 +1117,7 @@ static void gltf_parse_buffer_views(uint index, json *j, allocator *alloc, gltf 
 
     uint cnt = j->obj.values[index].arr.len & tmp;
     g->buffer_view_count = cnt;
-    g->buffer_views = sallocate(alloc, *g->buffer_views, cnt);
+    g->buffer_views = sallocate(alloc, *g->buffer_views, cnt + extra_attrs);
     gltf_buffer_view *buffer_views = g->buffer_views;
     uint i, ki;
     for(i = 0; i < cnt; ++i) {
@@ -1302,9 +1466,9 @@ const int ATTR_KEY_LENS[] = {
     GLTF_MESH_PRIMITIVE_ATTRIBUTE_KEY_LEN_WEIGHTS,
 };
 
-static uint gltf_mesh_parse_primitive_attributes(json_object *j_attribs, struct gltf_extra_attr *extra_attrs, gltf_mesh_primitive_attribute *attribs)
+static uint gltf_mesh_parse_primitive_attributes(json_object *j_attribs, struct gltf_extra_attrs *extra_attrs, gltf_mesh_primitive_attribute *attribs)
 {
-    assert(j_attribs->key_count < 32); // @Todo I think this assert is doing nothing.
+    assert(j_attribs->key_count < 32); // @Tidy I think this assert is doing nothing.
     uint attr_m[7];
     memset(attr_m,0,sizeof(attr_m));
     uint i;
@@ -1329,6 +1493,11 @@ static uint gltf_mesh_parse_primitive_attributes(json_object *j_attribs, struct 
     extra_attrs->tang = !attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_TANGENT];
     uint extra_attr_cnt = extra_attrs->norm || extra_attrs->tang;
 
+    // ensure tang and norm attribs are initialized (their accessor fields will
+    // take the accessor of the 0th attr, but this is corrected later in parse_gltf)
+    attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_NORMAL]  |= 0x1 & maxif(!attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_NORMAL]);
+    attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_TANGENT] |= 0x1 & maxif(!attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_TANGENT]);
+
     uint cnt = 0;
     uint tz,pc,j,idx;
     for(i=0;i<7;++i) {
@@ -1347,9 +1516,10 @@ static uint gltf_mesh_parse_primitive_attributes(json_object *j_attribs, struct 
         }
         cnt += pc;
     }
+    return extra_attr_cnt;
 }
 
-static uint gltf_mesh_parse_primitives(json_array *j_prim_array, struct gltf_extra_attr *extra_attrs, allocator *alloc, gltf_mesh *mesh)
+static uint gltf_mesh_parse_primitives(json_array *j_prim_array, struct gltf_extra_attrs *extra_attrs, allocator *alloc, gltf_mesh *mesh)
 {
     json_object *j_prims = j_prim_array->objs;
     json_object *j_attribs;
@@ -1362,11 +1532,17 @@ static uint gltf_mesh_parse_primitives(json_array *j_prim_array, struct gltf_ext
     for(i = 0; i < cnt; ++i) {
         ki = json_find_key(&j_prims[i], "attributes");
         log_print_error_if(ki == Max_u32, "mesh.primitives.attributes must be defined");
+
         prims[i].attribute_count = j_prims[i].values[ki].obj.key_count;
-        prims[i].attributes = sallocate(alloc, *prims[i].attributes, prims[i].attribute_count);
-        tmp = gltf_mesh_parse_primitive_attributes(&j_prims[i].values[ki].obj, false, prims[i].attributes);
-        extra_attrs[extra_attr_cnt].prim = tmp ? i : extra_attrs[extra_attr_cnt].prim;
+        prims[i].attributes = sallocate(alloc, *prims[i].attributes,
+                prims[i].attribute_count +
+                (json_find_key(&j_prims[i].values[ki].obj, "NORMAL") == Max_u32) +
+                (json_find_key(&j_prims[i].values[ki].obj, "TANGENT") == Max_u32));
+
+        tmp = gltf_mesh_parse_primitive_attributes(&j_prims[i].values[ki].obj, extra_attrs + extra_attr_cnt, prims[i].attributes);
+        extra_attrs[extra_attr_cnt].prim = i; // this out of bounds write is fine, I am allocating +1
         extra_attr_cnt += tmp;
+        prims[i].attribute_count += tmp;
 
         tmp = json_find_key(&j_prims[i], "indices");
         ki = tmp & max32_if_true(tmp != Max_u32);
@@ -1392,12 +1568,13 @@ static uint gltf_mesh_parse_primitives(json_array *j_prim_array, struct gltf_ext
             prims[i].morph_targets[j].attribute_count = j_attribs->key_count;
             prims[i].morph_targets[j].attributes =
                 sallocate(alloc, *prims[i].morph_targets[j].attributes, j_attribs->key_count);
-            gltf_mesh_parse_primitive_attributes(j_attribs, true, prims[i].morph_targets[j].attributes);
+            gltf_mesh_parse_primitive_attributes(j_attribs, extra_attrs + extra_attr_cnt, prims[i].morph_targets[j].attributes);
         }
     }
+    return extra_attr_cnt;
 }
 
-static void gltf_parse_meshes(uint index, json *j, struct gltf_extra_attr *extra_attrs, allocator *alloc, gltf *g)
+static void gltf_parse_meshes(uint index, json *j, struct gltf_extra_attrs *extra_attrs, allocator *alloc, gltf *g)
 {
     uint tmp = index;
     tmp = max64_if_false(tmp == Max_u32);
@@ -1420,7 +1597,9 @@ static void gltf_parse_meshes(uint index, json *j, struct gltf_extra_attr *extra
 
         ki = json_find_key(&json_meshes[i], "primitives");
         log_print_error_if(ki == Max_u32, "mesh.primitives must be defined");
-        eac += gltf_mesh_parse_primitives(&json_meshes[i].values[ki].arr, alloc, &meshes[i]);
+        tmp = eac + gltf_mesh_parse_primitives(&json_meshes[i].values[ki].arr, extra_attrs + eac, alloc, &meshes[i]);
+        for(; eac < tmp; ++eac)
+            extra_attrs[eac].mesh = i; // this out of bounds write is fine, I am allocating +1
 
         tmp = json_find_key(&json_meshes[i], "weights");
         ki = tmp & max32_if_true(tmp != Max_u32);

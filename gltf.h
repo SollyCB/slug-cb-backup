@@ -42,6 +42,7 @@ typedef enum {
 
     GLTF_ACCESSOR_NORMALIZED_BIT  = 0x2000,
     GLTF_ACCESSOR_SPARSE_BIT      = 0x4000,
+    GLTF_ACCESSOR_MINMAX_BIT      = 0x8000,
 
     GLTF_ACCESSOR_COMPONENT_TYPE_BITS = GLTF_ACCESSOR_COMPONENT_TYPE_BYTE_BIT           |
                                         GLTF_ACCESSOR_COMPONENT_TYPE_UNSIGNED_BYTE_BIT  |
@@ -415,22 +416,18 @@ gltf_count_mesh_instances(gltf_node *nodes, uint node, uint *instance_counts)
 static inline struct image gltf_load_image(gltf *model, uint image_i)
 {
     char uri[256];
-    for(uint i=0; i < model->dir.len; ++i)
-        uri[i] = model->dir.cstr[i];
-    for(uint i=0; i < model->images[image_i].uri.len; ++i)
-        uri[i + model->dir.len] = model->images[image_i].uri.cstr[i];
-    uri[model->dir.len + model->images[image_i].uri.len] = 0;
+    memcpy(uri, model->dir.cstr, model->dir.len);
+    memcpy(uri + model->dir.len, model->images[image_i].uri.cstr,
+                                 model->images[image_i].uri.len + 1);
     return load_image(uri);
 }
 
 static inline void gltf_read_buffer(gltf *model, uint buf_i, char *to)
 {
     char uri[256];
-    for(uint i=0; i < model->dir.len; ++i)
-        uri[i] = model->dir.cstr[i];
-    for(uint i=0; i < model->buffers[buf_i].uri.len; ++i)
-        uri[i + model->dir.len] = model->buffers[buf_i].uri.cstr[i];
-    uri[model->dir.len + model->buffers[buf_i].uri.len] = 0;
+    memcpy(uri, model->dir.cstr, model->dir.len);
+    memcpy(uri + model->dir.len, model->buffers[buf_i].uri.cstr, model->buffers[buf_i].uri.len + 1);
+    // file_open_read(uri, 0, model->buffers[buf_i].byte_length, to);
     file_read_bin_size(uri, model->buffers[buf_i].byte_length, to);
 }
 

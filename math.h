@@ -768,21 +768,48 @@ static inline float tangent_handedness(vector n, vector t1, vector t2)
     return dot(cross(n,t1),t2) > 0 ? 1 : -1;
 }
 
-void calc_vertex_tangents(
-    uint         index_count,
-    uint        *indices,
-    uint         vertex_count,
-    float       *vertices,
-    float       *normals,
-    float       *texcoords,
-    allocator   *alloc,
-    vector      *ret_tangents);
+void calc_vertex_normals16(
+    uint    index_count,
+    uint16 *indices,
+    uint    vertex_count,
+    uint    vertex_stride,
+    float  *vertices,
+    vector *ret_normals);
 
 void calc_vertex_normals(
-    uint         index_count,
-    uint        *indices,
-    uint         vertex_count,
-    float       *vertices,
-    float       *ret_normals);
+    uint    index_count,
+    uint   *indices,
+    uint    vertex_count,
+    uint    vertex_stride,
+    float  *vertices,
+    vector *ret_normals);
+
+void calc_vertex_tangents16(
+    uint       index_count,
+    uint16    *indices,
+    uint       vertex_count,
+    uint       vertex_stride,
+    float     *vertices,
+    bool       aligned_normals,
+    uint       normal_stride,
+    float     *normals,
+    uint       texcoord_stride,
+    float     *texcoords,
+    allocator *alloc,
+    vector    *ret_tangents);
+
+void calc_vertex_tangents(
+    uint       index_count,
+    uint      *indices,
+    uint       vertex_count,
+    uint       vertex_stride,
+    float     *vertices,
+    bool       aligned_normals,
+    uint       normal_stride,
+    float     *normals,
+    uint       texcoord_stride,
+    float     *texcoords,
+    allocator *alloc,
+    vector    *ret_tangents);
 
 #endif // include guard

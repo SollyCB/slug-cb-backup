@@ -94,7 +94,7 @@ static inline void *allocate_and_zero(allocator *alloc, size_t size) {
     return ret;
 }
 
-#define sallocate(alloc, type, count) allocate(alloc, sizeof(type) * count)
+#define sallocate(alloc, type, count) allocate(alloc, sizeof(type) * (count))
 #define sreallocate(alloc, ptr, type, count) reallocate(alloc, ptr, sizeof(type) * count)
 #define sallocate_unaligned(alloc, type, count) allocate_unaligned(alloc, sizeof(type), sizeof(type) * count)
 
