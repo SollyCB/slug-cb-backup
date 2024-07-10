@@ -427,8 +427,7 @@ static inline void gltf_read_buffer(gltf *model, uint buf_i, char *to)
     char uri[256];
     memcpy(uri, model->dir.cstr, model->dir.len);
     memcpy(uri + model->dir.len, model->buffers[buf_i].uri.cstr, model->buffers[buf_i].uri.len + 1);
-    // file_open_read(uri, 0, model->buffers[buf_i].byte_length, to);
-    file_read_bin_size(uri, model->buffers[buf_i].byte_length, to);
+    file_open_read(uri, 0, model->buffers[buf_i].byte_length, to);
 }
 
 struct shader_dir; // @Review I do want to reimplement these better...

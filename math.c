@@ -23,22 +23,34 @@ void calc_vertex_normals16( // @Todo Need a version that does not use indices
     float  *vertices,
     vector *ret_normals)
 {
+    assert(index_count % 3 == 0);
+
+    vertex_stride /= 4;
     smemset(ret_normals, 0, *ret_normals, vertex_count);
+
     vector p[3];
     uint i,j;
-    for(i = 0; i < index_count; i += vertex_stride) {
+    for(i=0; i < index_count; i += 3) {
         for(j = 0; j < 3; ++j)
             p[j] = vector3_ua(&vertices[indices[i+j] * vertex_stride]);
 
-        p[1] = sub_vector(p[0], p[1]);
-        p[2] = sub_vector(p[0], p[2]);
-        p[1] = cross(p[2], p[0]);
+        p[0] = cross(sub_vector(p[1], p[0]), sub_vector(p[2], p[0]));
 
-        for(j = 0; j < 3; ++j)
+        for(j=0; j < 3; ++j)
             ret_normals[indices[i+j]] = add_vector(ret_normals[indices[i+j]], p[0]);
     }
-    for(i = 0; i < vertex_count; i++)
+    for(i=0; i < vertex_count; ++i)
         ret_normals[i] = normalize(ret_normals[i]);
+
+    for(i=0; i < index_count; i += 3) {
+        for(j = 0; j < 3; ++j) {
+            vector p = vector3_ua(&vertices[indices[i+j] * vertex_stride]);
+            vector n = ret_normals[indices[i+j]];
+            print_vector(p);
+            print(" : ");
+            println_vector(n);
+        }
+    }
 }
 
 void calc_vertex_normals( // @Todo Need a version that does not use indices
@@ -49,18 +61,18 @@ void calc_vertex_normals( // @Todo Need a version that does not use indices
     float  *vertices,
     vector *ret_normals)
 {
+    vertex_stride /= 4;
     smemset(ret_normals, 0, *ret_normals, vertex_count);
+
     vector p[3];
     uint i,j;
-    for(i = 0; i < index_count; i += vertex_stride) {
+    for(i = 0; i < index_count; i += 3) {
         for(j = 0; j < 3; ++j)
             p[j] = vector3_ua(&vertices[indices[i+j] * vertex_stride]);
 
-        p[1] = sub_vector(p[0], p[1]);
-        p[2] = sub_vector(p[0], p[2]);
-        p[1] = cross(p[2], p[0]);
+        p[0] = cross(sub_vector(p[1], p[0]), sub_vector(p[2], p[0]));
 
-        for(j = 0; j < 3; ++j)
+        for(j = 0; j < 4; ++j)
             ret_normals[indices[i+j]] = add_vector(ret_normals[indices[i+j]], p[0]);
     }
     for(i = 0; i < vertex_count; i++)
@@ -81,6 +93,10 @@ void calc_vertex_tangents16( // @Todo Without indices.
     allocator *alloc,
     vector    *ret_tangents)
 {
+    vertex_stride /= 4;
+    normal_stride /= 4;
+    texcoord_stride /= 4;
+
     vector *tan1 = sallocate(alloc, *tan1, 2 * vertex_count);
     vector *tan2 = tan1 + vertex_count;
     smemset(tan1, 0, *tan1, 2 * vertex_count);
@@ -147,6 +163,10 @@ void calc_vertex_tangents( // @Todo Without indices.
     allocator *alloc,
     vector    *ret_tangents)
 {
+    vertex_stride /= 4;
+    normal_stride /= 4;
+    texcoord_stride /= 4;
+
     vector *tan1 = sallocate(alloc, *tan1, 2 * vertex_count);
     vector *tan2 = tan1 + vertex_count;
     smemset(tan1, 0, *tan1, 2 * vertex_count);

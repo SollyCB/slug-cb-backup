@@ -176,6 +176,16 @@ static inline vector mul_vector(vector v1, vector v2)
     return r;
 }
 
+static inline vector div_vector(vector v1, vector v2)
+{
+    __m128 a = _mm_load_ps(&v1.x);
+    __m128 b = _mm_load_ps(&v2.x);
+    a = _mm_div_ps(a,b);
+    vector r;
+    _mm_store_ps(&r.x, a);
+    return r;
+}
+
 static inline float sq_vector(vector v)
 {
     v = mul_vector(v, v);

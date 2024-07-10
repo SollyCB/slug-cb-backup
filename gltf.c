@@ -333,7 +333,7 @@ void parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_con
                                     vert.count, vert.stride, (float*)(bufs[vert.buffer] + vert.offset), normals);
 
             uint sz = sizeof(*normals) * vert.count;
-            file_write(fd, g->buffer_views[bv].byte_offset + bc, sz, normals);
+            file_write(fd, g->buffer_views[bv].byte_offset + bc, sz, normals); // @Optimise This should only be called once.
             bc += sz;
 
             g->meshes[m].primitives[p].attributes[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_NORMAL].accessor = ac-1;

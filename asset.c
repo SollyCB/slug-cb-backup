@@ -1256,6 +1256,10 @@ model_pipelines_transform_descriptors_and_draw_info(
         .pScissors = &dsci,
     };
 
+    bool  depth_bias_enable   = 1;
+    float depth_bias_constant = 1.05;
+    float depth_bias_slope    = 1.05;
+
     // @Todo This is supposed to be an 'over' operator blend. I am assuming
     // that that is the same as the vulkan VK_BLEND_OVER.
     //
@@ -1268,12 +1272,20 @@ model_pipelines_transform_descriptors_and_draw_info(
             .polygonMode = VK_POLYGON_MODE_LINE & maxif(arg->flags & LOAD_MODEL_WIREFRAME_BIT),
             .cullMode = VK_CULL_MODE_NONE,
             .lineWidth = 1.0f,
+
+            .depthBiasEnable = depth_bias_enable,
+            .depthBiasConstantFactor = depth_bias_constant,
+            .depthBiasSlopeFactor = depth_bias_slope,
         },
         (VkPipelineRasterizationStateCreateInfo) {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
             .polygonMode = VK_POLYGON_MODE_LINE & maxif(arg->flags & LOAD_MODEL_WIREFRAME_BIT),
             .cullMode = VK_CULL_MODE_BACK_BIT,
             .lineWidth = 1.0f,
+
+            .depthBiasEnable = depth_bias_enable,
+            .depthBiasConstantFactor = depth_bias_constant,
+            .depthBiasSlopeFactor = depth_bias_slope,
         },
     };
 
@@ -1284,10 +1296,9 @@ model_pipelines_transform_descriptors_and_draw_info(
             .lineWidth = 1.0f,
 
             // @Todo Idk what the right numbers are here...
-            .depthBiasEnable = VK_TRUE,
-            .depthBiasConstantFactor = 1.05,
-            .depthBiasSlopeFactor = 1.1,
-            // .depthBiasClamp = 1.0,
+            .depthBiasEnable = depth_bias_enable,
+            .depthBiasConstantFactor = depth_bias_constant,
+            .depthBiasSlopeFactor = depth_bias_slope,
     };
 
     // @Todo I want to look at multisampling. Idk how important it is for a good image.

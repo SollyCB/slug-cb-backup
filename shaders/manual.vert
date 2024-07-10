@@ -8,6 +8,8 @@
 
 layout(location = 3) in vec2 in_texcoord;
 
+layout(location = 25) out vec3 dbg_norm;
+
 void main() {
 
     mat4 ws = vs_info.model * transforms.trs[0];
@@ -20,6 +22,8 @@ void main() {
         gl_Position = vs_info.proj * view_pos;
 
     fs_info.texcoord = in_texcoord;
+
+    dbg_norm = in_normal;
 
     vec3 normal = vec3(ws * vec4(in_normal, 0));
     vec3 tangent = vec3(ws * vec4(in_tangent.xyz, 0));

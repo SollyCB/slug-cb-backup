@@ -5,6 +5,8 @@
 #define FRAG
 #include "../shader.h.glsl"
 
+layout(location = 25) in vec3 dbg_norm;
+
 void main() {
 
     vec4 base_color = texture(material_textures[0], fs_info.texcoord) * material_ubo.bbbb;
@@ -54,5 +56,7 @@ void main() {
         light += fs_info.dir_lights[i].color * matbrdf * max(dot(N, L), 0);
     }
 
-    fc = vec4(light, 1);
+    // fc = vec4(light, 1);
+    // fc = vec4(abs(dbg_norm.x), abs(dbg_norm.y), abs(dbg_norm.z), 1);
+    fc = vec4(dbg_norm, 1);
 }
