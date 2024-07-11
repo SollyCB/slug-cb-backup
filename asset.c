@@ -759,6 +759,30 @@ static uint allocate_model_resources(
         for(uint i=0; i < model->buffer_count; ++i)
             gltf_read_buffer(model, i,
                              (char*)gpu->mem.bind_buffer.data + offsets->base_bind + offsets->buffers[i]);
+        {
+            char *data = (char*)gpu->mem.bind_buffer.data + offsets->base_bind + offsets->buffers[0];
+
+            struct gltf_index_data id = gltf_index_data(model, 0, 0);
+            struct gltf_attr_data pd = gltf_attr_data(model, 0, 0, 0);
+            struct gltf_attr_data nd = gltf_attr_data(model, 0, 0, 1);
+
+            uint16 *indices = (uint16*)(data + id.offset);
+            float *vertices = (float*)(data + pd.offset);
+            float *normals = (float*)(data + nd.offset);
+
+            for(uint i=0; i < id.count; ++i) {
+                #if 0 // @RemoveMe
+                vector p = vector3_ua(vertices + indices[i]*3);
+                vector n = vector3_ua(normals + indices[i]*4);
+                if (FRAMES_ELAPSED == 0) {
+                    print("%u - ", indices[i]);
+                    print_vector(p);
+                    print(" : ");
+                    println_vector(n);
+                }
+                #endif
+            }
+        }
     } else {
         for(uint i=0; i < model->buffer_count; ++i)
             gltf_read_buffer(model, i,

@@ -279,10 +279,11 @@ void parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_con
         // GPU does large gathers anyway, idk what kind of performance impact
         // this would really have.
         g->buffer_views[bv].flags = GLTF_BUFFER_VIEW_VERTEX_BUFFER_BIT;
-        g->buffer_views[bv].buffer = g->buffer_views[bv-1].buffer;
+        g->buffer_views[bv].buffer = 0; // @Note Idk if there is a better idea.
         g->buffer_views[bv].byte_stride = 0;
-        g->buffer_views[bv].byte_offset = align(g->buffer_views[bv-1].byte_offset +
-                                                g->buffer_views[bv-1].byte_length, 16);
+
+        g->buffers[0].byte_length = align(g->buffers[0].byte_length, 16);
+        g->buffer_views[bv].byte_offset = g->buffers[0].byte_length;
     }
 
     int fd;
@@ -379,7 +380,7 @@ void parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_con
         }
     }
     g->buffer_views[bv].byte_length = bc;
-    g->buffers[g->buffer_views[bv].buffer].byte_length += bc;
+    g->buffers[0].byte_length += bc;
 
     file_close(fd);
 }

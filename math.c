@@ -26,7 +26,7 @@ void calc_vertex_normals16( // @Todo Need a version that does not use indices
     assert(index_count % 3 == 0);
 
     vertex_stride /= 4;
-    smemset(ret_normals, 0, *ret_normals, vertex_count);
+    memset(ret_normals, 0, sizeof(*ret_normals) * vertex_count);
 
     vector p[3];
     uint i,j;
@@ -42,14 +42,15 @@ void calc_vertex_normals16( // @Todo Need a version that does not use indices
     for(i=0; i < vertex_count; ++i)
         ret_normals[i] = normalize(ret_normals[i]);
 
-    for(i=0; i < index_count; i += 3) {
-        for(j = 0; j < 3; ++j) {
-            vector p = vector3_ua(&vertices[indices[i+j] * vertex_stride]);
-            vector n = ret_normals[indices[i+j]];
-            print_vector(p);
-            print(" : ");
-            println_vector(n);
-        }
+    for(i=0; i < index_count; i++) {
+        #if 0 // @RemoveMe
+        vector p = vector3_ua(vertices + indices[i]*3);
+        vector n = ret_normals[indices[i]];
+        print("%u - ", indices[i]);
+        print_vector(p);
+        print(" : ");
+        println_vector(n);
+        #endif
     }
 }
 

@@ -146,6 +146,29 @@ int main() {
             &conf, &pr.allocs.temp, &pr.allocs.heap, &model);
     #endif
 
+    {
+        char *data = allocate(&pr.allocs.temp, 2048);
+        gltf_read_buffer(&model, 0, data);
+        struct gltf_index_data id = gltf_index_data(&model, 0, 0);
+        struct gltf_attr_data pd = gltf_attr_data(&model, 0, 0, 0);
+        struct gltf_attr_data nd = gltf_attr_data(&model, 0, 0, 1);
+
+        uint16 *indices = (uint16*)(data + id.offset);
+        float *vertices = (float*)(data + pd.offset);
+        float *normals = (float*)(data + nd.offset);
+
+        for(uint i=0; i < id.count; ++i) {
+            #if 0 // @RemoveMe
+            vector p = vector3_ua(vertices + i*3);
+            vector n = vector3_ua(normals + i*4);
+            print("%u - ", indices[i]);
+            print_vector(p);
+            print(" : ");
+            println_vector(n);
+            #endif
+        }
+    }
+
     struct vertex_info_descriptor vs_info_desc;
     Vertex_Info *vs_info = init_vs_info(&pr.gpu, cam.pos, cam.dir, &vs_info_desc);
 
@@ -249,7 +272,7 @@ int main() {
             struct trs model_trs;
             get_trs(
                 vector3(0, 3, 0),
-                quaternion(0, vector3(0, 1, 1)),
+                quaternion(sinf(t / 2) * 2, vector3(0, 1, 1)),
                 vector3(1, 1, 1),
                 &model_trs
             );

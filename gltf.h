@@ -440,4 +440,4 @@ void store_gltf(gltf *model, const char *file_name, allocator *alloc);
 void test_gltf(test_suite *suite);
 #endif
 
-    #endif
+#endif // include guard
