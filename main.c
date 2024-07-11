@@ -138,7 +138,7 @@ int main() {
     struct shader_config conf = {0};
 
     gltf model;
-    #if 0
+    #if 1
     load_gltf("models/cube-static/Cube.gltf", &pr.gpu.shader_dir,
             &conf, &pr.allocs.temp, &pr.allocs.heap, &model);
     #else

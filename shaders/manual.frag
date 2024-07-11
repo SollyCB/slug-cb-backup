@@ -6,6 +6,7 @@
 #include "../shader.h.glsl"
 
 layout(location = 25) in vec3 dbg_norm;
+layout(location = 26) in vec4 dbg_tang;
 
 void main() {
 
@@ -59,4 +60,5 @@ void main() {
     fc = vec4(light, 1);
     // fc = vec4(abs(dbg_norm.x), abs(dbg_norm.y), abs(dbg_norm.z), 1);
     // fc = vec4(dbg_norm, 1);
+    // fc = vec4(vec3(dbg_tang), 1);
 }

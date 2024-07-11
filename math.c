@@ -62,22 +62,36 @@ void calc_vertex_normals( // @Todo Need a version that does not use indices
     float  *vertices,
     vector *ret_normals)
 {
+
+    assert(index_count % 3 == 0);
+
     vertex_stride /= 4;
-    smemset(ret_normals, 0, *ret_normals, vertex_count);
+    memset(ret_normals, 0, sizeof(*ret_normals) * vertex_count);
 
     vector p[3];
     uint i,j;
-    for(i = 0; i < index_count; i += 3) {
+    for(i=0; i < index_count; i += 3) {
         for(j = 0; j < 3; ++j)
             p[j] = vector3_ua(&vertices[indices[i+j] * vertex_stride]);
 
         p[0] = cross(sub_vector(p[1], p[0]), sub_vector(p[2], p[0]));
 
-        for(j = 0; j < 4; ++j)
+        for(j=0; j < 3; ++j)
             ret_normals[indices[i+j]] = add_vector(ret_normals[indices[i+j]], p[0]);
     }
-    for(i = 0; i < vertex_count; i++)
+    for(i=0; i < vertex_count; ++i)
         ret_normals[i] = normalize(ret_normals[i]);
+
+    for(i=0; i < index_count; i++) {
+        #if 0 // @RemoveMe
+        vector p = vector3_ua(vertices + indices[i]*3);
+        vector n = ret_normals[indices[i]];
+        print("%u - ", indices[i]);
+        print_vector(p);
+        print(" : ");
+        println_vector(n);
+        #endif
+    }
 }
 
 void calc_vertex_tangents16( // @Todo Without indices.
@@ -145,7 +159,7 @@ void calc_vertex_tangents16( // @Todo Without indices.
             v3[0] = vector3_ua(&normals[i*normal_stride]);
         else
             v3[0] = *(vector*)&normals[i*4];
-        ret_tangents[i] = gram_schmidt(v3[0], tan1[i]);
+        ret_tangents[i] = normalize(gram_schmidt(v3[0], tan1[i]));
         ret_tangents[i].w = tangent_handedness(v3[0], tan1[i], tan2[i]);
     }
 }
@@ -215,7 +229,7 @@ void calc_vertex_tangents( // @Todo Without indices.
             v3[0] = vector3_ua(&normals[i*normal_stride]);
         else
             v3[0] = *(vector*)&normals[i*4];
-        ret_tangents[i] = gram_schmidt(v3[0], tan1[i]);
+        ret_tangents[i] = normalize(gram_schmidt(v3[0], tan1[i]));
         ret_tangents[i].w = tangent_handedness(v3[0], tan1[i], tan2[i]);
     }
 }

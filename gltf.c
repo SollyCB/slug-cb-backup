@@ -150,6 +150,9 @@ struct gltf_attr_data {
 
 static struct gltf_index_data gltf_index_data(gltf *g, uint mesh, uint prim)
 {
+    log_print_error_if(g->meshes[mesh].primitives[prim].indices == Max_u32,
+            "trying to access indices data, but this primitive does not declare indices");
+
     gltf_accessor *pa = &g->accessors[g->meshes[mesh].primitives[prim].indices];
     gltf_buffer_view *pb = &g->buffer_views[pa->buffer_view];
 
@@ -165,6 +168,11 @@ static struct gltf_index_data gltf_index_data(gltf *g, uint mesh, uint prim)
 
 static struct gltf_attr_data gltf_attr_data(gltf *g, uint mesh, uint prim, gltf_mesh_primitive_attribute_type type)
 {
+    log_print_error_if(type == GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_TEXCOORD &&
+            g->meshes[mesh].primitives[prim].attributes[type].type !=
+            GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_TEXCOORD,
+            "trying to access texcoord attr data, but this primitive does not declare texcoords");
+
     gltf_accessor *pa = &g->accessors[g->meshes[mesh].primitives[prim].attributes[type].accessor];
     gltf_buffer_view *pb = &g->buffer_views[pa->buffer_view];
 
@@ -374,7 +382,7 @@ void parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_con
             file_write(fd, g->buffer_views[bv].byte_offset + bc, sz, tangents);
             bc += sz;
 
-            g->meshes[m].primitives[p].attributes[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_NORMAL].accessor = ac-1;
+            g->meshes[m].primitives[p].attributes[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_TANGENT].accessor = ac-1;
 
             allocator_reset_linear_to(temp, alloc_pos);
         }

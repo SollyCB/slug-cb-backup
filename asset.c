@@ -765,12 +765,25 @@ static uint allocate_model_resources(
             struct gltf_index_data id = gltf_index_data(model, 0, 0);
             struct gltf_attr_data pd = gltf_attr_data(model, 0, 0, 0);
             struct gltf_attr_data nd = gltf_attr_data(model, 0, 0, 1);
+            struct gltf_attr_data td = gltf_attr_data(model, 0, 0, 2);
 
             uint16 *indices = (uint16*)(data + id.offset);
             float *vertices = (float*)(data + pd.offset);
             float *normals = (float*)(data + nd.offset);
+            float *tangents = (float*)(data + td.offset);
 
             for(uint i=0; i < id.count; ++i) {
+                #if 1 // @RemoveMe
+                vector p = vector3_ua(vertices + indices[i]*3);
+                vector t = vector3_ua(tangents + indices[i]*4);
+                if (FRAMES_ELAPSED == 0) {
+                    println("%u", td.offset);
+                    print("%u - ", indices[i]);
+                    print_vector(p);
+                    print(" : ");
+                    println_vector(t);
+                }
+                #endif
                 #if 0 // @RemoveMe
                 vector p = vector3_ua(vertices + indices[i]*3);
                 vector n = vector3_ua(normals + indices[i]*4);

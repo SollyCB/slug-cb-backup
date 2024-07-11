@@ -9,6 +9,7 @@
 layout(location = 3) in vec2 in_texcoord;
 
 layout(location = 25) out vec3 dbg_norm;
+layout(location = 26) out vec4 dbg_tang;
 
 void main() {
 
@@ -24,6 +25,7 @@ void main() {
     fs_info.texcoord = in_texcoord;
 
     dbg_norm = in_normal;
+    dbg_tang = in_tangent;
 
     vec3 normal = vec3(ws * vec4(in_normal, 0));
     vec3 tangent = vec3(ws * vec4(in_tangent.xyz, 0));
