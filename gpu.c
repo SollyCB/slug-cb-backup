@@ -184,8 +184,8 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
     gpu->shader_dir = load_shader_dir(gpu, gpu->alloc_heap);
     #endif
 
-    gpu->settings.shadow_maps.width = 4096 / 4;
-    gpu->settings.shadow_maps.height = 4096 / 4;
+    gpu->settings.shadow_maps.width = 4096 / 2;
+    gpu->settings.shadow_maps.height = 4096 / 2;
 }
 
 void shutdown_gpu(struct gpu *gpu) {
@@ -2435,9 +2435,12 @@ void begin_shadow_renderpass(VkCommandBuffer cmd, struct renderpass *rp, struct 
 
 void do_shadow_pass(VkCommandBuffer cmd, struct shadow_pass_info *info, allocator *alloc)
 {
+    // @Optimise AMD best practive complains about large pipeline layouts, I am
+    // assuming due to the matrix push constant here. Maybe want to switch to
+    // using a descriptor set for AMD gpus instead. Although that would have to
+    // be tested, as it may still be faster to use a push constant in this
+    // specific situation.
     begin_shadow_renderpass(cmd, info->rp, info->gpu, info->maps->count * CSM_COUNT, alloc);
-
-    static bool print = 1;
 
     uint idx = 0;
     for(uint i=0; i < info->maps->count; ++i) {
@@ -2480,8 +2483,6 @@ void do_shadow_pass(VkCommandBuffer cmd, struct shadow_pass_info *info, allocato
             idx++;
         }
     }
-
-    print = print ? 0 : 0;
     end_renderpass(cmd);
 }
 

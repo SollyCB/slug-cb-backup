@@ -38,7 +38,7 @@ static inline void scene_bounding_box(struct box *bb)
     float max_z = -40;
 
     float min_x = -40;
-    float min_y =    0;
+    float min_y =   0;
     float min_z =  40;
 
     bb->p[0] = vector4(min_x, min_y, max_z, 1);

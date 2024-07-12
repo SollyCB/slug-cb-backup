@@ -242,7 +242,8 @@ int main() {
             get_trs(
                 vector3(0, 0, 0),
                 quaternion(0, vector3(0, 1, 0)),
-                vector3(1, 1, 1),
+                vector3(1,1,1),
+                // vector3(sinf(t / 4) * 0.5 + 1, sinf(t / 2) * 0.5 + 1, sinf(t / 3) * 0.5 + 1),
                 &model_trs
             );
             convert_trs(&model_trs, &mat_model);

@@ -720,6 +720,10 @@ static inline gltf_accessor_flag_bits gltf_accessor_type_to_flags(json_string ty
 static VkFormat gltf_accessor_flags_to_vkformat(uint flags, uint *byte_stride)
 {
     switch(flags & (GLTF_ACCESSOR_COMPONENT_TYPE_BITS | GLTF_ACCESSOR_TYPE_BITS | GLTF_ACCESSOR_NORMALIZED_BIT)) {
+    case GLTF_ACCESSOR_COMPONENT_TYPE_FLOAT_BIT | GLTF_ACCESSOR_TYPE_MAT4_BIT:
+        *byte_stride = 64;
+        return VK_FORMAT_UNDEFINED;
+
     case GLTF_ACCESSOR_COMPONENT_TYPE_BYTE_BIT | GLTF_ACCESSOR_TYPE_SCALAR_BIT:
         *byte_stride = 1;
         return VK_FORMAT_R8_SINT;
@@ -851,8 +855,7 @@ static VkFormat gltf_accessor_flags_to_vkformat(uint flags, uint *byte_stride)
         return VK_FORMAT_R16G16B16A16_UNORM;
 
     default:
-        return Max_u32;
-        return 0;
+        return VK_FORMAT_UNDEFINED;
     }
 }
 

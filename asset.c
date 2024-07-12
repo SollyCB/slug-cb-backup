@@ -1256,7 +1256,7 @@ model_pipelines_transform_descriptors_and_draw_info(
         .pScissors = &dsci,
     };
 
-    bool  depth_bias_enable   = 1;
+    bool  depth_bias_enable   = true;
     float depth_bias_constant = 1.05;
     float depth_bias_slope    = 1.05;
 
@@ -1738,8 +1738,6 @@ static void model_build_transform_ubo(
     uint                                  mesh,
     struct model_build_transform_ubo_arg *arg);
 
-// @Todo TBN matrices.
-//
 // @Optimise This is a lot of arguments for a function that I
 // want to be lightning... Maybe it would be faster to visit
 // fields in pieces, so one pass does the transforms, and a
@@ -1869,6 +1867,8 @@ static void model_node_transforms(
                 mesh_counts[tz]++;
             }
         }
+    // @TODO @CurrentTask Multiply the inverse bind matrices for each joint by
+    // the corresponsing node's global transform.
 }
 
 struct model_animation_timestep {

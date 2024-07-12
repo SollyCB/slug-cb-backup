@@ -54,7 +54,8 @@ struct Vertex_Info {
 };
 
 struct Vertex_Transforms {
-    mat4 trs[JOINT_COUNT];
+    mat4 joints[JOINT_COUNT];
+    mat4 inverse_bind_matrices[JOINT_COUNT];
     vec4 weights[(MORPH_WEIGHT_COUNT / 4) + 1];
 };
 
