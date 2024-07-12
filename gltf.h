@@ -422,6 +422,15 @@ static inline struct image gltf_load_image(gltf *model, uint image_i)
     return load_image(uri);
 }
 
+static inline int gltf_open_buffer_w(gltf *g, uint buf_i)
+{
+    char buf[128];
+    memcpy(buf, g->dir.cstr, g->dir.len);
+    memcpy(buf + g->dir.len, g->buffers[buf_i].uri.cstr,
+                             g->buffers[buf_i].uri.len + 1);
+    return file_open(buf, WRITE);
+}
+
 static inline void gltf_read_buffer(gltf *model, uint buf_i, char *to)
 {
     char uri[256];

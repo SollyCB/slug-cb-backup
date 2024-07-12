@@ -138,13 +138,26 @@ int main() {
     struct shader_config conf = {0};
 
     gltf model;
-    #if 1
-    load_gltf("models/cube-static/Cube.gltf", &pr.gpu.shader_dir,
-            &conf, &pr.allocs.temp, &pr.allocs.heap, &model);
-    #else
-    load_gltf("models/cube-static-testing/Cube.gltf", &pr.gpu.shader_dir,
-            &conf, &pr.allocs.temp, &pr.allocs.heap, &model);
-    #endif
+    switch(MODEL_TYPE) {
+        case MODEL_CUBE:
+            load_gltf("models/cube-static/Cube.gltf", &pr.gpu.shader_dir,
+                    &conf, &pr.allocs.temp, &pr.allocs.heap, &model);
+            break;
+        case MODEL_CUBE_TESTING:
+            load_gltf("models/cube-static-testing/Cube.gltf", &pr.gpu.shader_dir,
+                    &conf, &pr.allocs.temp, &pr.allocs.heap, &model);
+            break;
+        case MODEL_CESIUM_MAN:
+            load_gltf("models/cesium-man/CesiumMan.gltf", &pr.gpu.shader_dir,
+                    &conf, &pr.allocs.temp, &pr.allocs.heap, &model);
+            break;
+        case MODEL_CESIUM_MAN_TESTING:
+            load_gltf("models/cesium-man-testing/CesiumMan.gltf", &pr.gpu.shader_dir,
+                    &conf, &pr.allocs.temp, &pr.allocs.heap, &model);
+            break;
+        default:
+            assert(false && "invalid case");
+    }
 
     {
         char *data = allocate(&pr.allocs.temp, 2048);
@@ -233,15 +246,13 @@ int main() {
 
         matrix light_view_mat;
         { // update light view, pos
-            vector q = quaternion(dt, vector3(0, 1, 0));
-            matrix m;
-            rotation_matrix(q, &m);
-            // vs_info->dir_lights[0].position = mul_matrix_vector(&m, vs_info->dir_lights[0].position);
+            vector q = quaternion(dt / 10, vector3(0, 1, 0));
+            // vs_info->dir_lights[0].position = rotate_passive(vs_info->dir_lights[0].position, q);
 
             vector light_tgt = vector4(0, 0, 0, 1);
             view_matrix(vs_info->dir_lights[0].position,
                         normalize(sub_vector(light_tgt, vs_info->dir_lights[0].position)),
-                        vector3(0, 0, -1), &light_view_mat);
+                        vector3(0, 1, 0), &light_view_mat);
         }
 
         matrix lmvp;
@@ -272,7 +283,8 @@ int main() {
             struct trs model_trs;
             get_trs(
                 vector3(0, 3, 0),
-                quaternion(sinf(t / 2) * 2, vector3(0, 1, 1)),
+                // quaternion(sinf(t / 2) * 2, vector3(0, 1, 1)),
+                quaternion(0, vector3(0, 1, 1)),
                 vector3(1, 1, 1),
                 &model_trs
             );
@@ -464,7 +476,7 @@ int main() {
             draw_model_color(draw_cmd, lmr.draw_info);
 
             {
-                #define DLP 0
+                #define DLP 1
                 #define DSB 0
                 #define DLF 0
                 #define DCF 0

@@ -184,8 +184,8 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
     gpu->shader_dir = load_shader_dir(gpu, gpu->alloc_heap);
     #endif
 
-    gpu->settings.shadow_maps.width = 4096 / 8;
-    gpu->settings.shadow_maps.height = 4096 / 8;
+    gpu->settings.shadow_maps.width = 4096 / 4;
+    gpu->settings.shadow_maps.height = 4096 / 4;
 }
 
 void shutdown_gpu(struct gpu *gpu) {
@@ -1151,7 +1151,7 @@ Vertex_Info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vertex
     Vertex_Info *vs = (Vertex_Info*)(gpu->mem.bind_buffer.data + ret->bb_offset);
 
     vs->dlcx[0] = 1;
-    vs->dir_lights[0].position = vector4(0, 15, 0,  1);
+    vs->dir_lights[0].position = vector4(7, 9, 15,  1);
     vs->dir_lights[0].color    = scale_vector(vector4(20.0, 20.0, 20.0, 0), 0.5);
 
     vs->ambient = scale_vector(vector3(1, 1, 1), 1.3);
@@ -3140,7 +3140,6 @@ void draw_floor(VkCommandBuffer cmd, struct gpu *gpu, VkRenderPass rp, uint subp
             count,
             sets,
             0, NULL);
-    assert(count == 2); // @RemoveMe
     vk_cmd_draw(cmd, 6, 1, 0, 0);
 }
 #else

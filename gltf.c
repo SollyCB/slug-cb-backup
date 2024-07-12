@@ -31,8 +31,9 @@ void load_gltf(const char *file_name, struct shader_dir *dir, struct shader_conf
     memcpy(buf + len, PROCESSED_GLTF_FILE_EXTENSION, 5);
 
     if (!file_exists(buf)) {
+        println("loading model file %s for the first time, parsing gltf", file_name);
         parse_gltf(file_name, dir, conf, temp, persistent, g);
-        // store_gltf(g, file_name, temp); <- @Uncomment // to create file_name.gltf.out
+        // store_gltf(g, file_name, temp); // to create file_name.gltf.sol
         return;
     }
 
@@ -209,7 +210,7 @@ static void gltf_camera_parse_orthographic(json_object *json_orthographic, gltf_
 static void gltf_camera_parse_perspective(json_object *json_perspective, gltf_camera_perspective *perspective);
 static void gltf_parse_images(uint index, json *j, allocator *alloc, gltf *g);
 static void gltf_parse_materials(uint index, json *j, allocator *alloc, gltf *g);
-static void gltf_parse_meshes(uint index, json *j, struct gltf_extra_attrs *extra_attrs, allocator *alloc, gltf *g);
+static void gltf_parse_meshes(uint index, json *j, struct gltf_extra_attrs *extra_attrs, uint *extra_attr_count, allocator *alloc, gltf *g);
 static uint gltf_mesh_parse_primitives(json_array *j_prim_array, struct gltf_extra_attrs *extra_attrs, allocator *alloc, gltf_mesh *mesh);
 static uint gltf_mesh_parse_primitive_attributes(json_object *j_attribs, struct gltf_extra_attrs *extra_attrs, gltf_mesh_primitive_attribute *attribs);
 static void gltf_parse_nodes(uint index, json *j, allocator *alloc, gltf *g);
@@ -244,6 +245,10 @@ void parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_con
     g->dir.cstr = allocate(&gltf_alloc, strlen(file_name));
     g->dir.len = file_dir_name(file_name, (char*)g->dir.cstr);
 
+    // counts the number of primitives which require extra attributes, not the
+    // total number of new attributes.
+    uint eac = 0;
+
     gltf_parse_accessors(indices[GLTF_PROPERTY_INDEX_ACCESSORS], &j, req_size.extra_mesh_attrs, &gltf_alloc, g);
     gltf_parse_animations(indices[GLTF_PROPERTY_INDEX_ANIMATIONS], &j, &gltf_alloc, req_size.anim_target_counts, g);
     gltf_parse_buffers(indices[GLTF_PROPERTY_INDEX_BUFFERS], &j, &gltf_alloc, g);
@@ -251,7 +256,7 @@ void parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_con
     gltf_parse_cameras(indices[GLTF_PROPERTY_INDEX_CAMERAS], &j, &gltf_alloc, g);
     gltf_parse_images(indices[GLTF_PROPERTY_INDEX_IMAGES], &j, &gltf_alloc, g);
     gltf_parse_materials(indices[GLTF_PROPERTY_INDEX_MATERIALS], &j, &gltf_alloc, g);
-    gltf_parse_meshes(indices[GLTF_PROPERTY_INDEX_MESHES], &j, extra_attrs, &gltf_alloc, g);
+    gltf_parse_meshes(indices[GLTF_PROPERTY_INDEX_MESHES], &j, extra_attrs, &eac, &gltf_alloc, g);
     gltf_parse_samplers(indices[GLTF_PROPERTY_INDEX_SAMPLERS], &j, &gltf_alloc, g);
     gltf_parse_scenes(indices[GLTF_PROPERTY_INDEX_SCENES], &j, &gltf_alloc, g);
     gltf_parse_skins(indices[GLTF_PROPERTY_INDEX_SKINS], &j, &gltf_alloc, g);
@@ -271,15 +276,13 @@ void parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_con
         g->meshes[i].max_instance_count = instance_counts[i];
 #endif
 
-    if (!req_size.extra_mesh_attrs)
+    if (!eac)
         return;
-
-    uint eac = req_size.extra_mesh_attrs;
 
     uint bv = g->buffer_view_count;
     uint ac = g->accessor_count;
     g->buffer_view_count++;
-    g->accessor_count += eac;
+    g->accessor_count += req_size.extra_mesh_attrs; // counts both missing tangent and normals
     {
         // @Optimise @Test I might want to find a way to store the data closer
         // to the other primitive data... Since individual elements are already
@@ -289,24 +292,35 @@ void parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_con
         g->buffer_views[bv].flags = GLTF_BUFFER_VIEW_VERTEX_BUFFER_BIT;
         g->buffer_views[bv].buffer = 0; // @Note Idk if there is a better idea.
         g->buffer_views[bv].byte_stride = 0;
-
-        g->buffers[0].byte_length = align(g->buffers[0].byte_length, 16);
-        g->buffer_views[bv].byte_offset = g->buffers[0].byte_length;
+        g->buffer_views[bv].byte_offset =
+            align(g->buffers[g->buffer_views[bv].buffer].byte_length, 16);
     }
 
-    int fd;
-    {
-        char buf[128];
-        memcpy(buf, g->dir.cstr, g->dir.len);
-        memcpy(buf + g->dir.len, g->buffers[g->buffer_views[bv].buffer].uri.cstr,
-                                 g->buffers[g->buffer_views[bv].buffer].uri.len + 1);
-        fd = file_open(buf, WRITE);
-    }
-
+    uint64 alloc_pos = allocator_used(temp);
     char *bufs[8]; assert(g->buffer_count <= carrlen(bufs));
-    for(uint i=0; i < g->buffer_count; ++i) {
-        bufs[i] = allocate(temp, g->buffers[i].byte_length);
-        gltf_read_buffer(g, i, bufs[i]);
+    vector *tn_data;
+    {
+        uint64 sz = 0;
+        for(uint i=0; i < g->buffer_count; ++i)
+            sz += g->buffers[i].byte_length;
+
+        sz = align(sz, 16);
+        uint tn_ofs = sz;
+
+        for(uint i=0; i < eac; ++i)
+            sz += sizeof(*tn_data) * g->accessors[g->meshes[extra_attrs[i].mesh]
+                .primitives[extra_attrs[i].prim]
+                .attributes[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_POSITION].accessor].count *
+                (extra_attrs[i].tang + extra_attrs[i].norm);
+
+        bufs[0] = allocate(temp, sz);
+        for(uint i=1; i < g->buffer_count; ++i)
+            bufs[i] = bufs[i-1] + g->buffers[i-1].byte_length;
+
+        tn_data = (vector*)(bufs[0] + tn_ofs);
+
+        for(uint i=0; i < g->buffer_count; ++i)
+            gltf_read_buffer(g, i, bufs[i]);
     }
 
     uint bc = 0;
@@ -329,10 +343,8 @@ void parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_con
                 .attributes[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_POSITION].accessor].count;
             g->accessors[ac].buffer_view = bv;
             g->accessors[ac].byte_offset = bc;
-            ac++;
 
-            uint64 alloc_pos = allocator_used(temp);
-            vector *normals = sallocate(temp, *normals, vert.count);
+            vector *normals = tn_data + (bc>>4);
 
             if (index.type_u16)
                 calc_vertex_normals16(index.count, (uint16*)(bufs[index.buffer] + index.offset),
@@ -341,13 +353,10 @@ void parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_con
                 calc_vertex_normals(index.count, (uint*)(bufs[index.buffer] + index.offset),
                                     vert.count, vert.stride, (float*)(bufs[vert.buffer] + vert.offset), normals);
 
-            uint sz = sizeof(*normals) * vert.count;
-            file_write(fd, g->buffer_views[bv].byte_offset + bc, sz, normals); // @Optimise This should only be called once.
-            bc += sz;
-
-            g->meshes[m].primitives[p].attributes[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_NORMAL].accessor = ac-1;
-
-            allocator_reset_linear_to(temp, alloc_pos);
+            g->meshes[m].primitives[p].attribute_count++;
+            g->meshes[m].primitives[p].attributes[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_NORMAL].accessor = ac;
+            ac++;
+            bc += sizeof(*normals) * vert.count;
         }
         if (extra_attrs[i].tang) {
             struct gltf_attr_data norm = gltf_attr_data(g, m, p, GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_NORMAL);
@@ -360,10 +369,8 @@ void parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_con
                 .attributes[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_POSITION].accessor].count;
             g->accessors[ac].buffer_view = bv;
             g->accessors[ac].byte_offset = bc;
-            ac++;
 
-            uint64 alloc_pos = allocator_used(temp);
-            vector *tangents = sallocate(temp, *tangents, vert.count);
+            vector *tangents = tn_data + (bc>>4);
 
             if (index.type_u16)
                 calc_vertex_tangents16(index.count, (uint16*)(bufs[index.buffer] + index.offset),
@@ -378,19 +385,22 @@ void parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_con
                                       texcoord.stride, (float*)(bufs[texcoord.buffer] + texcoord.offset),
                                       temp, tangents);
 
-            uint sz = sizeof(*tangents) * vert.count;
-            file_write(fd, g->buffer_views[bv].byte_offset + bc, sz, tangents);
-            bc += sz;
-
-            g->meshes[m].primitives[p].attributes[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_TANGENT].accessor = ac-1;
-
-            allocator_reset_linear_to(temp, alloc_pos);
+            g->meshes[m].primitives[p].attribute_count++;
+            g->meshes[m].primitives[p].attributes[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_TANGENT].accessor = ac;
+            ac++;
+            bc += sizeof(*tangents) * vert.count;
         }
     }
     g->buffer_views[bv].byte_length = bc;
-    g->buffers[0].byte_length += bc;
+    g->buffers[g->buffer_views[bv].buffer].byte_length = g->buffer_views[bv].byte_offset +
+                                                         g->buffer_views[bv].byte_length;
 
+    int fd = gltf_open_buffer_w(g, g->buffer_views[bv].buffer);
+    file_resize(fd, g->buffers[g->buffer_views[bv].buffer].byte_length);
+    file_write(fd, g->buffer_views[bv].byte_offset, g->buffer_views[bv].byte_length, tn_data);
     file_close(fd);
+
+    allocator_reset_linear_to(temp, alloc_pos);
 }
 
 static struct gltf_required_size gltf_required_size(json *j, allocator *temp, uint *indices)
@@ -1551,7 +1561,6 @@ static uint gltf_mesh_parse_primitives(json_array *j_prim_array, struct gltf_ext
         tmp = gltf_mesh_parse_primitive_attributes(&j_prims[i].values[ki].obj, extra_attrs + extra_attr_cnt, prims[i].attributes);
         extra_attrs[extra_attr_cnt].prim = i; // this out of bounds write is fine, I am allocating +1
         extra_attr_cnt += tmp;
-        prims[i].attribute_count += tmp;
 
         tmp = json_find_key(&j_prims[i], "indices");
         ki = tmp & max32_if_true(tmp != Max_u32);
@@ -1583,7 +1592,7 @@ static uint gltf_mesh_parse_primitives(json_array *j_prim_array, struct gltf_ext
     return extra_attr_cnt;
 }
 
-static void gltf_parse_meshes(uint index, json *j, struct gltf_extra_attrs *extra_attrs, allocator *alloc, gltf *g)
+static void gltf_parse_meshes(uint index, json *j, struct gltf_extra_attrs *extra_attrs, uint *extra_attr_count, allocator *alloc, gltf *g)
 {
     uint tmp = index;
     tmp = max64_if_false(tmp == Max_u32);
@@ -1618,6 +1627,7 @@ static void gltf_parse_meshes(uint index, json *j, struct gltf_extra_attrs *extr
         for(tmp = 0; tmp < meshes[i].weight_count; ++tmp)
             meshes[i].weights[tmp] = json_meshes[i].values[ki].arr.nums[tmp];
     }
+    *extra_attr_count = eac;
 }
 
 static void gltf_parse_nodes(uint index, json *j, allocator *alloc, gltf *g)
@@ -1899,6 +1909,8 @@ static void gltf_parse_skins(uint index, json *j, allocator *alloc, gltf *g)
         log_print_error_if(ki == Max_u32, "skin.joints must be defined");
         skins[i].joint_count = j_skins[i].values[ki].arr.len;
         skins[i].joints = sallocate(alloc, *skins->joints, skins[i].joint_count);
+        log_print_error_if(skins[i].joint_count > JOINT_COUNT,
+                "vertex shader supports %i joint, model uses %u", JOINT_COUNT, skins[i].joint_count);
         for(i2=0; i2 < skins[i].joint_count; ++i2)
             skins[i].joints[i2] = j_skins[i].values[ki].arr.nums[i2];
 

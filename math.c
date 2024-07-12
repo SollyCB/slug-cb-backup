@@ -42,16 +42,16 @@ void calc_vertex_normals16( // @Todo Need a version that does not use indices
     for(i=0; i < vertex_count; ++i)
         ret_normals[i] = normalize(ret_normals[i]);
 
+    #if 0 // @RemoveMe
     for(i=0; i < index_count; i++) {
-        #if 0 // @RemoveMe
         vector p = vector3_ua(vertices + indices[i]*3);
         vector n = ret_normals[indices[i]];
         print("%u - ", indices[i]);
         print_vector(p);
         print(" : ");
         println_vector(n);
-        #endif
     }
+    #endif
 }
 
 void calc_vertex_normals( // @Todo Need a version that does not use indices

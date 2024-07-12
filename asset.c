@@ -759,7 +759,14 @@ static uint allocate_model_resources(
         for(uint i=0; i < model->buffer_count; ++i)
             gltf_read_buffer(model, i,
                              (char*)gpu->mem.bind_buffer.data + offsets->base_bind + offsets->buffers[i]);
+        #if 0 // @RemoveMe
+        struct gltf_attr_data tex = gltf_attr_data(model, 0, 0, 3);
+        println("tex %u", tex.offset);
+        for(uint i=0; i < 36; ++i)
+            println("%f, %f", *(float*)((char*)gpu->mem.bind_buffer.data + offsets->base_bind + offsets->buffers[0] + tex.offset + i*8),
+                              *(float*)((char*)gpu->mem.bind_buffer.data + offsets->base_bind + offsets->buffers[0] + tex.offset + 4 + i*8));
         {
+            /*
             char *data = (char*)gpu->mem.bind_buffer.data + offsets->base_bind + offsets->buffers[0];
 
             struct gltf_index_data id = gltf_index_data(model, 0, 0);
@@ -773,7 +780,6 @@ static uint allocate_model_resources(
             float *tangents = (float*)(data + td.offset);
 
             for(uint i=0; i < id.count; ++i) {
-                #if 1 // @RemoveMe
                 vector p = vector3_ua(vertices + indices[i]*3);
                 vector t = vector3_ua(tangents + indices[i]*4);
                 if (FRAMES_ELAPSED == 0) {
@@ -783,8 +789,6 @@ static uint allocate_model_resources(
                     print(" : ");
                     println_vector(t);
                 }
-                #endif
-                #if 0 // @RemoveMe
                 vector p = vector3_ua(vertices + indices[i]*3);
                 vector n = vector3_ua(normals + indices[i]*4);
                 if (FRAMES_ELAPSED == 0) {
@@ -793,9 +797,10 @@ static uint allocate_model_resources(
                     print(" : ");
                     println_vector(n);
                 }
-                #endif
             }
+            */
         }
+        #endif
     } else {
         for(uint i=0; i < model->buffer_count; ++i)
             gltf_read_buffer(model, i,
@@ -1329,7 +1334,7 @@ model_pipelines_transform_descriptors_and_draw_info(
     VkPipelineRasterizationStateCreateInfo depth_rasterization = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
             .polygonMode = VK_POLYGON_MODE_LINE & maxif(arg->flags & LOAD_MODEL_WIREFRAME_BIT),
-            .cullMode = 0, // VK_CULL_MODE_FRONT_BIT,
+            .cullMode = VK_CULL_MODE_FRONT_BIT,
             .lineWidth = 1.0f,
 
             // @Todo Idk what the right numbers are here...

@@ -61,6 +61,13 @@ static inline bool has_file_changed(const char *path, struct timespec *then) {
     return now.tv_sec != then->tv_sec || now.tv_nsec != then->tv_nsec;
 }
 
+static inline bool file_resize(int fd, uint64 sz)
+{
+    int e = ftruncate(fd, sz);
+    log_print_error_if(e == -1, "failed to resize file %i: %s", fd, strerror(errno));
+    return e != -1;
+}
+
 enum {
     READ = O_RDONLY,
     WRITE = O_WRONLY,
