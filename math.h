@@ -391,6 +391,20 @@ static inline void count_identity_matrix(uint count, matrix *m)
     }
 }
 
+static inline void count_invert_y_identity_matrix(uint count, matrix *m)
+{
+    __m128i a = (__m128i)_mm_set_ps(0,0,0,1);
+    __m128i b = (__m128i)_mm_set_ps(0,0,-1,0);
+    __m128i c = (__m128i)_mm_set_ps(0,1,0,0);
+    __m128i d = (__m128i)_mm_set_ps(1,0,0,0);
+    for(uint i = 0; i < count; ++i) {
+        _mm_store_si128((__m128i*)(m[i].m+0), a);
+        _mm_store_si128((__m128i*)(m[i].m+4), b);
+        _mm_store_si128((__m128i*)(m[i].m+8), c);
+        _mm_store_si128((__m128i*)(m[i].m+12), d);
+    }
+}
+
 static inline void scale_matrix(vector v, matrix *m)
 {
     memset(m, 0, sizeof(*m));

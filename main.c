@@ -242,11 +242,16 @@ int main() {
             get_trs(
                 vector3(0, 3, 0),
                 // quaternion(sinf(t / 2) * 2, vector3(0, 1, 1)),
-                quaternion(0, vector3(0, 1, 1)),
+                quaternion(0, vector3(0, 1, 0)),
                 vector3(1, 1, 1),
                 &model_trs
             );
             convert_trs(&model_trs, &mat_model);
+
+            matrix rot;
+            vector q = hamilton_product(quaternion(-PI/2, vector3(0, 1, 0)), quaternion(-PI/2, vector3(1, 0, 0)));
+            rotation_matrix(q, &rot);
+            mul_matrix(&mat_model, &rot, &mat_model);
 
             update_vs_info_mat_model(&pr.gpu, vs_info_desc.bb_offset, &mat_model);
             update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &mat_view);

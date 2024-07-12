@@ -13,8 +13,10 @@ layout(location = 26) out vec4 dbg_tang;
 
 void main() {
 
-    mat4 ws = vs_info.model * transforms.trs[0];
-    vec4 world_pos = ws * vec4(in_position, 1);
+    vec4 pos = vec4(in_position, 1);
+
+    mat4 ws = vs_info.model; // * transforms.trs[0];
+    vec4 world_pos = ws * pos;
     vec4 view_pos = vs_info.view * world_pos;
 
     if (vs_info.dlcx[1] != 0)
