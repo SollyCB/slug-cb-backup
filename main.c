@@ -159,29 +159,6 @@ int main() {
             assert(false && "invalid case");
     }
 
-    {
-        char *data = allocate(&pr.allocs.temp, 2048);
-        gltf_read_buffer(&model, 0, data);
-        struct gltf_index_data id = gltf_index_data(&model, 0, 0);
-        struct gltf_attr_data pd = gltf_attr_data(&model, 0, 0, 0);
-        struct gltf_attr_data nd = gltf_attr_data(&model, 0, 0, 1);
-
-        uint16 *indices = (uint16*)(data + id.offset);
-        float *vertices = (float*)(data + pd.offset);
-        float *normals = (float*)(data + nd.offset);
-
-        for(uint i=0; i < id.count; ++i) {
-            #if 0 // @RemoveMe
-            vector p = vector3_ua(vertices + i*3);
-            vector n = vector3_ua(normals + i*4);
-            print("%u - ", indices[i]);
-            print_vector(p);
-            print(" : ");
-            println_vector(n);
-            #endif
-        }
-    }
-
     struct vertex_info_descriptor vs_info_desc;
     Vertex_Info *vs_info = init_vs_info(&pr.gpu, cam.pos, cam.dir, &vs_info_desc);
 
@@ -255,7 +232,6 @@ int main() {
                         vector3(0, 1, 0), &light_view_mat);
         }
 
-        matrix lmvp;
         matrix mat_model;
         {
             dt = t;
@@ -336,11 +312,23 @@ int main() {
                 float *cb = &vs_info->cascade_boundaries.x;
                 cb[i] = mul_matrix_vector(&mat_view, sub_frusta[i].bl_far).z;
 
+                #if SPLIT_SHADOW_MVP
                 ortho_matrix(minmax_frustum_x[i].min, minmax_frustum_x[i].max,
                              minmax_frustum_y[i].max, minmax_frustum_y[i].min,
                              light_nearfar_planes[i].min, light_nearfar_planes[i].max, &light_proj[i]);
 
                 mul_matrix(&light_proj[i], &light_view_mat, &vs_info->dir_lights[0].space[i]);
+                #else
+                matrix light_proj;
+                ortho_matrix(minmax_frustum_x[i].min, minmax_frustum_x[i].max,
+                             minmax_frustum_y[i].max, minmax_frustum_y[i].min,
+                             light_nearfar_planes[i].min, light_nearfar_planes[i].max, &light_proj);
+
+                matrix lv;
+                mul_matrix(&light_view_mat, &mat_model, &lv);
+                mul_matrix(&light_proj, &lv, &light_space[i]);
+                mul_matrix(&light_proj, &light_view_mat, &vs_info->dir_lights[0].space[i]);
+                #endif
             }
 
             if (cam.mode == CAMERA_MODE_LIGHT) {
@@ -456,7 +444,7 @@ int main() {
                 .light_view = &light_view_mat,
                 .light_proj = light_proj,
                 #else
-                .light_space = light_space,
+                .light_spaces = light_space,
                 #endif
             };
             do_shadow_pass(draw_cmd, &spi, &pr.allocs.temp);

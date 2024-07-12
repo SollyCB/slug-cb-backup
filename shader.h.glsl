@@ -6,7 +6,7 @@
 #define CSM_BLEND_BAND (25/2)
 #define JOINT_COUNT 19
 #define MORPH_WEIGHT_COUNT 1
-#define SPLIT_SHADOW_MVP 1
+#define SPLIT_SHADOW_MVP 0
 
 #ifdef GL_core_profile
 #extension GL_EXT_nonuniform_qualifier : require

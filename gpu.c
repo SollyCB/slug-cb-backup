@@ -2437,6 +2437,8 @@ void do_shadow_pass(VkCommandBuffer cmd, struct shadow_pass_info *info, allocato
 {
     begin_shadow_renderpass(cmd, info->rp, info->gpu, info->maps->count * CSM_COUNT, alloc);
 
+    static bool print = 1;
+
     uint idx = 0;
     for(uint i=0; i < info->maps->count; ++i) {
         for(uint j=0; j < CSM_COUNT; ++j) {
@@ -2479,6 +2481,7 @@ void do_shadow_pass(VkCommandBuffer cmd, struct shadow_pass_info *info, allocato
         }
     }
 
+    print = print ? 0 : 0;
     end_renderpass(cmd);
 }
 

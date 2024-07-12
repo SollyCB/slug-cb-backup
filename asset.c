@@ -759,48 +759,6 @@ static uint allocate_model_resources(
         for(uint i=0; i < model->buffer_count; ++i)
             gltf_read_buffer(model, i,
                              (char*)gpu->mem.bind_buffer.data + offsets->base_bind + offsets->buffers[i]);
-        #if 0 // @RemoveMe
-        struct gltf_attr_data tex = gltf_attr_data(model, 0, 0, 3);
-        println("tex %u", tex.offset);
-        for(uint i=0; i < 36; ++i)
-            println("%f, %f", *(float*)((char*)gpu->mem.bind_buffer.data + offsets->base_bind + offsets->buffers[0] + tex.offset + i*8),
-                              *(float*)((char*)gpu->mem.bind_buffer.data + offsets->base_bind + offsets->buffers[0] + tex.offset + 4 + i*8));
-        {
-            /*
-            char *data = (char*)gpu->mem.bind_buffer.data + offsets->base_bind + offsets->buffers[0];
-
-            struct gltf_index_data id = gltf_index_data(model, 0, 0);
-            struct gltf_attr_data pd = gltf_attr_data(model, 0, 0, 0);
-            struct gltf_attr_data nd = gltf_attr_data(model, 0, 0, 1);
-            struct gltf_attr_data td = gltf_attr_data(model, 0, 0, 2);
-
-            uint16 *indices = (uint16*)(data + id.offset);
-            float *vertices = (float*)(data + pd.offset);
-            float *normals = (float*)(data + nd.offset);
-            float *tangents = (float*)(data + td.offset);
-
-            for(uint i=0; i < id.count; ++i) {
-                vector p = vector3_ua(vertices + indices[i]*3);
-                vector t = vector3_ua(tangents + indices[i]*4);
-                if (FRAMES_ELAPSED == 0) {
-                    println("%u", td.offset);
-                    print("%u - ", indices[i]);
-                    print_vector(p);
-                    print(" : ");
-                    println_vector(t);
-                }
-                vector p = vector3_ua(vertices + indices[i]*3);
-                vector n = vector3_ua(normals + indices[i]*4);
-                if (FRAMES_ELAPSED == 0) {
-                    print("%u - ", indices[i]);
-                    print_vector(p);
-                    print(" : ");
-                    println_vector(n);
-                }
-            }
-            */
-        }
-        #endif
     } else {
         for(uint i=0; i < model->buffer_count; ++i)
             gltf_read_buffer(model, i,
@@ -1439,32 +1397,32 @@ model_pipelines_transform_descriptors_and_draw_info(
     }
 
     {
-        #if 0 // @RemoveMe Broke up push constants for testing the matrices in the shadow/depth shaders.
-        VkPushConstantRange pcr = {
-            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-            .offset = 0,
-            .size = sizeof(matrix),
-        };
-        VkPipelineLayoutCreateInfo ci = {
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-            .pushConstantRangeCount = 1,
-            .pPushConstantRanges = &pcr,
-        };
-        VkResult check = vk_create_pipeline_layout(gpu->device, &ci, GAC, &resources->pipeline_layouts[pc]);
-        DEBUG_VK_OBJ_CREATION(vkCreatePipelineLayout, check);
+        #if SPLIT_SHADOW_MVP
+            VkPushConstantRange pcr = {
+                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                .offset = 0,
+                .size = sizeof(matrix) * 3,
+            };
+            VkPipelineLayoutCreateInfo ci = {
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+                .pushConstantRangeCount = 1,
+                .pPushConstantRanges = &pcr,
+            };
+            VkResult check = vk_create_pipeline_layout(gpu->device, &ci, GAC, &resources->pipeline_layouts[pc]);
+            DEBUG_VK_OBJ_CREATION(vkCreatePipelineLayout, check);
         #else
-        VkPushConstantRange pcr = {
-            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-            .offset = 0,
-            .size = sizeof(matrix) * 3,
-        };
-        VkPipelineLayoutCreateInfo ci = {
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-            .pushConstantRangeCount = 1,
-            .pPushConstantRanges = &pcr,
-        };
-        VkResult check = vk_create_pipeline_layout(gpu->device, &ci, GAC, &resources->pipeline_layouts[pc]);
-        DEBUG_VK_OBJ_CREATION(vkCreatePipelineLayout, check);
+            VkPushConstantRange pcr = {
+                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                .offset = 0,
+                .size = sizeof(matrix),
+            };
+            VkPipelineLayoutCreateInfo ci = {
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+                .pushConstantRangeCount = 1,
+                .pPushConstantRanges = &pcr,
+            };
+            VkResult check = vk_create_pipeline_layout(gpu->device, &ci, GAC, &resources->pipeline_layouts[pc]);
+            DEBUG_VK_OBJ_CREATION(vkCreatePipelineLayout, check);
         #endif
     }
 

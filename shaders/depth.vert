@@ -1,30 +1,22 @@
-#version 450
-#extension GL_EXT_debug_printf : enable
+#version 460
+
+#extension GL_GOOGLE_include_directive : require
+#include "../shader.h.glsl"
 
 layout(location = 0) in vec3 pos;
 
 layout(push_constant) uniform pc {
     #if SPLIT_SHADOW_MVP
-    mat4 m;
-    mat4 v;
-    mat4 p;
+    mat4 m,v,p;
     #else
     mat4 mvp;
     #endif
 };
 
-void pmat(mat4 m) {
-    debugPrintfEXT("[%f, %f, %f, %f,\n %f, %f, %f, %f,\n %f, %f, %f, %f,\n %f, %f, %f, %f]\n",
-    m[0][0], m[1][0], m[2][0], m[3][0],
-    m[0][1], m[1][1], m[2][1], m[3][1],
-    m[0][2], m[1][2], m[2][2], m[3][2],
-    m[0][3], m[1][3], m[2][3], m[3][3]);
-}
-
-void pv4(vec4 v) {
-    debugPrintfEXT("[%f, %f, %f, %f,]\n", v.x, v.y, v.z, v.w);
-}
-
 void main() {
+    #if SPLIT_SHADOW_MVP
     gl_Position = p * v * m * vec4(pos, 1);
+    #else
+    gl_Position = mvp * vec4(pos, 1);
+    #endif
 }
