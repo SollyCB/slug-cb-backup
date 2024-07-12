@@ -11,10 +11,25 @@ enum {
     MODEL_CESIUM_MAN_TESTING,
 };
 
+const char *MODEL_FILES[] = {
+    "models/cube-static/Cube.gltf",
+    "models/cube-static-testing/Cube.gltf",
+    "models/cesium-man/CesiumMan.gltf",
+    "models/cesium-man-testing/CesiumMan.gltf",
+};
+
 #if 1
-#define MODEL_TYPE MODEL_CUBE_TESTING
+    #if 1
+        #define MODEL MODEL_CESIUM_MAN_TESTING
+    #else
+        #define MODEL MODEL_CESIUM_MAN,
+    #endif
 #else
-#define MODEL_TYPE MODEL_CUBE
+    #if 1
+        #define MODEL MODEL_CUBE_TESTING
+    #else
+        #define MODEL MODEL_CUBE
+    #endif
 #endif
 
 enum {

@@ -138,26 +138,8 @@ int main() {
     struct shader_config conf = {0};
 
     gltf model;
-    switch(MODEL_TYPE) {
-        case MODEL_CUBE:
-            load_gltf("models/cube-static/Cube.gltf", &pr.gpu.shader_dir,
-                    &conf, &pr.allocs.temp, &pr.allocs.heap, &model);
-            break;
-        case MODEL_CUBE_TESTING:
-            load_gltf("models/cube-static-testing/Cube.gltf", &pr.gpu.shader_dir,
-                    &conf, &pr.allocs.temp, &pr.allocs.heap, &model);
-            break;
-        case MODEL_CESIUM_MAN:
-            load_gltf("models/cesium-man/CesiumMan.gltf", &pr.gpu.shader_dir,
-                    &conf, &pr.allocs.temp, &pr.allocs.heap, &model);
-            break;
-        case MODEL_CESIUM_MAN_TESTING:
-            load_gltf("models/cesium-man-testing/CesiumMan.gltf", &pr.gpu.shader_dir,
-                    &conf, &pr.allocs.temp, &pr.allocs.heap, &model);
-            break;
-        default:
-            assert(false && "invalid case");
-    }
+    load_gltf(MODEL_FILES[MODEL], &pr.gpu.shader_dir, &conf,
+            &pr.allocs.temp, &pr.allocs.heap, &model);
 
     struct vertex_info_descriptor vs_info_desc;
     Vertex_Info *vs_info = init_vs_info(&pr.gpu, cam.pos, cam.dir, &vs_info_desc);
