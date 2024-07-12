@@ -15,7 +15,9 @@ void main() {
 
     vec4 pos = vec4(in_position, 1);
 
-    mat4 ws = vs_info.model; // * transforms.trs[0];
+    // mat4 skin = transforms.trs[0]
+
+    mat4 ws = vs_info.model; // * skin;
     vec4 world_pos = ws * pos;
     vec4 view_pos = vs_info.view * world_pos;
 

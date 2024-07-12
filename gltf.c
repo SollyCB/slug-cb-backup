@@ -33,7 +33,7 @@ void load_gltf(const char *file_name, struct shader_dir *dir, struct shader_conf
     if (!file_exists(buf)) {
         println("loading model file %s for the first time, parsing gltf", file_name);
         parse_gltf(file_name, dir, conf, temp, persistent, g);
-        // store_gltf(g, file_name, temp); // to create file_name.gltf.sol
+        store_gltf(g, file_name, temp); // to create file_name.gltf.sol
         return;
     }
 
@@ -48,54 +48,54 @@ void load_gltf(const char *file_name, struct shader_dir *dir, struct shader_conf
     char *b = ((gltf*)file.data)->meta.data;
     char *d = g->meta.data;
 
-    g->accessors = ptrinc(d, ptrdiff(g->accessors, b));
-    g->animations = ptrinc(d, ptrdiff(g->animations, b));
-    g->buffers = ptrinc(d, ptrdiff(g->buffers, b));
-    g->buffer_views = ptrinc(d, ptrdiff(g->buffer_views, b));
-    g->cameras = ptrinc(d, ptrdiff(g->cameras, b));
-    g->images = ptrinc(d, ptrdiff(g->images, b));
-    g->materials = ptrinc(d, ptrdiff(g->materials, b));
-    g->meshes = ptrinc(d, ptrdiff(g->meshes, b));
-    g->nodes = ptrinc(d, ptrdiff(g->nodes, b));
-    g->samplers = ptrinc(d, ptrdiff(g->samplers, b));
-    g->scenes = ptrinc(d, ptrdiff(g->scenes, b));
-    g->skins = ptrinc(d, ptrdiff(g->skins, b));
-    g->textures = ptrinc(d, ptrdiff(g->textures, b));
-    g->dir.cstr = ptrinc(d, ptrdiff(g->dir.cstr, b));
+    g->accessors = ptrinc_or_null(g->accessors, b, d);
+    g->animations = ptrinc_or_null(g->animations, b, d);
+    g->buffers = ptrinc_or_null(g->buffers, b, d);
+    g->buffer_views = ptrinc_or_null(g->buffer_views, b, d);
+    g->cameras = ptrinc_or_null(g->cameras, b, d);
+    g->images = ptrinc_or_null(g->images, b, d);
+    g->materials = ptrinc_or_null(g->materials, b, d);
+    g->meshes = ptrinc_or_null(g->meshes, b, d);
+    g->nodes = ptrinc_or_null(g->nodes, b, d);
+    g->samplers = ptrinc_or_null(g->samplers, b, d);
+    g->scenes = ptrinc_or_null(g->scenes, b, d);
+    g->skins = ptrinc_or_null(g->skins, b, d);
+    g->textures = ptrinc_or_null(g->textures, b, d);
+    g->dir.cstr = ptrinc_or_null(g->dir.cstr, b, d);
 
     for(uint i=0; i < g->animation_count; ++i) {
-        g->animations[i].targets  = ptrinc(d, ptrdiff(g->animations[i].targets, b));
-        g->animations[i].samplers = ptrinc(d, ptrdiff(g->animations[i].samplers, b));
+        g->animations[i].targets  = ptrinc_or_null(g->animations[i].targets, b, d);
+        g->animations[i].samplers = ptrinc_or_null(g->animations[i].samplers, b, d);
     }
     for(uint i=0; i < g->buffer_count; ++i) {
-        g->buffers[i].uri.cstr  = ptrinc(d, ptrdiff(g->buffers[i].uri.cstr, b));
+        g->buffers[i].uri.cstr  = ptrinc_or_null(g->buffers[i].uri.cstr, b, d);
     }
     for(uint i=0; i < g->image_count; ++i) {
-        g->images[i].uri.cstr  = ptrinc(d, ptrdiff(g->images[i].uri.cstr, b));
+        g->images[i].uri.cstr  = ptrinc_or_null(g->images[i].uri.cstr, b, d);
     }
     for(uint i=0; i < g->mesh_count; ++i) {
-        g->meshes[i].primitives = ptrinc(d, ptrdiff(g->meshes[i].primitives, b));
+        g->meshes[i].primitives = ptrinc_or_null(g->meshes[i].primitives, b, d);
         for(uint j=0; j < g->meshes[i].primitive_count; ++j) {
             g->meshes[i].primitives[j].attributes =
-                ptrinc(d, ptrdiff(g->meshes[i].primitives[j].attributes, b));
+                ptrinc_or_null(g->meshes[i].primitives[j].attributes, b, d);
             g->meshes[i].primitives[j].morph_targets =
-                ptrinc(d, ptrdiff(g->meshes[i].primitives[j].morph_targets, b));
+                ptrinc_or_null(g->meshes[i].primitives[j].morph_targets, b, d);
             for(uint k=0; k < g->meshes[i].primitives[j].target_count; ++k)
                 g->meshes[i].primitives[j].morph_targets[k].attributes =
-                    ptrinc(d, ptrdiff(g->meshes[i].primitives[j].morph_targets[k].attributes, b));
+                    ptrinc_or_null(g->meshes[i].primitives[j].morph_targets[k].attributes, b, d);
         }
-        g->meshes[i].weights = ptrinc(d, ptrdiff(g->meshes[i].weights, b));
+        g->meshes[i].weights = ptrinc_or_null(g->meshes[i].weights, b, d);
     }
     for(uint i=0; i < g->node_count; ++i) {
-        g->nodes[i].children = ptrinc(d, ptrdiff(g->nodes[i].children, b));
-        g->nodes[i].weights  = ptrinc(d, ptrdiff(g->nodes[i].weights, b));
+        g->nodes[i].children = ptrinc_or_null(g->nodes[i].children, b, d);
+        g->nodes[i].weights  = ptrinc_or_null(g->nodes[i].weights, b, d);
     }
     for(uint i=0; i < g->scene_count; ++i) {
-        g->scenes[i].name.cstr = ptrinc(d, ptrdiff(g->scenes[i].name.cstr, b));
-        g->scenes[i].nodes = ptrinc(d, ptrdiff(g->scenes[i].nodes, b));
+        g->scenes[i].name.cstr = ptrinc_or_null(g->scenes[i].name.cstr, b, d);
+        g->scenes[i].nodes = ptrinc_or_null(g->scenes[i].nodes, b, d);
     }
-    for(uint i=0; i < g->node_count; ++i) {
-        g->skins[i].joints = ptrinc(d, ptrdiff(g->skins[i].joints, b));
+    for(uint i=0; i < g->skin_count; ++i) {
+        g->skins[i].joints = ptrinc_or_null(g->skins[i].joints, b, d);
     }
 }
 

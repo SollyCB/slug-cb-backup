@@ -240,8 +240,7 @@ int main() {
 
             struct trs model_trs;
             get_trs(
-                vector3(0, 3, 0),
-                // quaternion(sinf(t / 2) * 2, vector3(0, 1, 1)),
+                vector3(0, 0, 0),
                 quaternion(0, vector3(0, 1, 0)),
                 vector3(1, 1, 1),
                 &model_trs

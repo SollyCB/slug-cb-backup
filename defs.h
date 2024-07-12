@@ -128,6 +128,11 @@ typedef uint32 bool32;
 #define ptrdiff(a,b) ((uint64)((char*)(a) - (char*)(b)))
 #define ptrinc(a,b)  ((void*)((char*)(a) + b))
 
+void* ptrinc_or_null(const void *ptr, const void *base, const void *data)
+{
+    return !ptr ? NULL : ptrinc(data, ptrdiff(ptr, base));
+}
+
 const uint64 one64 = 1;
 
 struct memreq {
