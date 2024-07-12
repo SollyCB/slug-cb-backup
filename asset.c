@@ -29,6 +29,7 @@ struct model_memory_offsets {
     struct pair_uint material_ubo_dsl;
     #endif
     uint             material_ubo;
+    uint64           skin_mask;
 };
 
 struct model_resources {
@@ -475,11 +476,12 @@ static uint allocate_model_resources(
 
     smemset(offsets->mesh_instance_counts, 0,
            *offsets->mesh_instance_counts, model->mesh_count);
+    offsets->skin_mask = 0;
     for(uint i=0; i < arg->scene_count; ++i)
         for(uint j=0; j < model->scenes[arg->scenes[i]].node_count; ++j)
             gltf_count_mesh_instances(model->nodes,
                                       model->scenes[arg->scenes[i]].nodes[j],
-                                      offsets->mesh_instance_counts);
+                                      offsets->mesh_instance_counts, &offsets->skin_mask);
 
     uint buffers_size = 0;
     for(uint i=0; i < model->buffer_count; ++i) {
@@ -1652,6 +1654,17 @@ static uint model_vertex_state_and_draw_info(
         gltf_accessor *accessor = &model->accessors[prim->attributes[i].accessor];
         gltf_buffer_view *buffer_view = &model->buffer_views[accessor->buffer_view];
 
+        #if 0
+        if (prim->attributes[i].type == GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_JOINTS) {
+            println("joints %u", accessor->vkformat);
+            println("stride %u", accessor->byte_stride);
+        }
+        if (prim->attributes[i].type == GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_WEIGHTS) {
+            println("weights %u", accessor->vkformat);
+            println("stride %u", accessor->byte_stride);
+        }
+        #endif
+
         ret->vertex_offsets[ac] = offsets->base_bind +
                                   offsets->buffers[buffer_view->buffer] +
                                   buffer_view->byte_offset +
@@ -1660,7 +1673,6 @@ static uint model_vertex_state_and_draw_info(
             .binding = ac,
             .stride = buffer_view->byte_stride ? buffer_view->byte_stride : accessor->byte_stride, // Why can this not be zero...? Why bother with the format??
         };
-
         attrs[ac] = (VkVertexInputAttributeDescription) {
             .location = ac,
             .binding = ac,
@@ -1719,13 +1731,15 @@ struct model_scene_meshes {
 };
 
 struct model_build_transform_ubo_arg {
-    gltf                      *model;
-    uchar                     *ubo_data;
-    uint64                    *weight_anim_mask;
-    matrix                    *xforms;
-    uint                      *weight_offsets;
-    float                     *weight_data;
-    struct model_scene_meshes *meshes;
+    gltf                        *model;
+    uchar                       *ubo_data;
+    uint64                      *weight_anim_mask;
+    uint                        *ibm_ofs;
+    matrix                      *ibm; // inverse bind matrices
+    matrix                      *xforms;
+    uint                        *weight_offsets;
+    float                       *weight_data;
+    struct model_scene_meshes   *meshes;
 };
 
 static void model_animations(
@@ -1784,6 +1798,25 @@ static inline void model_node_global_transforms(
                 &global_xforms[node], nodes, nodes[node].children[i], mesh_mask);
 }
 
+inline static uchar* model_get_accessor_data(
+    struct gpu                  *gpu,
+    gltf                        *model,
+    uint                         accessor_i,
+    struct model_memory_offsets *offsets)
+{
+    gltf_accessor *acc = &model->accessors[accessor_i];
+    gltf_buffer_view *bv = &model->buffer_views[acc->buffer_view];
+    uint buf = offsets->buffers[bv->buffer];
+    uchar *data;
+    if (gpu->flags & GPU_UMA_BIT)
+        data = gpu->mem.bind_buffer.data + offsets->base_bind +
+               buf + bv->byte_offset + acc->byte_offset;
+    else
+        data = gpu->mem.transfer_buffer.data + offsets->base_stage +
+               buf + bv->byte_offset + acc->byte_offset;
+    return data;
+}
+
 static void model_node_transforms(
     struct load_model_arg       *arg,
     struct model_memory_offsets *offsets,
@@ -1801,19 +1834,49 @@ static void model_node_transforms(
     scene_meshes = (struct model_scene_meshes*)(weight_offsets + model->node_count);
     mesh_counts = (uint*)(scene_meshes + model->mesh_count);
 
+    // @Optimise Make a node mask like I am doing for skins? Probably overkill
+    // for just a count, especially as a 64bit mask would be likely
+    // insufficient. I would not have done it for skins if it was not for the
+    // loading of the inverse bind matrices, and the rather guaranteed low count.
     uint weight_count = 0;
     for(uint i=0; i < model->node_count; ++i) {
         weight_offsets[i] = weight_count;
         weight_count += model->nodes[i].weight_count;
     }
+    uint joint_count = 0;
+    uint pc = popcnt(offsets->skin_mask);
+    uint64 skin_mask = offsets->skin_mask;
+    for(uint i=0; i < pc; ++i) {
+        uint tz = ctz(skin_mask);
+        skin_mask &= ~(1<<tz);
+        joint_count += model->skins[tz].joint_count;
+    }
 
-    float *weight_data;
+    float  *weight_data;
+    uint   *ibm_ofs;
     matrix *global_xforms;
-    matrix *anim_xforms = allocate(allocs->temp, sizeof(*anim_xforms) * model->node_count +
+    matrix *ibm;
+    matrix *anim_xforms = allocate(allocs->temp, sizeof(*anim_xforms)   * model->node_count +
                                                  sizeof(*global_xforms) * model->node_count +
-                                                 sizeof(*weight_data) * weight_count);
-    global_xforms = anim_xforms + model->node_count;
-    weight_data = (float*)(global_xforms + model->node_count);
+                                                 sizeof(*ibm)           * joint_count       +
+                                                 sizeof(*weight_data)   * weight_count      +
+                                                 sizeof(*ibm_ofs)       * model->skin_count);
+    global_xforms = anim_xforms           + model->node_count;
+    ibm           = global_xforms         + model->node_count;
+    weight_data   = (float*)(ibm          + joint_count);
+    ibm_ofs       =  (uint*)(weight_data  + weight_count);
+
+    joint_count = 0;
+    skin_mask = offsets->skin_mask;
+    for(uint i=0; i < pc; ++i) {
+        uint tz = ctz(skin_mask);
+        skin_mask &= ~(1<<tz);
+        gltf_skin *skin = &model->skins[tz];
+        float *data = (float*)model_get_accessor_data(gpu, model, skin->inverse_bind_matrices, offsets);
+        load_count_matrices_ua(skin->joint_count, data, ibm);
+        ibm_ofs[tz] = joint_count;
+        joint_count += skin->joint_count;
+    }
 
     // @Todo This memset is to be able to sum animated weights together. I
     // think that this is the correct behaviour, but now I think about it it
@@ -1838,6 +1901,8 @@ static void model_node_transforms(
     ubo_build_arg.meshes = scene_meshes;
     ubo_build_arg.weight_anim_mask = anim_masks.weights;
     ubo_build_arg.xforms = global_xforms;
+    ubo_build_arg.ibm_ofs = ibm_ofs;
+    ubo_build_arg.ibm = ibm;
     ubo_build_arg.weight_offsets = weight_offsets;
     ubo_build_arg.weight_data = weight_data;
 
@@ -1867,8 +1932,6 @@ static void model_node_transforms(
                 mesh_counts[tz]++;
             }
         }
-    // @TODO @CurrentTask Multiply the inverse bind matrices for each joint by
-    // the corresponsing node's global transform.
 }
 
 struct model_animation_timestep {
@@ -2110,26 +2173,6 @@ model_anim_weights(struct model_animation_timestep timestep, uint accessor_flags
         weight_data_to[i] += lerp(buf[i], buf[count+i], timestep.lerp_constant) * anim_weight;
 }
 
-inline static uchar*
-model_get_accessor_data(
-    struct gpu                  *gpu,
-    gltf                        *model,
-    uint                         accessor_i,
-    struct model_memory_offsets *offsets)
-{
-    gltf_accessor *acc = &model->accessors[accessor_i];
-    gltf_buffer_view *bv = &model->buffer_views[acc->buffer_view];
-    uint buf = offsets->buffers[bv->buffer];
-    uchar *data;
-    if (gpu->flags & GPU_UMA_BIT)
-        data = gpu->mem.bind_buffer.data + offsets->base_bind +
-               buf + bv->byte_offset + acc->byte_offset;
-    else
-        data = gpu->mem.transfer_buffer.data + offsets->base_stage +
-               buf + bv->byte_offset + acc->byte_offset;
-    return data;
-}
-
 static void model_animations(
     struct load_model_arg     *lm_arg,
     struct model_memory_offsets  *offsets,
@@ -2208,11 +2251,11 @@ static void model_animations(
 
 static void model_build_transform_ubo(uint mesh, struct model_build_transform_ubo_arg *arg)
 {
-    gltf   *model      = arg->model;
-    uchar  *ubo_data   = arg->ubo_data;
-    uint64  skin_mask  = arg->meshes[mesh].skin_mask;
-    uint64 *node_masks = arg->meshes[mesh].node_mask;
-    uint64  one        = 1;
+    gltf       *model      = arg->model;
+    uchar      *ubo_data   = arg->ubo_data;
+    uint64      skin_mask  = arg->meshes[mesh].skin_mask;
+    uint64     *node_masks = arg->meshes[mesh].node_mask;
+    uint64      one        = 1;
 
     uint joints_trs_ofs = vt_ubo_ofs(false);
 
@@ -2223,8 +2266,14 @@ static void model_build_transform_ubo(uint mesh, struct model_build_transform_ub
 
         gltf_skin *skin = &model->skins[tz];
         for(uint i=0; i < skin->joint_count; ++i)
+            mul_matrix(arg->xforms + skin->joints[i],
+                       arg->ibm    + arg->ibm_ofs[tz] + i,
+                       arg->xforms + skin->joints[i]);
+        for(uint i=0; i < skin->joint_count; ++i) {
             memcpy(ubo_data + joints_trs_ofs + sizeof(*arg->xforms) * i,
                    arg->xforms + skin->joints[i], sizeof(*arg->xforms));
+            // print_matrix(arg->xforms + skin->joints[i]);
+        }
     }
 
     uint node_trs_ofs = vt_ubo_ofs(false);

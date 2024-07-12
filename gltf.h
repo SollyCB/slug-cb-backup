@@ -405,12 +405,17 @@ typedef struct {
 } gltf;
 
 static inline void
-gltf_count_mesh_instances(gltf_node *nodes, uint node, uint *instance_counts)
+gltf_count_mesh_instances(gltf_node *nodes, uint node, uint *instance_counts, uint64 *skin_mask)
 {
     uint mesh = nodes[node].mesh != Max_u32 ? nodes[node].mesh : 0;
+    uint skin = nodes[node].skin != Max_u32 ? nodes[node].skin : 0;
+
     instance_counts[mesh] += nodes[node].mesh != Max_u32;
+    *skin_mask |= (1 << skin) & maxif(nodes[node].skin != Max_u32);
+    assert(skin < 64);
+
     for(uint i=0; i < nodes[node].child_count; ++i)
-        gltf_count_mesh_instances(nodes, nodes[node].children[i], instance_counts);
+        gltf_count_mesh_instances(nodes, nodes[node].children[i], instance_counts, skin_mask);
 }
 
 static inline struct image gltf_load_image(gltf *model, uint image_i)

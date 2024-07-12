@@ -6,21 +6,13 @@
 #define VERTEX_INPUT
 #include "../shader.h.glsl"
 
-layout(location = 3) in vec2 in_texcoord;
-layout(location = 4) in vec4 in_joints;
-layout(location = 5) in vec4 in_weights;
-
 layout(location = 25) out vec3 dbg_norm;
 layout(location = 26) out vec4 dbg_tang;
 
 void main() {
 
     vec4 pos = vec4(in_position, 1);
-
-    mat4 skin = in_weights.x * transforms.joints[in_joints.x] *
-                in_weights.y * transforms.joints[in_joints.y] *
-                in_weights.z * transforms.joints[in_joints.z] *
-                in_weights.w * transforms.joints[in_joints.w];
+    mat4 skin = skin_calc();
 
     mat4 ws = vs_info.model * skin;
     vec4 world_pos = ws * pos;

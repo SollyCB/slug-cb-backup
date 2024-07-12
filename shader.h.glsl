@@ -55,7 +55,6 @@ struct Vertex_Info {
 
 struct Vertex_Transforms {
     mat4 joints[JOINT_COUNT];
-    mat4 inverse_bind_matrices[JOINT_COUNT];
     vec4 weights[(MORPH_WEIGHT_COUNT / 4) + 1];
 };
 
@@ -100,6 +99,10 @@ void pv3(vec3 v) {
     debugPrintfEXT("%f, %f, %f\n", v.x, v.y, v.z);
 }
 
+void puv4(uvec4 v) {
+    debugPrintfEXT("%u, %u, %u, %u\n", v.x, v.y, v.z, v.w);
+}
+
 void pv4(vec4 v) {
     debugPrintfEXT("%f, %f, %f, %f\n", v.x, v.y, v.z, v.w);
 }
@@ -124,13 +127,28 @@ layout(set = 0, binding = 0) uniform UBO_Vertex_Info { Vertex_Info vs_info; };
 
 #ifdef VERT // vertex shader only
 
-#ifdef VERTEX_INPUT
-layout(location = 0) in vec3 in_position;
-layout(location = 1) in vec3 in_normal;
-layout(location = 2) in vec4 in_tangent;
-#endif
+#define SKINNED
 
-layout(set = 2, binding = 0) uniform UBO_Transforms { Vertex_Transforms transforms; };
+#ifdef VERTEX_INPUT
+    layout(location = 0) in vec3 in_position;
+    layout(location = 1) in vec3 in_normal;
+    layout(location = 2) in vec4 in_tangent;
+    layout(location = 3) in vec2 in_texcoord;
+
+    layout(set = 2, binding = 0) uniform UBO_Transforms { Vertex_Transforms transforms; };
+
+    #ifdef SKINNED
+        layout(location = 4) in uvec4 in_joints;
+        layout(location = 5) in  vec4 in_weights;
+
+        mat4 skin_calc() {
+           return in_weights.x * transforms.joints[in_joints.x] +
+                  in_weights.y * transforms.joints[in_joints.y] +
+                  in_weights.z * transforms.joints[in_joints.z] +
+                  in_weights.w * transforms.joints[in_joints.w];
+        }
+    #endif
+#endif
 
 layout(location = 0) out uint dir_light_count;
 layout(location = 1) out Fragment_Info fs_info;

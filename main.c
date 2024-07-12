@@ -249,7 +249,8 @@ int main() {
             convert_trs(&model_trs, &mat_model);
 
             matrix rot;
-            vector q = hamilton_product(quaternion(-PI/2, vector3(0, 1, 0)), quaternion(-PI/2, vector3(1, 0, 0)));
+            // vector q = hamilton_product(quaternion(-PI/2, vector3(0, 1, 0)), quaternion(-PI/2, vector3(1, 0, 0)));
+            vector q = quaternion(-PI, vector3(0, 0, 1));
             rotation_matrix(q, &rot);
             mul_matrix(&mat_model, &rot, &mat_model);
 

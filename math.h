@@ -90,6 +90,15 @@ static inline void get_matrix(vector colx, vector coly, vector colz, vector colw
 #define matrix4(x, y, z, w, m) get_matrix(x, y, z, w, m)
 #define matrix3(x, y, z, m) get_matrix(x, y, z, (vector){0}, m)
 
+static inline void load_count_matrices_ua(uint count, float *from, matrix *to)
+{
+    for(uint i=0; i < count; ++i)
+        matrix4(vector4(from[i*16+ 0], from[i*16+ 1], from[i*16+ 2], from[i*16+ 3]),
+                vector4(from[i*16+ 4], from[i*16+ 5], from[i*16+ 6], from[i*16+ 7]),
+                vector4(from[i*16+ 8], from[i*16+ 9], from[i*16+10], from[i*16+11]),
+                vector4(from[i*16+12], from[i*16+13], from[i*16+14], from[i*16+15]), &to[i]);
+}
+
 static inline vector vector3_w(vector v, float w)
 {
     v.w = w;

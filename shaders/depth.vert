@@ -1,9 +1,10 @@
 #version 460
 
 #extension GL_GOOGLE_include_directive : require
-#include "../shader.h.glsl"
 
-layout(location = 0) in vec3 pos;
+#define VERT
+#define VERTEX_INPUT
+#include "../shader.h.glsl"
 
 layout(push_constant) uniform pc {
     #if SPLIT_SHADOW_MVP
@@ -14,9 +15,12 @@ layout(push_constant) uniform pc {
 };
 
 void main() {
+    vec4 pos = vec4(in_position, 1);
+    mat4 skin = skin_calc();
+
     #if SPLIT_SHADOW_MVP
-    gl_Position = p * v * m * vec4(pos, 1);
+    gl_Position = p * v * m * skin * pos;
     #else
-    gl_Position = mvp * vec4(pos, 1);
+    gl_Position = mvp * skin * pos;
     #endif
 }

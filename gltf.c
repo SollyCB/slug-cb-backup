@@ -268,10 +268,11 @@ void parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_con
 #if !TEST // test.gltf uses a bogus file which would not make sense to run this on.
     assert(g->mesh_count < 32);
     uint instance_counts[32] = {};
+    uint64 skin_mask;
     for(uint i=0; i < g->scene_count; ++i)
         for(uint j=0; j < g->scenes[i].node_count; ++j)
             gltf_count_mesh_instances(g->nodes, g->scenes[i].nodes[j],
-                                      instance_counts);
+                                      instance_counts, &skin_mask);
     for(uint i=0; i < g->mesh_count; ++i)
         g->meshes[i].max_instance_count = instance_counts[i];
 #endif
