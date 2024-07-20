@@ -74,8 +74,10 @@ static void gpu_reset_viewport_and_scissor_to_window_extent(struct gpu *gpu);
 static void gpu_store_pipeline_cache(struct gpu *gpu);
 static void gpu_load_pipeline_cache(struct gpu *gpu);
 static void gpu_init_descriptor_pools(struct gpu *gpu);
-bool resource_dp_allocate_persist(struct gpu *gpu, uint count, VkDescriptorSetLayout *layouts, VkDescriptorSet *sets);
-bool sampler_dp_allocate_persist(struct gpu *gpu, uint count, VkDescriptorSetLayout *layouts, VkDescriptorSet *sets);
+static bool resource_dp_allocate_persist(struct gpu *gpu, uint count, VkDescriptorSetLayout *layouts, VkDescriptorSet *sets);
+static bool sampler_dp_allocate_persist(struct gpu *gpu, uint count, VkDescriptorSetLayout *layouts, VkDescriptorSet *sets);
+static VkShaderModule create_shader_module(struct gpu *gpu, size_t size, void *data);
+static void compile_shaders(struct gpu *gpu, allocator *temp);
 
 void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
     gpu->flags = 0;
@@ -184,8 +186,10 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
     gpu->shader_dir = load_shader_dir(gpu, gpu->alloc_heap);
     #endif
 
-    gpu->settings.shadow_maps.width = 4096 / 2;
-    gpu->settings.shadow_maps.height = 4096 / 2;
+    gpu->settings.shadow_maps.width = 4096 / 4;
+    gpu->settings.shadow_maps.height = 4096 / 4;
+
+    compile_shaders(gpu, gpu->alloc_temp);
 }
 
 void shutdown_gpu(struct gpu *gpu) {
@@ -1295,6 +1299,82 @@ static void gpu_init_descriptor_pools(struct gpu *gpu)
     }
 }
 
+static inline int shader_kind(string s)
+{
+    if (!memcmp(s.cstr + s.len - 4, "vert", 4))
+        return shaderc_vertex_shader;
+    else if (!memcmp(s.cstr + s.len - 4, "frag", 4))
+        return shaderc_fragment_shader;
+    else
+        return -1;
+}
+
+struct shader_decl SHADERS[SHADER_COUNT] = {
+    {.flags = 0x0,                .uri = {.cstr = "shaders/color.vert",         .len = strlen("shaders/color.vert")}},
+    {.flags = SHADER_SKINNED_BIT, .uri = {.cstr = "shaders/color_skinned.vert", .len = strlen("shaders/color_skinned.vert")}},
+    {.flags = 0x0,                .uri = {.cstr = "shaders/color.frag",         .len = strlen("shaders/color.frag")}},
+    {.flags = 0x0,                .uri = {.cstr = "shaders/depth.vert",         .len = strlen("shaders/depth.vert")}},
+    {.flags = SHADER_SKINNED_BIT, .uri = {.cstr = "shaders/depth_skinned.vert", .len = strlen("shaders/depth_skinned.vert")}},
+    {.flags = 0x0,                .uri = {.cstr = "shaders/depth.frag",         .len = strlen("shaders/depth.frag")}},
+    {.flags = 0x0,                .uri = {.cstr = "shaders/floor.vert",         .len = strlen("shaders/floor.vert")}},
+    {.flags = 0x0,                .uri = {.cstr = "shaders/floor.frag",         .len = strlen("shaders/floor.frag")}},
+    {.flags = 0x0,                .uri = {.cstr = "shaders/box.vert",           .len = strlen("shaders/box.vert")}},
+    {.flags = 0x0,                .uri = {.cstr = "shaders/box.frag",           .len = strlen("shaders/box.frag")}},
+    {.flags = 0x0,                .uri = {.cstr = "shaders/htp.vert",           .len = strlen("shaders/htp.vert")}},
+    {.flags = 0x0,                .uri = {.cstr = "shaders/htp.frag",           .len = strlen("shaders/htp.frag")}},
+};
+
+static void compile_shaders(struct gpu *gpu, allocator *temp)
+{
+    shaderc_compilation_result_t r;
+    shaderc_compiler_t c = shaderc_compiler_initialize();
+    shaderc_compile_options_t o = shaderc_compile_options_initialize();
+    shaderc_compile_options_set_optimization_level(o, shaderc_optimization_level_zero); // @Optimise
+    shaderc_compile_options_set_warnings_as_errors(o);
+
+    for(uint i=0; i < SHADER_COUNT; ++i) {
+        char buf[128]; assert(SHADERS[i].uri.len + 5 < carrlen(buf));
+        short_copy(buf, SHADERS[i].uri.cstr, SHADERS[i].uri.len);
+        short_copy(buf + SHADERS[i].uri.len, ".spv", 5);
+
+        if (ts_before(file_last_modified(buf), file_last_modified(SHADERS[i].uri.cstr))) {
+            struct file f = file_read_all(buf, temp);
+            gpu->shaders[i] = create_shader_module(gpu, f.size, f.data);
+        } else {
+            struct file f = file_read_all(SHADERS[i].uri.cstr, temp);
+            shaderc_compile_options_add_macro_definition(o, "SKINNED", 7, SHADERS[i].flags & SHADER_SKINNED_BIT ? "1":"0", 1);
+            r = shaderc_compile_into_spv(c, f.data, f.size, shader_kind(SHADERS[i].uri), SHADERS[i].uri.cstr, SHADER_ENTRY_POINT, o);
+            if (shaderc_result_get_compilation_status(r) != shaderc_compilation_status_success) {
+                log_print_error("failed to compile shader %s:\n%s", SHADERS[i].uri.cstr,
+                        shaderc_result_get_error_message(r));
+                memset(gpu->shaders, 0, sizeof(gpu->shaders));
+                return;
+            }
+            size_t len = shaderc_result_get_length(r);
+            uint32 *spv = (uint32*)shaderc_result_get_bytes(r);
+            gpu->shaders[i] = create_shader_module(gpu, len, spv);
+            file_open_write_create(buf, 0, len, spv);
+            assert(ts_before(file_last_modified(buf), file_last_modified(SHADERS[i].uri.cstr))); // @RemoveMe sanity check.
+        }
+    }
+    shaderc_result_release(r);
+    shaderc_compile_options_release(o);
+    shaderc_compiler_release(c);
+}
+
+static VkShaderModule create_shader_module(struct gpu *gpu, size_t size, void *data)
+{
+    VkShaderModuleCreateInfo ci = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = size,
+        .pCode = (const uint32*)data,
+    };
+    VkShaderModule ret;
+    VkResult check = vk_create_shader_module(gpu->device, &ci, GAC, &ret);
+    DEBUG_VK_OBJ_CREATION(vkCreateShaderModule, check);
+    return check == VK_SUCCESS ? ret : VK_NULL_HANDLE;
+}
+
 bool resource_dp_allocate_persist(struct gpu *gpu, uint count,
         VkDescriptorSetLayout *layouts, VkDescriptorSet *sets)
 {
@@ -1310,7 +1390,7 @@ bool resource_dp_allocate_persist(struct gpu *gpu, uint count,
     return r == VK_SUCCESS;
 }
 
-bool sampler_dp_allocate_persist(struct gpu *gpu, uint count,
+static bool sampler_dp_allocate_persist(struct gpu *gpu, uint count,
         VkDescriptorSetLayout *layouts, VkDescriptorSet *sets)
 {
     VkDescriptorSetAllocateInfo ai = {
@@ -2803,9 +2883,11 @@ fail:
 
 void htp_free_resources(struct gpu *gpu, struct htp_rsc *rsc)
 {
+    #if 0 // @RemoveMe Shaders now stored on gpu.
     for(uint i=0; i < carrlen(rsc->shader_modules); ++i)
         if (rsc->shader_modules[i])
             vk_destroy_shader_module(gpu->device, rsc->shader_modules[i], GAC);
+    #endif
     if (rsc->dsl)
         vk_destroy_descriptor_set_layout(gpu->device, rsc->dsl, GAC);
     if (rsc->pipeline_layout)
@@ -2831,8 +2913,6 @@ void htp_commands(VkCommandBuffer cmd, struct gpu *gpu, struct htp_rsc *rsc)
     vk_cmd_draw(cmd, 6, 1, 0, 0);
 }
 
-static VkShaderModule create_shader_module(VkDevice d, const char *file_name, allocator *alloc);
-
 // @Todo Only works on UMA
 void draw_box(VkCommandBuffer cmd, struct gpu *gpu, struct box *box, bool wireframe,
               VkRenderPass rp, uint subpass, struct draw_box_rsc *rsc, matrix *space, vector color)
@@ -2841,18 +2921,16 @@ void draw_box(VkCommandBuffer cmd, struct gpu *gpu, struct box *box, bool wirefr
         {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = VK_SHADER_STAGE_VERTEX_BIT,
-            .module = create_shader_module(gpu->device, "shaders/box.vert.spv", gpu->alloc_temp),
+            .module = gpu->shaders[SHADERS_BOX_VERT],
             .pName = SHADER_ENTRY_POINT,
         },
         {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-            .module = create_shader_module(gpu->device, "shaders/box.frag.spv", gpu->alloc_temp),
+            .module = gpu->shaders[SHADERS_BOX_FRAG],
             .pName = SHADER_ENTRY_POINT,
         },
     };
-    rsc->modules[0] = stages[0].module;
-    rsc->modules[1] = stages[1].module;
 
     VkVertexInputBindingDescription bd = {
         .binding = 0,
@@ -3002,26 +3080,12 @@ void draw_box(VkCommandBuffer cmd, struct gpu *gpu, struct box *box, bool wirefr
 
 void draw_box_cleanup(struct gpu *gpu, struct draw_box_rsc *rsc)
 {
+    #if 0 // @RemoveMe Shaders now stored on gpu.
     for(uint i=0; i < carrlen(rsc->modules); ++i)
         vk_destroy_shader_module(gpu->device, rsc->modules[i], GAC);
+    #endif
     vk_destroy_pipeline(gpu->device, rsc->pipeline, GAC);
     vk_destroy_pipeline_layout(gpu->device, rsc->layout, GAC);
-}
-
-static VkShaderModule create_shader_module(VkDevice d, const char *file_name, allocator *alloc)
-{
-    struct file f = file_read_bin_all(file_name, alloc);
-
-    VkShaderModuleCreateInfo ci = {
-        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = f.size,
-        .pCode = (const uint32*)f.data,
-    };
-
-    VkShaderModule mod;
-    vk_create_shader_module(d, &ci, GAC, &mod);
-
-    return mod;
 }
 
 #define GIANT_DRAW_FLOOR_PIPELINE_MACRO \
@@ -3029,18 +3093,16 @@ static VkShaderModule create_shader_module(VkDevice d, const char *file_name, al
         { \
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, \
             .stage = VK_SHADER_STAGE_VERTEX_BIT, \
-            .module = create_shader_module(gpu->device, "shaders/floor.vert.spv", gpu->alloc_temp), \
+            .module = gpu->shaders[SHADERS_FLOOR_VERT], \
             .pName = SHADER_ENTRY_POINT, \
         }, \
         { \
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, \
             .stage = VK_SHADER_STAGE_FRAGMENT_BIT, \
-            .module = create_shader_module(gpu->device, "shaders/floor.frag.spv", gpu->alloc_temp), \
+            .module = gpu->shaders[SHADERS_FLOOR_FRAG], \
             .pName = SHADER_ENTRY_POINT, \
         }, \
     }; \
-    rsc->modules[0] = stages[0].module; \
-    rsc->modules[1] = stages[1].module; \
  \
     VkPipelineVertexInputStateCreateInfo vi = { \
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO, \
@@ -3165,6 +3227,9 @@ void draw_floor_cleanup(struct gpu *gpu, struct draw_floor_rsc *rsc)
 {
     vk_destroy_pipeline(gpu->device, rsc->pipeline, GAC);
     vk_destroy_pipeline_layout(gpu->device, rsc->layout, GAC);
+
+    #if 0 // @RemoveMe Shaders now stored on gpu.
     for(uint i=0; i < carrlen(rsc->modules); ++i)
         vk_destroy_shader_module(gpu->device, rsc->modules[i], GAC);
+    #endif
 }

@@ -127,7 +127,11 @@ layout(set = 0, binding = 0) uniform UBO_Vertex_Info { Vertex_Info vs_info; };
 
 #ifdef VERT // vertex shader only
 
-#define SKINNED
+#ifdef VERTEX_INPUT
+layout(location = 0) in vec3 in_position; // @AnimatedShadow
+layout(location = 1) in vec3 in_normal;
+layout(location = 2) in vec4 in_tangent;
+#endif
 
 #ifdef VERTEX_INPUT
     layout(location = 0) in vec3 in_position;

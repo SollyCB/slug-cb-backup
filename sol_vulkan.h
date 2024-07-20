@@ -1,10 +1,7 @@
 #ifndef SOL_VULKAN_H_INCLUDE_GUARD_
 #define SOL_VULKAN_H_INCLUDE_GUARD_
 
-#if SHADER_C
-    #include <shaderc/shaderc.h>
-#endif
-
+#include <shaderc/shaderc.h>
 #include <vulkan/vulkan.h>
 
 enum {

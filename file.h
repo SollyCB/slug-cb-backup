@@ -48,17 +48,16 @@ static inline uint file_extension(const char *file_name, char *buf)
     return p;
 }
 
-static inline void file_last_modified(const char *path, struct timespec *ts) {
+static inline struct timespec file_last_modified(const char *path) {
     struct stat s;
     int err = stat(path, &s);
-    log_print_error_if(err, "failed to stat file %s", path);
-    *ts = s.st_mtim;
+    log_print_error_if(err, "failed to stat file %s: %s", path, strerror(errno));
+    return s.st_mtim;
 }
 
-static inline bool has_file_changed(const char *path, struct timespec *then) {
-    struct timespec now;
-    file_last_modified(path, &now);
-    return now.tv_sec != then->tv_sec || now.tv_nsec != then->tv_nsec;
+static inline bool has_file_changed(const char *path, struct timespec then) {
+    struct timespec now = file_last_modified(path);
+    return now.tv_sec != then.tv_sec || now.tv_nsec != then.tv_nsec;
 }
 
 static inline bool file_resize(int fd, uint64 sz)
@@ -80,22 +79,10 @@ int file_open(const char *path, int flags);
 int64 file_write(int fd, uint64 offset, uint64 count, void *data);
 int64 file_read(int fd, uint64 offset, uint64 count, void *data);
 bool file_close(int fd);
-
-static inline int64 file_open_write(const char *path, uint64 offset, uint64 count, void *data)
-{
-    int fd = file_open(path, O_WRONLY);
-    uint64 r = file_write(fd, offset, count, data);
-    file_close(fd);
-    return r;
-}
-
-static inline int64 file_open_read(const char *path, uint64 offset, uint64 count, void *data)
-{
-    int fd = file_open(path, O_RDONLY);
-    int64 r = file_read(fd, offset, count, data);
-    file_close(fd);
-    return r;
-}
+static inline int64 file_open_write(const char *path, uint64 offset, uint64 count, void *data);
+static inline int64 file_open_write_create(const char *path, uint64 offset, uint64 count, void *data);
+static inline int64 file_open_read(const char *path, uint64 offset, uint64 count, void *data);
+static inline struct file file_read_all(const char *path, allocator *alloc);
 
 // @Deprecated
 struct file file_read_bin_all(const char *file_name, allocator *alloc);
