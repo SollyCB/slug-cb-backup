@@ -36,6 +36,41 @@ int64 file_read(int fd, uint64 offset, uint64 count, void *data)
     return sz;
 }
 
+static inline int64 file_open_write(const char *path, uint64 offset, uint64 count, void *data)
+{
+    int fd = file_open(path, O_WRONLY);
+    uint64 r = file_write(fd, offset, count, data);
+    file_close(fd);
+    return r;
+}
+
+static inline int64 file_open_write_create(const char *path, uint64 offset, uint64 count, void *data)
+{
+    int fd = file_open(path, WRITE|CREATE);
+    uint64 r = file_write(fd, offset, count, data);
+    file_close(fd);
+    return r;
+}
+
+static inline int64 file_open_read(const char *path, uint64 offset, uint64 count, void *data)
+{
+    int fd = file_open(path, O_RDONLY);
+    int64 r = file_read(fd, offset, count, data);
+    file_close(fd);
+    return r;
+}
+
+static inline struct file file_read_all(const char *path, allocator *alloc)
+{
+    int fd = file_open(path, READ);
+    struct stat stat;
+    int e = fstat(fd, &stat);
+    log_print_error_if(e, "failed to stat file %s: %s", path, strerror(errno));
+    void *data = allocate(alloc, stat.st_size);
+    file_read(fd, 0, stat.st_size, data);
+    return (struct file) {.size = stat.st_size, .data = data};
+}
+
 /*--------------------------------------------------------------------------------*/
 // @Deprecated
 struct file file_read_bin_all(const char *file_name, allocator *alloc)

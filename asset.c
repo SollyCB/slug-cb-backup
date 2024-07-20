@@ -51,10 +51,6 @@ struct model_resources {
     VkDescriptorSetLayout *texture_dsls;
     VkPipeline            *pipelines;
     VkPipelineLayout      *pipeline_layouts;
-    VkShaderModule         depth_shader_vert;
-    VkShaderModule         depth_shader_frag;
-
-    VkShaderModule shader_modules[2]; // @TempShader
 };
 
 struct model_texture_descriptors {
@@ -214,12 +210,14 @@ static void model_cleanup(struct model_resources *resources)
 {
     struct gpu *gpu = resources->gpu;
 
+    #if 0 // @RemoveMe Shaders now stored on gpu.
     vk_destroy_shader_module(gpu->device, resources->depth_shader_vert, GAC);
     vk_destroy_shader_module(gpu->device, resources->depth_shader_frag, GAC);
 
     // @TempShader
     vk_destroy_shader_module(gpu->device, resources->shader_modules[0], GAC);
     vk_destroy_shader_module(gpu->device, resources->shader_modules[1], GAC);
+    #endif
 
     for(uint i=0; i < resources->image_count; ++i)
         gpu_destroy_image_and_view(gpu, &resources->images[i]);
@@ -1194,36 +1192,29 @@ model_pipelines_transform_descriptors_and_draw_info(
 
     draw_info->prim_count = pc;
 
-    {
-        struct file f = file_read_bin_all("shaders/depth.vert.spv", allocs->temp);
-        VkShaderModuleCreateInfo ci = {
-            .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-            .codeSize = f.size,
-            .pCode = (const uint32*)f.data,
-        };
-        VkResult check = vk_create_shader_module(gpu->device, &ci, GAC, &resources->depth_shader_vert);
-        DEBUG_VK_OBJ_CREATION(vkCreateShaderModule, check);
-    } {
-        struct file f = file_read_bin_all("shaders/depth.frag.spv", allocs->temp);
-        VkShaderModuleCreateInfo ci = {
-            .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-            .codeSize = f.size,
-            .pCode = (const uint32*)f.data,
-        };
-        VkResult check = vk_create_shader_module(gpu->device, &ci, GAC, &resources->depth_shader_frag);
-        DEBUG_VK_OBJ_CREATION(vkCreateShaderModule, check);
-    }
-
     VkPipelineShaderStageCreateInfo depth_shaders[2] = {
         {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = VK_SHADER_STAGE_VERTEX_BIT,
-            .module = resources->depth_shader_vert,
+            .module = gpu->shaders[SHADERS_DEPTH_VERT],
             .pName = SHADER_ENTRY_POINT,
         }, {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-            .module = resources->depth_shader_frag,
+            .module = gpu->shaders[SHADERS_DEPTH_FRAG],
+            .pName = SHADER_ENTRY_POINT,
+        },
+    };
+    VkPipelineShaderStageCreateInfo depth_shaders_skinned[2] = {
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_VERTEX_BIT,
+            .module = gpu->shaders[SHADERS_DEPTH_SKINNED_VERT],
+            .pName = SHADER_ENTRY_POINT,
+        }, {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .module = gpu->shaders[SHADERS_DEPTH_FRAG],
             .pName = SHADER_ENTRY_POINT,
         },
     };
@@ -1369,33 +1360,6 @@ model_pipelines_transform_descriptors_and_draw_info(
     vb      =        (VkVertexInputBindingDescription*)(ia             + pc * 2);
     va      =      (VkVertexInputAttributeDescription*)(vb             + ac * 1);
 
-    VkShaderModule mod_v;
-    VkShaderModule mod_f;
-    {
-        struct file f = file_read_bin_all("shaders/manual.vert.spv", allocs->temp);
-        VkShaderModuleCreateInfo ci = {
-            .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-            .codeSize = f.size,
-            .pCode = (const uint32*)f.data,
-        };
-        VkResult check = vk_create_shader_module(gpu->device, &ci, GAC, &mod_v);
-        DEBUG_VK_OBJ_CREATION(vkCreateShaderModule, check);
-
-        // @TempShader
-        resources->shader_modules[0] = mod_v;
-    } {
-        struct file f = file_read_bin_all("shaders/manual.frag.spv", allocs->temp);
-        VkShaderModuleCreateInfo ci = {
-            .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-            .codeSize = f.size,
-            .pCode = (const uint32*)f.data,
-        };
-        VkResult check = vk_create_shader_module(gpu->device, &ci, GAC, &mod_f);
-        DEBUG_VK_OBJ_CREATION(vkCreateShaderModule, check);
-
-        resources->shader_modules[1] = mod_f;
-    }
-
     {
         #if SPLIT_SHADOW_MVP
             VkPushConstantRange pcr = {
@@ -1437,13 +1401,13 @@ model_pipelines_transform_descriptors_and_draw_info(
                 .vertex = (VkPipelineShaderStageCreateInfo) {
                     .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                     .stage = VK_SHADER_STAGE_VERTEX_BIT,
-                    .module = mod_v,// gpu->shader_dir.sets[prim->shader_i].vert,
+                    .module = model->meshes[i].joint_count ? gpu->shaders[SHADERS_COLOR_SKINNED_VERT] : gpu->shaders[SHADERS_COLOR_VERT],
                     .pName = SHADER_ENTRY_POINT,
                 },
                 .fragment = (VkPipelineShaderStageCreateInfo) {
                     .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                     .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-                    .module = mod_f, // gpu->shader_dir.sets[prim->shader_i].frag,
+                    .module = gpu->shaders[SHADERS_COLOR_FRAG],
                     .pName = SHADER_ENTRY_POINT,
                 },
             };
@@ -1489,9 +1453,9 @@ model_pipelines_transform_descriptors_and_draw_info(
         for(uint j=0; j < model->meshes[i].primitive_count; ++j) {
             gltf_mesh_primitive *prim = &model->meshes[i].primitives[j];
 
-            vi[pc] = vi[pc - prim_count];
-            vi[pc].vertexBindingDescriptionCount = 1; // only position
-            vi[pc].vertexAttributeDescriptionCount = 1;
+            vi[pc] = vi[pc - prim_count]; // if skinned, require joints and weights in depth shader
+            vi[pc].vertexBindingDescriptionCount = 1 + 2 * (model->meshes[i].joint_count > 0);
+            vi[pc].vertexAttributeDescriptionCount = 1 + 2 * (model->meshes[i].joint_count > 0);
 
             ia[pc] = ia[pc - prim_count];
 
@@ -1499,11 +1463,11 @@ model_pipelines_transform_descriptors_and_draw_info(
                 .sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
                 .flags               = DESCRIPTOR_BUFFER ? VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT : 0,
                 .stageCount          = 2, // @ShaderCount
-                .pStages             = depth_shaders,
+                .pStages             = model->meshes[i].joint_count ? depth_shaders_skinned : depth_shaders,
                 .pVertexInputState   = &vi[pc],
                 .pInputAssemblyState = &ia[pc],
                 .pViewportState      = &depth_viewport,
-                .pRasterizationState = &depth_rasterization, // pipeline_infos[pc - prim_count].pRasterizationState,
+                .pRasterizationState = &depth_rasterization,
                 .pMultisampleState   = &multisample,
                 .pDepthStencilState  = &depth_depth,
                 .pColorBlendState    = &depth_blend,

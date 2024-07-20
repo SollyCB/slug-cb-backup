@@ -32,6 +32,7 @@ extern float FOV;
 #define _GNU_SOURCE
 
 #define FRAME_COUNT 2
+#define SHADER_C 0
 
 #define DEBUG 1
 #define TEST  0
@@ -183,6 +184,12 @@ static inline bool before(uint64_t a, uint64_t b) {
     return ((int64)b - (int64)a) > 0;
 }
 
+// is x before y
+static inline bool ts_before(struct timespec x, struct timespec y)
+{
+    return x.tv_sec < y.tv_sec || (x.tv_sec == y.tv_sec && x.tv_nsec < y.tv_nsec);
+}
+
 static inline uint32 set_bit_idx(uint32 mask, uint i) {
     return mask | (1 << i);
 }
@@ -218,6 +225,12 @@ static inline size_t copied(void *to, const void *from, size_t size) {
 static inline void memcpy_if(void *to, const void *from, size_t size, bool b) {
     if (b)
         memcpy(to, from, size);
+}
+
+static inline void short_copy(void *to, const void *from, uint64 sz)
+{
+    for(uint i=0; i < sz; ++i)
+        ((char*)to)[i] = ((char*)from)[i];
 }
 
 #define zero(t) memset(&t,0,sizeof(t))

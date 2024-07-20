@@ -150,6 +150,31 @@ struct gpu_descriptors {
     VkPhysicalDeviceDescriptorBufferPropertiesEXT props;
 };
 
+typedef enum {
+    SHADERS_COLOR_VERT,
+    SHADERS_COLOR_SKINNED_VERT,
+    SHADERS_COLOR_FRAG,
+    SHADERS_DEPTH_VERT,
+    SHADERS_DEPTH_SKINNED_VERT,
+    SHADERS_DEPTH_FRAG,
+    SHADERS_FLOOR_VERT,
+    SHADERS_FLOOR_FRAG,
+    SHADERS_BOX_VERT,
+    SHADERS_BOX_FRAG,
+    SHADERS_HTP_VERT,
+    SHADERS_HTP_FRAG,
+    SHADER_COUNT,
+} shader_index;
+
+enum {
+    SHADER_SKINNED_BIT = 0x01,
+};
+
+extern struct shader_decl {
+    uint flags;
+    string uri;
+} SHADERS[SHADER_COUNT];
+
 struct gpu {
     struct gpu_defaults defaults;
 
@@ -183,6 +208,8 @@ struct gpu {
     thread_pool *threads;
 
     uint sampler_count;
+
+    VkShaderModule shaders[SHADER_COUNT]; // accessed via shader_index enum
 
     #if NO_DESCRIPTOR_BUFFER
     VkDescriptorPool resource_dp[THREAD_COUNT + 1]; // +1 for main thread

@@ -1494,6 +1494,10 @@ static uint gltf_mesh_parse_primitive_attributes(json_object *j_attribs, struct 
     for(i=0;i<j_attribs->key_count;++i) {
         attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_POSITION] |= (1<<i) &
             max_if(memcmp(j_attribs->keys[i].cstr, "POSITION", GLTF_MESH_PRIMITIVE_ATTRIBUTE_KEY_LEN_POSITION) == 0);
+        attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_JOINTS] |= (1<<i) &
+            max_if(memcmp(j_attribs->keys[i].cstr, "JOINTS", GLTF_MESH_PRIMITIVE_ATTRIBUTE_KEY_LEN_JOINTS) == 0);
+        attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_WEIGHTS] |= (1<<i) &
+            max_if(memcmp(j_attribs->keys[i].cstr, "WEIGHTS", GLTF_MESH_PRIMITIVE_ATTRIBUTE_KEY_LEN_WEIGHTS) == 0);
         attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_NORMAL] |= (1<<i) &
             max_if(memcmp(j_attribs->keys[i].cstr, "NORMAL", GLTF_MESH_PRIMITIVE_ATTRIBUTE_KEY_LEN_NORMAL) == 0);
         attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_TANGENT] |= (1<<i) &
@@ -1502,10 +1506,6 @@ static uint gltf_mesh_parse_primitive_attributes(json_object *j_attribs, struct 
             max_if(memcmp(j_attribs->keys[i].cstr, "TEXCOORD", GLTF_MESH_PRIMITIVE_ATTRIBUTE_KEY_LEN_TEXCOORD) == 0);
         attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_COLOR] |= (1<<i) &
             max_if(memcmp(j_attribs->keys[i].cstr, "COLOR",GLTF_MESH_PRIMITIVE_ATTRIBUTE_KEY_LEN_COLOR) == 0);
-        attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_JOINTS] |= (1<<i) &
-            max_if(memcmp(j_attribs->keys[i].cstr, "JOINTS", GLTF_MESH_PRIMITIVE_ATTRIBUTE_KEY_LEN_JOINTS) == 0);
-        attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_WEIGHTS] |= (1<<i) &
-            max_if(memcmp(j_attribs->keys[i].cstr, "WEIGHTS", GLTF_MESH_PRIMITIVE_ATTRIBUTE_KEY_LEN_WEIGHTS) == 0);
     }
 
     extra_attrs->norm = !attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_NORMAL];

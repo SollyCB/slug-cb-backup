@@ -5,6 +5,9 @@
 #include "defs.h"
 #include "shader.h.glsl"
 
+// I need to think about what I want to do with the below and with shader.c
+/*--------------------------------------------------------------------------------*/
+
 #define RECREATE_SHADER_DIR 1
 
 // @Todo Soon I am going to want the ability to do shadow passes, for which I will
