@@ -1310,55 +1310,135 @@ static inline int shader_kind(string s)
 }
 
 struct shader_decl SHADERS[SHADER_COUNT] = {
-    {.flags = 0x0,                .uri = {.cstr = "shaders/color.vert",         .len = strlen("shaders/color.vert")}},
-    {.flags = SHADER_SKINNED_BIT, .uri = {.cstr = "shaders/color_skinned.vert", .len = strlen("shaders/color_skinned.vert")}},
-    {.flags = 0x0,                .uri = {.cstr = "shaders/color.frag",         .len = strlen("shaders/color.frag")}},
-    {.flags = 0x0,                .uri = {.cstr = "shaders/depth.vert",         .len = strlen("shaders/depth.vert")}},
-    {.flags = SHADER_SKINNED_BIT, .uri = {.cstr = "shaders/depth_skinned.vert", .len = strlen("shaders/depth_skinned.vert")}},
-    {.flags = 0x0,                .uri = {.cstr = "shaders/depth.frag",         .len = strlen("shaders/depth.frag")}},
-    {.flags = 0x0,                .uri = {.cstr = "shaders/floor.vert",         .len = strlen("shaders/floor.vert")}},
-    {.flags = 0x0,                .uri = {.cstr = "shaders/floor.frag",         .len = strlen("shaders/floor.frag")}},
-    {.flags = 0x0,                .uri = {.cstr = "shaders/box.vert",           .len = strlen("shaders/box.vert")}},
-    {.flags = 0x0,                .uri = {.cstr = "shaders/box.frag",           .len = strlen("shaders/box.frag")}},
-    {.flags = 0x0,                .uri = {.cstr = "shaders/htp.vert",           .len = strlen("shaders/htp.vert")}},
-    {.flags = 0x0,                .uri = {.cstr = "shaders/htp.frag",           .len = strlen("shaders/htp.frag")}},
+    {.flags   = SHADER_VERTEX_BIT|SHADER_VERTEX_INPUT_BIT,
+     .src_uri = {.cstr = "shaders/manual.vert",             .len = strlen("shaders/manual.vert")},
+     .dst_uri = {.cstr = "shaders/manual.vert.spv",         .len = strlen("shaders/manual.vert.spv")}},
+    {.flags   = SHADER_VERTEX_BIT|SHADER_VERTEX_INPUT_BIT|SHADER_SKINNED_BIT,
+     .src_uri = {.cstr = "shaders/manual.vert",             .len = strlen("shaders/manual.vert")},
+     .dst_uri = {.cstr = "shaders/manual_skinned.vert.spv", .len = strlen("shaders/manual_skinned.vert.spv")}},
+    {.flags   = SHADER_FRAGMENT_BIT,
+     .src_uri = {.cstr = "shaders/manual.frag",             .len = strlen("shaders/manual.frag")},
+     .dst_uri = {.cstr = "shaders/manual.frag.spv",         .len = strlen("shaders/manual.frag.spv")}},
+    {.flags   = SHADER_VERTEX_BIT|SHADER_VERTEX_INPUT_BIT,
+     .src_uri = {.cstr = "shaders/depth.vert",              .len = strlen("shaders/depth.vert")},
+     .dst_uri = {.cstr = "shaders/depth.vert.spv",          .len = strlen("shaders/depth.vert.spv")}},
+    {.flags   = SHADER_VERTEX_BIT|SHADER_VERTEX_INPUT_BIT|SHADER_SKINNED_BIT,
+     .src_uri = {.cstr = "shaders/depth.vert",              .len = strlen("shaders/depth.vert")},
+     .dst_uri = {.cstr = "shaders/depth_skinned.vert.spv",  .len = strlen("shaders/depth_skinned.vert.spv")}},
+    {.flags   = SHADER_FRAGMENT_BIT|SHADER_NO_INCLUDE_BIT,
+     .src_uri = {.cstr = "shaders/depth.frag",              .len = strlen("shaders/depth.frag")},
+     .dst_uri = {.cstr = "shaders/depth.frag.spv",          .len = strlen("shaders/depth.frag.spv")}},
+    {.flags   = SHADER_VERTEX_BIT,
+     .src_uri = {.cstr = "shaders/floor.vert",              .len = strlen("shaders/floor.vert")},
+     .dst_uri = {.cstr = "shaders/floor.vert.spv",          .len = strlen("shaders/floor.vert.spv")}},
+    {.flags   = SHADER_FRAGMENT_BIT,
+     .src_uri = {.cstr = "shaders/floor.frag",              .len = strlen("shaders/floor.frag")},
+     .dst_uri = {.cstr = "shaders/floor.frag.spv",          .len = strlen("shaders/floor.frag.spv")}},
+    {.flags   = SHADER_NO_INCLUDE_BIT,
+     .src_uri = {.cstr = "shaders/box.vert",                .len = strlen("shaders/box.vert")},
+     .dst_uri = {.cstr = "shaders/box.vert.spv",            .len = strlen("shaders/box.vert.spv")}},
+    {.flags   = SHADER_NO_INCLUDE_BIT,
+     .src_uri = {.cstr = "shaders/box.frag",                .len = strlen("shaders/box.frag")},
+     .dst_uri = {.cstr = "shaders/box.frag.spv",            .len = strlen("shaders/box.frag.spv")}},
+    {.flags   = SHADER_NO_INCLUDE_BIT,
+     .src_uri = {.cstr = "shaders/htp.vert",                .len = strlen("shaders/htp.vert")},
+     .dst_uri = {.cstr = "shaders/htp.vert.spv",            .len = strlen("shaders/htp.vert.spv")}},
+    {.flags   = SHADER_NO_INCLUDE_BIT,
+     .src_uri = {.cstr = "shaders/htp.frag",                .len = strlen("shaders/htp.frag")},
+     .dst_uri = {.cstr = "shaders/htp.frag.spv",            .len = strlen("shaders/htp.frag.spv")}},
 };
 
 static void compile_shaders(struct gpu *gpu, allocator *temp)
 {
+    uint64 used = allocator_used(temp);
+
     shaderc_compilation_result_t r;
     shaderc_compiler_t c = shaderc_compiler_initialize();
-    shaderc_compile_options_t o = shaderc_compile_options_initialize();
-    shaderc_compile_options_set_optimization_level(o, shaderc_optimization_level_zero); // @Optimise
-    shaderc_compile_options_set_warnings_as_errors(o);
+
+    uint allocation_size = 20 * 1024;
+    char *src = allocate(temp, allocation_size);
+
+    const char *ver = "#version 460\n";
+    memcpy(src, ver, strlen(ver));
+
+    uint incl_sz = 0;
+    {
+        int fd = file_open("gltf_limits.h", READ);
+        uint sz = file_size_fd(fd); assert(sz + strlen(ver) < allocation_size && "increase allocation_size");
+        file_read(fd, 0, sz, src + strlen(ver));
+        sz += strlen(ver);
+        file_close(fd);
+        incl_sz += sz;
+    } {
+        int fd = file_open("shader.h.glsl", READ);
+        uint sz = file_size_fd(fd); assert(sz + incl_sz < allocation_size && "increase allocation_size");
+        file_read(fd, 0, sz, src + incl_sz);
+        file_close(fd);
+        incl_sz += sz;
+    }
 
     for(uint i=0; i < SHADER_COUNT; ++i) {
-        char buf[128]; assert(SHADERS[i].uri.len + 5 < carrlen(buf));
-        short_copy(buf, SHADERS[i].uri.cstr, SHADERS[i].uri.len);
-        short_copy(buf + SHADERS[i].uri.len, ".spv", 5);
-
-        if (ts_before(file_last_modified(buf), file_last_modified(SHADERS[i].uri.cstr))) {
-            struct file f = file_read_all(buf, temp);
+        if (file_exists(SHADERS[i].dst_uri.cstr) &&
+            ts_before(file_last_modified(SHADERS[i].dst_uri.cstr), file_last_modified(SHADERS[i].src_uri.cstr)))
+        {
+            struct file f = file_read_all(SHADERS[i].dst_uri.cstr, temp);
             gpu->shaders[i] = create_shader_module(gpu, f.size, f.data);
         } else {
-            struct file f = file_read_all(SHADERS[i].uri.cstr, temp);
-            shaderc_compile_options_add_macro_definition(o, "SKINNED", 7, SHADERS[i].flags & SHADER_SKINNED_BIT ? "1":"0", 1);
-            r = shaderc_compile_into_spv(c, f.data, f.size, shader_kind(SHADERS[i].uri), SHADERS[i].uri.cstr, SHADER_ENTRY_POINT, o);
+            int fd = file_open(SHADERS[i].src_uri.cstr, READ);
+            uint sz = file_size_fd(fd); assert(sz + incl_sz < allocation_size && "increase allocation_size");
+            file_read(fd, 0, sz, src + incl_sz);
+            file_close(fd);
+
+            shaderc_compile_options_t o = shaderc_compile_options_initialize();
+            shaderc_compile_options_set_optimization_level(o, shaderc_optimization_level_zero); // @Optimise
+            shaderc_compile_options_set_warnings_as_errors(o);
+            shaderc_compile_options_set_target_env(o, shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_3);
+
+            if (SHADERS[i].flags & SHADER_SKINNED_BIT)
+                shaderc_compile_options_add_macro_definition(o, "SKINNED", strlen("SKINNED"), "", 0);
+            if (SHADERS[i].flags & SHADER_VERTEX_BIT)
+                shaderc_compile_options_add_macro_definition(o, "VERT", strlen("VERT"), "", 0);
+            if (SHADERS[i].flags & SHADER_VERTEX_INPUT_BIT)
+                shaderc_compile_options_add_macro_definition(o, "VERTEX_INPUT", strlen("VERTEX_INPUT"), "", 0);
+            if (SHADERS[i].flags & SHADER_FRAGMENT_BIT)
+                shaderc_compile_options_add_macro_definition(o, "FRAG", strlen("FRAG"), "", 0);
+
+            uint src_sz;
+            if (SHADERS[i].flags & SHADER_NO_INCLUDE_BIT) {
+                src_sz = sz;
+            } else {
+                uint x = 0;
+                while(memcmp(src + incl_sz + x, "include", strlen("include"))) {
+                    x += simd_find_char(src + incl_sz + x, '#');
+                    x++;
+                }
+                x += simd_find_char(src + incl_sz + x, '\n');
+                memset(src + incl_sz, ' ', x);
+                shaderc_compile_options_add_macro_definition(o, "VERSION", strlen("VERSION"), "", 0);
+                src_sz = incl_sz + sz;
+            }
+
+            r = shaderc_compile_into_spv(c, SHADERS[i].flags & SHADER_NO_INCLUDE_BIT ? src + incl_sz : src,
+                    src_sz, shader_kind(SHADERS[i].src_uri), SHADERS[i].src_uri.cstr, SHADER_ENTRY_POINT, o);
+            shaderc_compile_options_release(o); // @Optimise I assume that this is the correct way to reset options.
+
             if (shaderc_result_get_compilation_status(r) != shaderc_compilation_status_success) {
-                log_print_error("failed to compile shader %s:\n%s", SHADERS[i].uri.cstr,
-                        shaderc_result_get_error_message(r));
+                println_count_chars(SHADERS[i].flags & SHADER_NO_INCLUDE_BIT ? src + incl_sz : src, src_sz);
+                log_print_error("failed to compile shader %s:\n%s\n",
+                        SHADERS[i].src_uri.cstr, shaderc_result_get_error_message(r));
                 memset(gpu->shaders, 0, sizeof(gpu->shaders));
                 return;
             }
+
             size_t len = shaderc_result_get_length(r);
             uint32 *spv = (uint32*)shaderc_result_get_bytes(r);
             gpu->shaders[i] = create_shader_module(gpu, len, spv);
-            file_open_write_create(buf, 0, len, spv);
-            assert(ts_before(file_last_modified(buf), file_last_modified(SHADERS[i].uri.cstr))); // @RemoveMe sanity check.
+
+            file_open_write_create(SHADERS[i].dst_uri.cstr, 0, len, spv);
         }
     }
+    allocator_reset_linear_to(temp, used);
     shaderc_result_release(r);
-    shaderc_compile_options_release(o);
     shaderc_compiler_release(c);
 }
 

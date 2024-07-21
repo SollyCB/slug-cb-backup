@@ -2,9 +2,8 @@
 
 int file_open(const char *path, int flags)
 {
-    if ((flags & (O_RDONLY|O_WRONLY)) == (O_RDONLY|O_WRONLY))
-        flags = (flags & ~(O_RDONLY|O_WRONLY)) | O_RDWR;
-    int e = open(path, flags);
+    int m = flags & CREATE ? S_IWUSR|S_IRUSR : 0;
+    int e = open(path, flags, m);
     log_print_error_if(!check_file_result(e), "failed to open file %s with perms %u: %s", path, flags, strerror(errno));
     return e;
 }
@@ -36,7 +35,7 @@ int64 file_read(int fd, uint64 offset, uint64 count, void *data)
     return sz;
 }
 
-static inline int64 file_open_write(const char *path, uint64 offset, uint64 count, void *data)
+int64 file_open_write(const char *path, uint64 offset, uint64 count, void *data)
 {
     int fd = file_open(path, O_WRONLY);
     uint64 r = file_write(fd, offset, count, data);
@@ -44,7 +43,7 @@ static inline int64 file_open_write(const char *path, uint64 offset, uint64 coun
     return r;
 }
 
-static inline int64 file_open_write_create(const char *path, uint64 offset, uint64 count, void *data)
+int64 file_open_write_create(const char *path, uint64 offset, uint64 count, void *data)
 {
     int fd = file_open(path, WRITE|CREATE);
     uint64 r = file_write(fd, offset, count, data);
@@ -52,7 +51,7 @@ static inline int64 file_open_write_create(const char *path, uint64 offset, uint
     return r;
 }
 
-static inline int64 file_open_read(const char *path, uint64 offset, uint64 count, void *data)
+int64 file_open_read(const char *path, uint64 offset, uint64 count, void *data)
 {
     int fd = file_open(path, O_RDONLY);
     int64 r = file_read(fd, offset, count, data);
@@ -60,7 +59,7 @@ static inline int64 file_open_read(const char *path, uint64 offset, uint64 count
     return r;
 }
 
-static inline struct file file_read_all(const char *path, allocator *alloc)
+struct file file_read_all(const char *path, allocator *alloc)
 {
     int fd = file_open(path, READ);
     struct stat stat;

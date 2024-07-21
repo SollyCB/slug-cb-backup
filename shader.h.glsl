@@ -1,6 +1,10 @@
 #ifndef SHADER_H_GLSL_
 #define SHADER_H_GLSL_
 
+#ifndef GL_core_profile
+#include "gltf_limits.h"
+#endif
+
 #define DIR_LIGHT_COUNT 1
 #define CSM_COUNT 4
 #define CSM_BLEND_BAND (25/2)
@@ -12,8 +16,6 @@
 #extension GL_EXT_nonuniform_qualifier : require
 #extension GL_GOOGLE_include_directive : require
 #endif
-
-#include "gltf_limits.h"
 
 #ifndef GL_core_profile // C code invisible to glsl
 
@@ -128,29 +130,27 @@ layout(set = 0, binding = 0) uniform UBO_Vertex_Info { Vertex_Info vs_info; };
 #ifdef VERT // vertex shader only
 
 #ifdef VERTEX_INPUT
-layout(location = 0) in vec3 in_position; // @AnimatedShadow
-layout(location = 1) in vec3 in_normal;
-layout(location = 2) in vec4 in_tangent;
-#endif
+    layout(set = 2, binding = 0) uniform UBO_Transforms { Vertex_Transforms transforms; };
 
-#ifdef VERTEX_INPUT
+    #ifdef SKINNED
+    layout(location = 0) in vec3  in_position;
+    layout(location = 1) in uvec4 in_joints;
+    layout(location = 2) in vec4  in_weights;
+    layout(location = 3) in vec3  in_normal;
+    layout(location = 4) in vec4  in_tangent;
+    layout(location = 5) in vec2  in_texcoord;
+
+    mat4 skin_calc() {
+       return in_weights.x * transforms.joints[in_joints.x] +
+              in_weights.y * transforms.joints[in_joints.y] +
+              in_weights.z * transforms.joints[in_joints.z] +
+              in_weights.w * transforms.joints[in_joints.w];
+    }
+    #else
     layout(location = 0) in vec3 in_position;
     layout(location = 1) in vec3 in_normal;
     layout(location = 2) in vec4 in_tangent;
     layout(location = 3) in vec2 in_texcoord;
-
-    layout(set = 2, binding = 0) uniform UBO_Transforms { Vertex_Transforms transforms; };
-
-    #ifdef SKINNED
-        layout(location = 4) in uvec4 in_joints;
-        layout(location = 5) in  vec4 in_weights;
-
-        mat4 skin_calc() {
-           return in_weights.x * transforms.joints[in_joints.x] +
-                  in_weights.y * transforms.joints[in_joints.y] +
-                  in_weights.z * transforms.joints[in_joints.z] +
-                  in_weights.w * transforms.joints[in_joints.w];
-        }
     #endif
 #endif
 

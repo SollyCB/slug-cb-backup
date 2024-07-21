@@ -41,9 +41,19 @@ static inline void print_count_chars(const char *data, int count) {
     fwrite(data, 1, count, stdout);
 }
 
-static inline void print_count_chars_ln(const char *data, int count) {
+static inline void println_count_chars(const char *data, int count) {
     fwrite(data, 1, count, stdout);
     println("");
+}
+
+static inline void print_ts(struct timespec ts)
+{
+    print("[%u sec, %u nsec]", ts.tv_sec, ts.tv_nsec);
+}
+
+static inline void println_ts(struct timespec ts)
+{
+    println("[%u sec, %u nsec]", ts.tv_sec, ts.tv_nsec);
 }
 
 static inline void print_time(long seconds, long nanoseconds) {

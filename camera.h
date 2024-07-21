@@ -11,8 +11,8 @@ enum {
 };
 
 enum {
-    CAMERA_MODE_FLY,
     CAMERA_MODE_NORMAL,
+    CAMERA_MODE_FLY,
     CAMERA_MODE_LIGHT,
 };
 

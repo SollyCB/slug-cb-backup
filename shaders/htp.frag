@@ -1,4 +1,4 @@
-#version 450
+#version 460
 #extension GL_EXT_debug_printf : enable
 
 layout(input_attachment_index = 0, set = 0, binding = 0) uniform subpassInput hdr_texture;

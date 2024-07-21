@@ -40,12 +40,10 @@ void init_glfw(struct window *glfw, struct camera *c) {
     log_print_error_if(!glfw->window, "failed to create glfw window");
 
     glfwSetWindowUserPointer(glfw->window, c);
-    glfwSetInputMode(glfw->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     glfwSetErrorCallback(glfw_error_callback);
     glfwSetCursorEnterCallback(glfw->window, glfw_cursor_enter_callback);
     glfwSetScrollCallback(glfw->window, scroll_callback);
-
 }
 
 void shutdown_glfw(struct window *glfw) {

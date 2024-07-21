@@ -9,7 +9,6 @@ extern float ASPECT_RATIO;
 extern float FOV;
 
 #ifndef _WIN32
-
     #define PRAGMA(arg) _Pragma(arg)
 
     #define GCC_IGNORE_WARNINGS_BEGIN \
@@ -18,11 +17,8 @@ extern float FOV;
 
     #define GCC_IGNORE_WARNINGS_END \
         PRAGMA("GCC diagnostic pop")
-
 #else
-
     #define PRAGMA(arg) __pragma(arg)
-
 #endif
 
 #define ASPECT_RATIO ((float)SCR_H / SCR_W)
@@ -187,7 +183,7 @@ static inline bool before(uint64_t a, uint64_t b) {
 // is x before y
 static inline bool ts_before(struct timespec x, struct timespec y)
 {
-    return x.tv_sec < y.tv_sec || (x.tv_sec == y.tv_sec && x.tv_nsec < y.tv_nsec);
+    return x.tv_sec > y.tv_sec || (x.tv_sec == y.tv_sec && x.tv_nsec > y.tv_nsec);
 }
 
 static inline uint32 set_bit_idx(uint32 mask, uint i) {

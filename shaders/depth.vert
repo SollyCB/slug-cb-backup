@@ -1,5 +1,3 @@
-#version 460
-
 #extension GL_GOOGLE_include_directive : require
 
 #define VERT
@@ -16,11 +14,18 @@ layout(push_constant) uniform pc {
 
 void main() {
     vec4 pos = vec4(in_position, 1);
-    mat4 skin = skin_calc();
 
     #if SPLIT_SHADOW_MVP
-    gl_Position = p * v * m * skin * pos;
+        #ifdef SKINNED
+        gl_Position = p * v * m * skin_calc() * pos;
+        #else
+        gl_Position = p * v * m * transforms.joints[0] * pos;
+        #endif
     #else
-    gl_Position = mvp * skin * pos;
+        #ifdef SKINNED
+        gl_Position = mvp * skin_calc() * pos;
+        #else
+        gl_Position = mvp * transforms.joints[0] * pos;
+        #endif
     #endif
 }

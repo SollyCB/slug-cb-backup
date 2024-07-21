@@ -23,6 +23,22 @@ static inline bool file_exists(const char *file_name)
     return access(file_name, R_OK|W_OK) == 0; // 0 is success code
 }
 
+static inline uint64 file_size(const char *path)
+{
+    struct stat stat_buf;
+    int e = stat(path, &stat_buf);
+    log_print_error_if(e, "failed to stat file %s: %s", path, strerror(errno));
+    return stat_buf.st_size;
+}
+
+static inline uint64 file_size_fd(int fd)
+{
+    struct stat stat;
+    int e = fstat(fd, &stat);
+    log_print_error_if(e, "failed to stat file %i: %s", fd, strerror(errno));
+    return stat.st_size;
+}
+
 // @Note breaks on windows?
 static inline uint file_dir_name(const char *file_name, char *buf)
 {
@@ -68,9 +84,10 @@ static inline bool file_resize(int fd, uint64 sz)
 }
 
 enum {
-    READ = O_RDONLY,
-    WRITE = O_WRONLY,
-    CREATE = O_CREAT,
+    READ       = O_RDONLY,
+    WRITE      = O_WRONLY,
+    READ_WRITE = O_RDWR,
+    CREATE     = O_CREAT,
 };
 #define check_file_result(r) (r != -1)
 #define FILE_READ_ALL Max_u64
@@ -79,10 +96,10 @@ int file_open(const char *path, int flags);
 int64 file_write(int fd, uint64 offset, uint64 count, void *data);
 int64 file_read(int fd, uint64 offset, uint64 count, void *data);
 bool file_close(int fd);
-static inline int64 file_open_write(const char *path, uint64 offset, uint64 count, void *data);
-static inline int64 file_open_write_create(const char *path, uint64 offset, uint64 count, void *data);
-static inline int64 file_open_read(const char *path, uint64 offset, uint64 count, void *data);
-static inline struct file file_read_all(const char *path, allocator *alloc);
+int64 file_open_write(const char *path, uint64 offset, uint64 count, void *data);
+int64 file_open_write_create(const char *path, uint64 offset, uint64 count, void *data);
+int64 file_open_read(const char *path, uint64 offset, uint64 count, void *data);
+struct file file_read_all(const char *path, allocator *alloc);
 
 // @Deprecated
 struct file file_read_bin_all(const char *file_name, allocator *alloc);

@@ -1,5 +1,3 @@
-#version 460
-
 #extension GL_GOOGLE_include_directive : require
 
 #define VERT
@@ -12,9 +10,14 @@ layout(location = 26) out vec4 dbg_tang;
 void main() {
 
     vec4 pos = vec4(in_position, 1);
-    mat4 skin = skin_calc();
 
+    #ifdef SKINNED
+    mat4 skin = skin_calc();
     mat4 ws = vs_info.model * skin;
+    #else
+    mat4 ws = vs_info.model * transforms.joints[0];
+    #endif
+
     vec4 world_pos = ws * pos;
     vec4 view_pos = vs_info.view * world_pos;
 

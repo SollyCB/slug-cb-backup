@@ -167,12 +167,17 @@ typedef enum {
 } shader_index;
 
 enum {
-    SHADER_SKINNED_BIT = 0x01,
+    SHADER_SKINNED_BIT      = 0x01,
+    SHADER_VERTEX_BIT       = 0x02,
+    SHADER_FRAGMENT_BIT     = 0x04,
+    SHADER_VERTEX_INPUT_BIT = 0x08,
+    SHADER_NO_INCLUDE_BIT   = 0x10,
 };
 
 extern struct shader_decl {
     uint flags;
-    string uri;
+    string src_uri;
+    string dst_uri;
 } SHADERS[SHADER_COUNT];
 
 struct gpu {
