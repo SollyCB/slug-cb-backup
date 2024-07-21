@@ -15,7 +15,7 @@ void main() {
     mat4 skin = skin_calc();
     mat4 ws = vs_info.model * skin;
     #else
-    mat4 ws = vs_info.model * transforms.joints[0];
+    mat4 ws = vs_info.model * transforms[gl_InstanceIndex].joints[0];
     #endif
 
     vec4 world_pos = ws * pos;

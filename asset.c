@@ -103,6 +103,7 @@ void load_model_tf(struct thread_work_arg *arg)
     }
 
     uint pipeline_count = prim_count + (prim_count * lmi->arg->depth_pass_count);
+    uint pipeline_layout_count = prim_count + 2;
 
     // vulkan handles are typedef'd pointers which makes the linter complain.
     struct model_resources *resources;
@@ -116,7 +117,7 @@ void load_model_tf(struct thread_work_arg *arg)
                           sizeof(*resources->resource_dsls)       * (model->mesh_count + 1) +
                           sizeof(*resources->texture_dsls)        *  model->material_count  +
                           sizeof(*resources->pipelines)           *  pipeline_count         +
-                          sizeof(*resources->pipeline_layouts)    * (prim_count + 1);
+                          sizeof(*resources->pipeline_layouts)    *  pipeline_layout_count;
 
     struct draw_model_info *draw_info;
     uint draw_infos_size = sizeof(*draw_info)                                  * 1                      +
@@ -161,7 +162,7 @@ void load_model_tf(struct thread_work_arg *arg)
         draw_info->bind_buffers[i] = lmi->arg->gpu->mem.bind_buffer.buf;
 
     resources->pipeline_count = pipeline_count;
-    resources->pipeline_layout_count = prim_count + 1;
+    resources->pipeline_layout_count = pipeline_layout_count;
 
     uint ac = 0;
     uint pc = 0;
@@ -1422,6 +1423,9 @@ model_pipelines_transform_descriptors_and_draw_info(
                                                   vi + pc, ia + pc);
             assert(dsl_buf[arg->dsl_count] == resources->resource_dsls[i]);
 
+            // @TODO Pipeline layouts and descriptor set layouts should be
+            // compiled once at initialization. There is fixed descriptor state
+            // that can be referenced.
             VkPipelineLayoutCreateInfo plc = {
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
                 .setLayoutCount = draw_info->primitive_infos[pc].dsl_count,

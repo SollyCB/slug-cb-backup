@@ -78,6 +78,7 @@ static bool resource_dp_allocate_persist(struct gpu *gpu, uint count, VkDescript
 static bool sampler_dp_allocate_persist(struct gpu *gpu, uint count, VkDescriptorSetLayout *layouts, VkDescriptorSet *sets);
 static VkShaderModule create_shader_module(struct gpu *gpu, size_t size, void *data);
 static void compile_shaders(struct gpu *gpu, allocator *temp);
+static void create_layouts(struct gpu *gpu);
 
 void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
     gpu->flags = 0;
@@ -190,6 +191,7 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
     gpu->settings.shadow_maps.height = 4096 / 4;
 
     compile_shaders(gpu, gpu->alloc_temp);
+    create_layouts(gpu);
 }
 
 void shutdown_gpu(struct gpu *gpu) {
@@ -1299,15 +1301,14 @@ static void gpu_init_descriptor_pools(struct gpu *gpu)
     }
 }
 
-static inline int shader_kind(string s)
-{
-    if (!memcmp(s.cstr + s.len - 4, "vert", 4))
-        return shaderc_vertex_shader;
-    else if (!memcmp(s.cstr + s.len - 4, "frag", 4))
-        return shaderc_fragment_shader;
-    else
-        return -1;
-}
+enum {
+    SHADER_SKINNED_BIT      = 0x01,
+    SHADER_VERTEX_BIT       = 0x02,
+    SHADER_FRAGMENT_BIT     = 0x04,
+    SHADER_VERTEX_INPUT_BIT = 0x08,
+    SHADER_NO_INCLUDE_BIT   = 0x10,
+    SHADER_DEPTH_BIT        = 0x20,
+};
 
 struct shader_decl SHADERS[SHADER_COUNT] = {
     {.flags   = SHADER_VERTEX_BIT|SHADER_VERTEX_INPUT_BIT,
@@ -1319,10 +1320,10 @@ struct shader_decl SHADERS[SHADER_COUNT] = {
     {.flags   = SHADER_FRAGMENT_BIT,
      .src_uri = {.cstr = "shaders/manual.frag",             .len = strlen("shaders/manual.frag")},
      .dst_uri = {.cstr = "shaders/manual.frag.spv",         .len = strlen("shaders/manual.frag.spv")}},
-    {.flags   = SHADER_VERTEX_BIT|SHADER_VERTEX_INPUT_BIT,
+    {.flags   = SHADER_VERTEX_BIT|SHADER_VERTEX_INPUT_BIT|SHADER_DEPTH_BIT,
      .src_uri = {.cstr = "shaders/depth.vert",              .len = strlen("shaders/depth.vert")},
      .dst_uri = {.cstr = "shaders/depth.vert.spv",          .len = strlen("shaders/depth.vert.spv")}},
-    {.flags   = SHADER_VERTEX_BIT|SHADER_VERTEX_INPUT_BIT|SHADER_SKINNED_BIT,
+    {.flags   = SHADER_VERTEX_BIT|SHADER_VERTEX_INPUT_BIT|SHADER_SKINNED_BIT|SHADER_DEPTH_BIT,
      .src_uri = {.cstr = "shaders/depth.vert",              .len = strlen("shaders/depth.vert")},
      .dst_uri = {.cstr = "shaders/depth_skinned.vert.spv",  .len = strlen("shaders/depth_skinned.vert.spv")}},
     {.flags   = SHADER_FRAGMENT_BIT|SHADER_NO_INCLUDE_BIT,
@@ -1347,6 +1348,17 @@ struct shader_decl SHADERS[SHADER_COUNT] = {
      .src_uri = {.cstr = "shaders/htp.frag",                .len = strlen("shaders/htp.frag")},
      .dst_uri = {.cstr = "shaders/htp.frag.spv",            .len = strlen("shaders/htp.frag.spv")}},
 };
+
+static inline int shader_kind(string s)
+{
+    if (!memcmp(s.cstr + s.len - 4, "vert", 4))
+        return shaderc_vertex_shader;
+    else if (!memcmp(s.cstr + s.len - 4, "frag", 4))
+        return shaderc_fragment_shader;
+    else
+        return -1;
+}
+
 
 static void compile_shaders(struct gpu *gpu, allocator *temp)
 {
@@ -1402,6 +1414,8 @@ static void compile_shaders(struct gpu *gpu, allocator *temp)
                 shaderc_compile_options_add_macro_definition(o, "VERTEX_INPUT", strlen("VERTEX_INPUT"), "", 0);
             if (SHADERS[i].flags & SHADER_FRAGMENT_BIT)
                 shaderc_compile_options_add_macro_definition(o, "FRAG", strlen("FRAG"), "", 0);
+            if (SHADERS[i].flags & SHADER_DEPTH_BIT)
+                shaderc_compile_options_add_macro_definition(o, "DEPTH", strlen("DEPTH"), "", 0);
 
             uint src_sz;
             if (SHADERS[i].flags & SHADER_NO_INCLUDE_BIT) {
@@ -1440,6 +1454,123 @@ static void compile_shaders(struct gpu *gpu, allocator *temp)
     allocator_reset_linear_to(temp, used);
     shaderc_result_release(r);
     shaderc_compiler_release(c);
+}
+
+struct pll_decl PLLS[PLL_COUNT] = {
+    { // PLL_COLOR,
+        .dsls = { // vertex info
+            {   .count = 1,
+                .bindings = {
+                    {.binding = 0,
+                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                     .descriptorCount = 1,
+                     .stageFlags = VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT}},
+            }, { // shadow maps
+                .count = 1,
+                .bindings = {
+                    {.binding = 0,
+                     .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                     .descriptorCount = 1,
+                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT}},
+            }, { // transforms
+                .count = 1,
+                .bindings = {
+                    {.binding = 0,
+                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                     .descriptorCount = 1,
+                     .stageFlags = VK_SHADER_STAGE_VERTEX_BIT}},
+            }, { // material ubo
+                .count = 1,
+                .bindings = {
+                    {.binding = 0,
+                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                     .descriptorCount = 1,
+                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT}},
+            }, { // material textures
+                .count = 1,
+                .bindings = {
+                    {.binding = 0,
+                     .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                     .descriptorCount = GLTF_MATERIAL_MAX_TEXTURE_COUNT,
+                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT}},
+            }
+        },
+        .dsl_count = 5,
+    }, { // PLL_DEPTH,
+        .dsls = { // vertex info
+            {   .count = 1,
+                .bindings = {
+                    .binding = 0,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT},
+            }, { // transforms
+                .count = 1,
+                .bindings = {
+                    {.binding = 0,
+                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                     .descriptorCount = 1,
+                     .stageFlags = VK_SHADER_STAGE_VERTEX_BIT}},
+            },
+        },
+        .pcrs = {
+            {.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+             .offset = 0,
+             .size = SPLIT_SHADOW_MVP ? 3 * sizeof(matrix) : sizeof(matrix)},
+        },
+        .dsl_count = 2,
+        .pcr_count = 1,
+    }, { // PLL_FLOOR,
+        .dsls = { // vertex info
+            {   .count = 1,
+                .bindings = {
+                    {.binding = 0,
+                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                     .descriptorCount = 1,
+                     .stageFlags = VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT},
+                },
+            }, { // shadow maps
+                .count = 1,
+                .bindings = {
+                    {.binding = 0,
+                     .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                     .descriptorCount = 1,
+                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT}}
+            },
+        },
+        .dsl_count = 2,
+    }, { // PLL_BOX,
+        .pcrs = {
+            {.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+             .offset = 0,
+             .size = sizeof(matrix) + sizeof(vector)},
+        },
+        .pcr_count = 1,
+    }, { // PLL_HTP,
+        .dsls = { // vertex info
+            {   .count = 1,
+                .bindings = {
+                    {.binding = 0,
+                     .descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+                     .descriptorCount = 1,
+                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT}},
+            }
+        },
+        .pcrs = {
+            {.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+             .offset = 0,
+             .size = sizeof(vector)},
+        },
+        .dsl_count = 1,
+        .pcr_count = 1,
+    },
+};
+
+static void create_layouts(struct gpu *gpu)
+{
+    for(uint i=0; i < PLL_COUNT; ++i) {
+        gpu->layouts[i].pll // @CurrentTask
+    }
 }
 
 static VkShaderModule create_shader_module(struct gpu *gpu, size_t size, void *data)

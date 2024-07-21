@@ -5,15 +5,18 @@
 #include "defs.h"
 #include "shader.h.glsl"
 
+#define SHADER_MATERIAL_UBO_SIZE sizeof(Material_Uniforms)
+
+#define SHADER_MAX_DESCRIPTOR_SET_COUNT 5
+#define SHADER_MAX_DESCRIPTOR_SET_COUNT_OUTSIDE_MODEL_SCOPE 2
+#define SHADER_MAX_DESCRIPTOR_SET_BINDING_COUNT 1 // current max used bindings in a set
+#define SHADER_MAX_PUSH_CONSTANT_RANGE_COUNT 2
+
 // I need to think about what I want to do with the below and with shader.c
+// I am fairly certain that everything below this point is currently unused.
 /*--------------------------------------------------------------------------------*/
 
 #define RECREATE_SHADER_DIR 1
-
-// @Todo Soon I am going to want the ability to do shadow passes, for which I will
-// need more shader types. I think should be implemented through extra flags in
-// in the config stating if depth pass shaders should also be generated. Shader sets
-// should then also include these other shader types.
 
 typedef enum {
     DESCRIPTOR_SET_ORDER_VS_INFO,
@@ -22,17 +25,6 @@ typedef enum {
     DESCRIPTOR_SET_ORDER_MATERIAL_UBO,
     DESCRIPTOR_SET_ORDER_MATERIAL_TEXTURES,
 } descriptor_set_order;
-
-#define SHADER_MATERIAL_UBO_SIZE sizeof(Material_Uniforms)
-
-// @Hardware I can manage with set count 4 easily, but it would be more expensive:
-// Transforms_Ubo and Material_Ubo can exist in the same set, but then the Transforms_Ubo
-// descriptors must have per primitive copies, as opposed to per mesh, as Material_Ubo is
-// a per primitive structure. Apparently the cap for my machine is 32 sets, so I guess I
-// should not worry. I just remember that on certain devices (I am very sure that these were
-// mobile devices) had limits as low as 4.
-#define SHADER_MAX_DESCRIPTOR_SET_COUNT 5
-#define SHADER_MAX_DESCRIPTOR_SET_COUNT_OUTSIDE_MODEL_SCOPE 2
 
 #define SHADER_TRANSFORMS_UBO_SET_INDEX 2
 #define SHADER_TRANSFORMS_UBO_BINDING_INDEX 0

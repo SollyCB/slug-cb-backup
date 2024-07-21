@@ -273,8 +273,11 @@ void parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_con
         for(uint j=0; j < g->scenes[i].node_count; ++j)
             gltf_count_mesh_instances(g->nodes, g->scenes[i].nodes[j],
                                       instance_counts, &skin_mask);
-    for(uint i=0; i < g->mesh_count; ++i)
+    for(uint i=0; i < g->mesh_count; ++i) {
         g->meshes[i].max_instance_count = instance_counts[i];
+        log_print_error_if(instance_counts[i] > SHADER_MAX_MESH_INSTANCE_COUNT,
+                "mesh max instance count too large for model %s, mesh %u", file_name, i);
+    }
 #endif
 
     if (!eac)

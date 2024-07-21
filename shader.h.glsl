@@ -11,6 +11,7 @@
 #define JOINT_COUNT 19
 #define MORPH_WEIGHT_COUNT 1
 #define SPLIT_SHADOW_MVP 0
+#define SHADER_MAX_MESH_INSTANCE_COUNT 2
 
 #ifdef GL_core_profile
 #extension GL_EXT_nonuniform_qualifier : require
@@ -130,7 +131,11 @@ layout(set = 0, binding = 0) uniform UBO_Vertex_Info { Vertex_Info vs_info; };
 #ifdef VERT // vertex shader only
 
 #ifdef VERTEX_INPUT
-    layout(set = 2, binding = 0) uniform UBO_Transforms { Vertex_Transforms transforms; };
+    #ifdef DEPTH
+    layout(set = 1, binding = 0) uniform UBO_Transforms { Vertex_Transforms transforms[SHADER_MAX_MESH_INSTANCE_COUNT]; };
+    #else
+    layout(set = 2, binding = 0) uniform UBO_Transforms { Vertex_Transforms transforms[SHADER_MAX_MESH_INSTANCE_COUNT]; };
+    #endif
 
     #ifdef SKINNED
     layout(location = 0) in vec3  in_position;
@@ -141,10 +146,10 @@ layout(set = 0, binding = 0) uniform UBO_Vertex_Info { Vertex_Info vs_info; };
     layout(location = 5) in vec2  in_texcoord;
 
     mat4 skin_calc() {
-       return in_weights.x * transforms.joints[in_joints.x] +
-              in_weights.y * transforms.joints[in_joints.y] +
-              in_weights.z * transforms.joints[in_joints.z] +
-              in_weights.w * transforms.joints[in_joints.w];
+       return in_weights.x * transforms[gl_InstanceIndex].joints[in_joints.x] +
+              in_weights.y * transforms[gl_InstanceIndex].joints[in_joints.y] +
+              in_weights.z * transforms[gl_InstanceIndex].joints[in_joints.z] +
+              in_weights.w * transforms[gl_InstanceIndex].joints[in_joints.w];
     }
     #else
     layout(location = 0) in vec3 in_position;

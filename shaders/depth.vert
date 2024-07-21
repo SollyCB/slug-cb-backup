@@ -19,13 +19,13 @@ void main() {
         #ifdef SKINNED
         gl_Position = p * v * m * skin_calc() * pos;
         #else
-        gl_Position = p * v * m * transforms.joints[0] * pos;
+        gl_Position = p * v * m * transforms[gl_InstanceIndex].joints[0] * pos;
         #endif
     #else
         #ifdef SKINNED
         gl_Position = mvp * skin_calc() * pos;
         #else
-        gl_Position = mvp * transforms.joints[0] * pos;
+        gl_Position = mvp * transforms[gl_InstanceIndex].joints[0] * pos;
         #endif
     #endif
 }

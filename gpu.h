@@ -166,19 +166,32 @@ typedef enum {
     SHADER_COUNT,
 } shader_index;
 
-enum {
-    SHADER_SKINNED_BIT      = 0x01,
-    SHADER_VERTEX_BIT       = 0x02,
-    SHADER_FRAGMENT_BIT     = 0x04,
-    SHADER_VERTEX_INPUT_BIT = 0x08,
-    SHADER_NO_INCLUDE_BIT   = 0x10,
-};
-
 extern struct shader_decl {
     uint flags;
     string src_uri;
     string dst_uri;
 } SHADERS[SHADER_COUNT];
+
+typedef enum {
+    PLL_COLOR,
+    PLL_DEPTH,
+    PLL_FLOOR,
+    PLL_BOX,
+    PLL_HTP,
+    PLL_COUNT,
+} pll_index;
+
+struct dsl_info {
+    uint count;
+    VkDescriptorSetLayoutBinding bindings[SHADER_MAX_DESCRIPTOR_SET_BINDING_COUNT];
+};
+
+extern struct pll_decl {
+    uint dsl_count;
+    uint pcr_count;
+    struct dsl_info dsls[SHADER_MAX_DESCRIPTOR_SET_COUNT];
+    VkPushConstantRange pcrs[SHADER_MAX_PUSH_CONSTANT_RANGE_COUNT];
+} PLLS[PLL_COUNT];
 
 struct gpu {
     struct gpu_defaults defaults;
@@ -215,6 +228,11 @@ struct gpu {
     uint sampler_count;
 
     VkShaderModule shaders[SHADER_COUNT]; // accessed via shader_index enum
+
+    struct {
+        VkDescriptorSetLayout dsls[SHADER_MAX_DESCRIPTOR_SET_COUNT];
+        VkPipelineLayout pll;
+    } layouts[PLL_COUNT]; // accessed via pll_index enum
 
     #if NO_DESCRIPTOR_BUFFER
     VkDescriptorPool resource_dp[THREAD_COUNT + 1]; // +1 for main thread
