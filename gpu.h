@@ -193,6 +193,23 @@ extern struct pll_decl {
     VkPushConstantRange pcrs[SHADER_MAX_PUSH_CONSTANT_RANGE_COUNT];
 } PLLS[PLL_COUNT];
 
+enum {
+    ASSET_DSL_COLOR_VS_INFO,
+    ASSET_DSL_COLOR_SHADOW_MAPS,
+    ASSET_DSL_COLOR_TRANSFORMS,
+    ASSET_DSL_COLOR_MATERIAL_UNIFORMS,
+    ASSET_DSL_COLOR_MATERIAL_TEXTURES,
+};
+
+enum {
+    ASSET_DSL_DEPTH_VS_INFO,
+    ASSET_DSL_DEPTH_TRANSFORMS,
+};
+
+enum {
+    HTP_DSL_INPUT_ATTACHMENT,
+};
+
 struct gpu {
     struct gpu_defaults defaults;
 

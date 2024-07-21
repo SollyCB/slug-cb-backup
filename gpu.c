@@ -1084,31 +1084,17 @@ static void gpu_reset_viewport_and_scissor_to_window_extent(struct gpu *gpu)
 // @Todo This only works for UMA and DESCRIPTOR_BUFFER_HOST_VISIBLE
 Vertex_Info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vertex_info_descriptor *ret)
 {
-    VkDescriptorSetLayoutBinding binding = {
-        .binding = 0,
-        .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,
-    };
-    VkDescriptorSetLayoutCreateInfo ci = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .flags = DESCRIPTOR_BUFFER ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT : 0,
-        .bindingCount = 1,
-        .pBindings = &binding,
-    };
-    VkResult check = vk_create_descriptor_set_layout(gpu->device, &ci, GAC, &ret->dsl);
-    DEBUG_VK_OBJ_CREATION(vkCreateDescriptorSetLayout, check);
-
     size_t used;
 
     ret->bb_offset = gpu_buffer_allocate(gpu, &gpu->mem.bind_buffer, sizeof(Vertex_Info));
 
     #if NO_DESCRIPTOR_BUFFER
     {
-        if (!resource_dp_allocate_persist(gpu, 1, &ret->dsl, &ret->d_set)) {
+        if (!resource_dp_allocate_persist(gpu, 1, &gpu->layouts[PLL_COLOR].dsls[ASSET_DSL_COLOR_VS_INFO], &ret->d_set)) {
             log_print_error("unable to allocate resource descriptors for vs_info");
             return NULL;
         }
+        ret->dsl = gpu->layouts[PLL_COLOR].dsls[ASSET_DSL_COLOR_VS_INFO];
 
         VkDescriptorBufferInfo dbi;
         dbi.buffer = gpu->mem.bind_buffer.buf;
@@ -1473,7 +1459,7 @@ struct pll_decl PLLS[PLL_COUNT] = {
                 .bindings = {
                     {.binding = 0,
                      .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                     .descriptorCount = 1,
+                     .descriptorCount = DIR_LIGHT_COUNT * CSM_COUNT,
                      .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT}},
             }, { // transforms
                 .count = 1,
@@ -2188,27 +2174,12 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
         img_sz += mr[i].size + mr[i].alignment;
     }
 
+    maps->dsl = gpu->layouts[PLL_COLOR].dsls[ASSET_DSL_COLOR_SHADOW_MAPS];
+
     size_t dsl_sz = 0;
     {
-        VkDescriptorSetLayoutBinding b = {
-            .binding = 0,
-            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount = DIR_LIGHT_COUNT * CSM_COUNT,
-            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-        };
-
-        VkDescriptorSetLayoutCreateInfo ci = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .flags = DESCRIPTOR_BUFFER ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT : 0,
-            .bindingCount = 1,
-            .pBindings = &b,
-        };
-
-        VkResult check = vk_create_descriptor_set_layout(gpu->device, &ci, GAC, &maps->dsl);
-        DEBUG_VK_OBJ_CREATION(vkCreateDescriptorSetLayout, check);
-
         #if DESCRIPTOR_BUFFER
-        vk_get_descriptor_set_layout_size_ext(gpu->device, maps->dsl, &dsl_sz);
+        vk_get_descriptor_set_layout_size_ext(gpu->device, gpu->layouts[PLL_COLOR].dsls[ASSET_DSL_COLOR_SHADOW_MAPS], &dsl_sz);
         dsl_sz = align(dsl_sz, gpu->descriptors.props.descriptorBufferOffsetAlignment);
         #endif
     }
@@ -2220,10 +2191,8 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
     }
 
     #if NO_DESCRIPTOR_BUFFER
-    {
-        if (!sampler_dp_allocate(gpu, 0, 1, &maps->dsl, &maps->d_set))
-            return false;
-    }
+    if (!sampler_dp_allocate(gpu, 0, 1, &maps->dsl, &maps->d_set))
+        return false;
     #else
     maps->db_offset = gpu_buffer_allocate(gpu, &gpu->mem.descriptor_buffer_sampler,
                                           dsl_sz + gpu->descriptors.props.descriptorBufferOffsetAlignment);
@@ -2364,7 +2333,6 @@ void free_shadow_maps(struct gpu *gpu, struct shadow_maps *maps)
         vk_destroy_image_view(gpu->device, maps->views[i], GAC);
 
     vk_destroy_sampler(gpu->device, maps->sampler, GAC);
-    vk_destroy_descriptor_set_layout(gpu->device, maps->dsl, GAC);
     deallocate(gpu->alloc_heap, maps->images); // @Optimise This should eventually happen on a thread.
 }
 
@@ -2612,7 +2580,7 @@ void create_shadow_renderpass(struct gpu *gpu, struct shadow_maps *shadow_maps, 
     ds =  (VkSubpassDescription*)(ar + shadow_maps->count * CSM_COUNT);
     dp =   (VkSubpassDependency*)(ds + shadow_maps->count * CSM_COUNT);
 
-    for(uint i=0; i < shadow_maps->count * CSM_COUNT; ++i) { // @TODO I think I only need one attachment description
+    for(uint i=0; i < shadow_maps->count * CSM_COUNT; ++i) { // @Todo I think I only need one attachment description
         ad[i] = (VkAttachmentDescription) {
             .format         = GPU_SHADOW_ATTACHMENT_FORMAT,
             .samples        = VK_SAMPLE_COUNT_1_BIT,
@@ -2856,21 +2824,8 @@ bool htp_allocate_resources(
     memset(rsc, 0, sizeof(*rsc));
     VkResult check;
     {
-        // @TODO @CurrentTask I think that this is the last descriptor stuff...
-        VkDescriptorSetLayoutBinding b = {
-            .binding = 0,
-            .descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-        };
-        VkDescriptorSetLayoutCreateInfo ci = {
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .flags = DESCRIPTOR_BUFFER ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT : 0,
-            .bindingCount = 1,
-            .pBindings = &b,
-        };
-        check = vk_create_descriptor_set_layout(gpu->device, &ci, GAC, &rsc->dsl);
-        DEBUG_VK_OBJ_CREATION(vkCreateDescriptorSetLayout, check);
+        rsc->dsl = gpu->layouts[PLL_HTP].dsls[HTP_DSL_INPUT_ATTACHMENT];
+        rsc->pipeline_layout = gpu->layouts[PLL_HTP].pll;
 
         #if DESCRIPTOR_BUFFER
         size_t dsl_sz;
@@ -2987,22 +2942,7 @@ bool htp_allocate_resources(
         }
         #endif
     }
-    {
-        VkPushConstantRange pc = {
-            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-            .offset = 0,
-            .size = 16,
-        };
-        VkPipelineLayoutCreateInfo ci = {
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-            .setLayoutCount = 1,
-            .pSetLayouts = &rsc->dsl,
-            .pushConstantRangeCount = 1,
-            .pPushConstantRanges = &pc,
-        };
-        check = vk_create_pipeline_layout(gpu->device, &ci, GAC, &rsc->pipeline_layout);
-        DEBUG_VK_OBJ_CREATION(vkCreatePipelineLayout, check);
-    }
+
     {
         struct file f;
         VkShaderModuleCreateInfo ci = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
@@ -3117,10 +3057,6 @@ void htp_free_resources(struct gpu *gpu, struct htp_rsc *rsc)
         if (rsc->shader_modules[i])
             vk_destroy_shader_module(gpu->device, rsc->shader_modules[i], GAC);
     #endif
-    if (rsc->dsl)
-        vk_destroy_descriptor_set_layout(gpu->device, rsc->dsl, GAC);
-    if (rsc->pipeline_layout)
-        vk_destroy_pipeline_layout(gpu->device, rsc->pipeline_layout, GAC);
     if (rsc->pipeline)
         vk_destroy_pipeline(gpu->device, rsc->pipeline, GAC);
 }
@@ -3229,7 +3165,7 @@ void draw_box(VkCommandBuffer cmd, struct gpu *gpu, struct box *box, bool wirefr
         vector c;
     } pc;
 
-    VkPipelineLayout layout;
+    #if 0 // @RemoveMe Compile pipeline layouts at startup
     {
         VkPushConstantRange pcr = {
             .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
@@ -3248,6 +3184,7 @@ void draw_box(VkCommandBuffer cmd, struct gpu *gpu, struct box *box, bool wirefr
 
         rsc->layout = layout;
     }
+    #endif
 
     VkPipeline pl;
     {
@@ -3264,7 +3201,7 @@ void draw_box(VkCommandBuffer cmd, struct gpu *gpu, struct box *box, bool wirefr
             .pDepthStencilState = &ds,
             .pColorBlendState = &cb,
             .pDynamicState = &dn,
-            .layout = layout,
+            .layout = gpu->layouts[PLL_BOX].pll,
             .renderPass = rp,
             .subpass = subpass,
         };
@@ -3298,7 +3235,7 @@ void draw_box(VkCommandBuffer cmd, struct gpu *gpu, struct box *box, bool wirefr
     pc.m = *space;
     pc.c =  color;
 
-    vk_cmd_push_constants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+    vk_cmd_push_constants(cmd, gpu->layouts[PLL_BOX].pll, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
 
     vk_cmd_bind_index_buffer(cmd, gpu->mem.bind_buffer.buf, index_offset, VK_INDEX_TYPE_UINT32);
 
@@ -3309,12 +3246,7 @@ void draw_box(VkCommandBuffer cmd, struct gpu *gpu, struct box *box, bool wirefr
 
 void draw_box_cleanup(struct gpu *gpu, struct draw_box_rsc *rsc)
 {
-    #if 0 // @RemoveMe Shaders now stored on gpu.
-    for(uint i=0; i < carrlen(rsc->modules); ++i)
-        vk_destroy_shader_module(gpu->device, rsc->modules[i], GAC);
-    #endif
     vk_destroy_pipeline(gpu->device, rsc->pipeline, GAC);
-    vk_destroy_pipeline_layout(gpu->device, rsc->layout, GAC);
 }
 
 #define GIANT_DRAW_FLOOR_PIPELINE_MACRO \
@@ -3381,20 +3313,6 @@ void draw_box_cleanup(struct gpu *gpu, struct draw_box_rsc *rsc)
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO, \
     }; \
  \
-    VkPipelineLayout layout; \
-    { \
-        VkPipelineLayoutCreateInfo ci = { \
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, \
-            .setLayoutCount = 2, \
-            .pSetLayouts = dsls, \
-        }; \
- \
-        VkResult check = vk_create_pipeline_layout(gpu->device, &ci, GAC, &layout); \
-        DEBUG_VK_OBJ_CREATION(vkCreatePipelineLayout, check); \
- \
-        rsc->layout = layout; \
-    } \
- \
     VkPipeline pl; \
     { \
         VkGraphicsPipelineCreateInfo ci = { \
@@ -3410,7 +3328,7 @@ void draw_box_cleanup(struct gpu *gpu, struct draw_box_rsc *rsc)
             .pDepthStencilState = &ds, \
             .pColorBlendState = &cb, \
             .pDynamicState = &dn, \
-            .layout = layout, \
+            .layout = gpu->layouts[PLL_FLOOR].pll, \
             .renderPass = rp, \
             .subpass = subpass, \
         }; \
@@ -3430,7 +3348,7 @@ void draw_floor(VkCommandBuffer cmd, struct gpu *gpu, VkRenderPass rp, uint subp
     vk_cmd_bind_pipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pl);
     vk_cmd_bind_descriptor_sets(cmd,
             VK_PIPELINE_BIND_POINT_GRAPHICS,
-            layout,
+            gpu->layouts[PLL_FLOOR].pll,
             0,
             count,
             sets,
@@ -3455,10 +3373,4 @@ void draw_floor(VkCommandBuffer cmd, struct gpu *gpu, VkRenderPass rp, uint subp
 void draw_floor_cleanup(struct gpu *gpu, struct draw_floor_rsc *rsc)
 {
     vk_destroy_pipeline(gpu->device, rsc->pipeline, GAC);
-    vk_destroy_pipeline_layout(gpu->device, rsc->layout, GAC);
-
-    #if 0 // @RemoveMe Shaders now stored on gpu.
-    for(uint i=0; i < carrlen(rsc->modules); ++i)
-        vk_destroy_shader_module(gpu->device, rsc->modules[i], GAC);
-    #endif
 }
