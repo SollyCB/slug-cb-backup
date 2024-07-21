@@ -2,12 +2,12 @@
 #define SOL_GLTF_H_INCLUDE_GUARD_
 
 #include "sol_vulkan.h"
+#include "image.h"
 #include "defs.h"
 #include "file.h"
 #include "math.h"
 #include "test.h"
 #include "string.h"
-#include "image.h"
 
 #include "gltf_limits.h"
 

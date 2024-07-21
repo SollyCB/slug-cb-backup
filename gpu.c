@@ -1391,11 +1391,14 @@ static void compile_shaders(struct gpu *gpu, allocator *temp)
 
     for(uint i=0; i < SHADER_COUNT; ++i) {
         if (file_exists(SHADERS[i].dst_uri.cstr) &&
-            ts_before(file_last_modified(SHADERS[i].dst_uri.cstr), file_last_modified(SHADERS[i].src_uri.cstr)))
+            ts_after(file_last_modified(SHADERS[i].dst_uri.cstr),
+                      file_last_modified(SHADERS[i].src_uri.cstr)))
         {
             struct file f = file_read_all(SHADERS[i].dst_uri.cstr, temp);
             gpu->shaders[i] = create_shader_module(gpu, f.size, f.data);
         } else {
+            println("Recompiling shader %s", SHADERS[i].src_uri.cstr);
+
             int fd = file_open(SHADERS[i].src_uri.cstr, READ);
             uint sz = file_size_fd(fd); assert(sz + incl_sz < allocation_size && "increase allocation_size");
             file_read(fd, 0, sz, src + incl_sz);
@@ -1491,7 +1494,7 @@ struct pll_decl PLLS[PLL_COUNT] = {
                 .bindings = {
                     {.binding = 0,
                      .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                     .descriptorCount = GLTF_MATERIAL_MAX_TEXTURE_COUNT,
+                     .descriptorCount = GLTF_MAX_MATERIAL_TEXTURE_COUNT,
                      .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT}},
             }
         },
@@ -1500,10 +1503,10 @@ struct pll_decl PLLS[PLL_COUNT] = {
         .dsls = { // vertex info
             {   .count = 1,
                 .bindings = {
-                    .binding = 0,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                    .descriptorCount = 1,
-                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT},
+                    {.binding = 0,
+                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                     .descriptorCount = 1,
+                     .stageFlags = VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT}},
             }, { // transforms
                 .count = 1,
                 .bindings = {
@@ -1569,7 +1572,22 @@ struct pll_decl PLLS[PLL_COUNT] = {
 static void create_layouts(struct gpu *gpu)
 {
     for(uint i=0; i < PLL_COUNT; ++i) {
-        gpu->layouts[i].pll // @CurrentTask
+        for(uint j=0; j < PLLS[i].dsl_count; ++j) {
+            VkDescriptorSetLayoutCreateInfo ci = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+            ci.bindingCount = PLLS[i].dsls[j].count;
+            ci.pBindings = PLLS[i].dsls[j].bindings;
+
+            VkResult check = vk_create_descriptor_set_layout(gpu->device, &ci, GAC, &gpu->layouts[i].dsls[j]);
+            DEBUG_VK_OBJ_CREATION(vkCreateDescriptorSetLayout, check);
+        }
+        VkPipelineLayoutCreateInfo ci = {VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+        ci.setLayoutCount = PLLS[i].dsl_count;
+        ci.pushConstantRangeCount = PLLS[i].pcr_count;
+        ci.pSetLayouts = gpu->layouts[i].dsls;
+        ci.pPushConstantRanges = PLLS[i].pcrs;
+
+        VkResult check = vk_create_pipeline_layout(gpu->device, &ci, GAC, &gpu->layouts[i].pll);
+        DEBUG_VK_OBJ_CREATION(vkCreatePipelineLayout, check);
     }
 }
 

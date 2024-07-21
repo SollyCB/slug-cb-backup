@@ -230,7 +230,7 @@ struct gpu {
     VkShaderModule shaders[SHADER_COUNT]; // accessed via shader_index enum
 
     struct {
-        VkDescriptorSetLayout dsls[SHADER_MAX_DESCRIPTOR_SET_COUNT];
+        VkDescriptorSetLayout dsls[SHADER_MAX_DESCRIPTOR_SET_COUNT]; // @Note I do not think that I need these if not using descriptor buffers
         VkPipelineLayout pll;
     } layouts[PLL_COUNT]; // accessed via pll_index enum
 

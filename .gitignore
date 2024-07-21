@@ -6,3 +6,4 @@ pl-caches/
 models/
 shaders/dir_info.bin
 jkl
+*.autosave

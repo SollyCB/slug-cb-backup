@@ -180,8 +180,8 @@ static inline bool before(uint64_t a, uint64_t b) {
     return ((int64)b - (int64)a) > 0;
 }
 
-// is x before y
-static inline bool ts_before(struct timespec x, struct timespec y)
+// is x after y
+static inline bool ts_after(struct timespec x, struct timespec y)
 {
     return x.tv_sec > y.tv_sec || (x.tv_sec == y.tv_sec && x.tv_nsec > y.tv_nsec);
 }

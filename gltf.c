@@ -3,6 +3,7 @@
 #include "log.h"
 #include "shader.h"
 #include "timer.h"
+#include "defs.h"
 
 #define PROCESSED_GLTF_FILE_EXTENSION ".sol"
 
@@ -30,8 +31,22 @@ void load_gltf(const char *file_name, struct shader_dir *dir, struct shader_conf
     memcpy(buf, file_name, len);
     memcpy(buf + len, PROCESSED_GLTF_FILE_EXTENSION, 5);
 
-    if (!file_exists(buf)) {
-        println("loading model file %s for the first time, parsing gltf", file_name);
+    // @Tidy I dont like statics in functions but I cannot think of a
+    // significantly cleaner way other than passing in some arg.
+    static int gltf_source_changed = -1;
+    static bool gltf_source_changed_msg = false;
+
+    if (gltf_source_changed == -1)
+        gltf_source_changed = ts_after(file_last_modified("gltf.c"), file_last_modified("exe"));
+
+    if (gltf_source_changed && !gltf_source_changed_msg) {
+        println("gltf.c has changed, parsing files again...");
+        gltf_source_changed_msg = true;
+    }
+
+    if (gltf_source_changed || !file_exists(buf)) {
+        if (!file_exists(buf))
+            println("loading model file %s for the first time, parsing gltf", file_name);
         parse_gltf(file_name, dir, conf, temp, persistent, g);
         store_gltf(g, file_name, temp); // to create file_name.gltf.sol
         return;
@@ -1484,17 +1499,24 @@ static inline gltf_mesh_primitive_topology gltf_mesh_primitive_translate_mode(ui
 
 const int ATTR_KEY_LENS[] = {
     GLTF_MESH_PRIMITIVE_ATTRIBUTE_KEY_LEN_POSITION,
+    GLTF_MESH_PRIMITIVE_ATTRIBUTE_KEY_LEN_JOINTS,
+    GLTF_MESH_PRIMITIVE_ATTRIBUTE_KEY_LEN_WEIGHTS,
     GLTF_MESH_PRIMITIVE_ATTRIBUTE_KEY_LEN_NORMAL,
     GLTF_MESH_PRIMITIVE_ATTRIBUTE_KEY_LEN_TANGENT,
     GLTF_MESH_PRIMITIVE_ATTRIBUTE_KEY_LEN_TEXCOORD,
     GLTF_MESH_PRIMITIVE_ATTRIBUTE_KEY_LEN_COLOR,
-    GLTF_MESH_PRIMITIVE_ATTRIBUTE_KEY_LEN_JOINTS,
-    GLTF_MESH_PRIMITIVE_ATTRIBUTE_KEY_LEN_WEIGHTS,
 };
+
+static inline bool gltf_single_attr(uint i)
+{
+    return i == GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_POSITION ||
+           i == GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_NORMAL ||
+           i == GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_TANGENT;
+}
 
 static uint gltf_mesh_parse_primitive_attributes(json_object *j_attribs, struct gltf_extra_attrs *extra_attrs, gltf_mesh_primitive_attribute *attribs)
 {
-    assert(j_attribs->key_count < 32); // @Tidy I think this assert is doing nothing.
+    assert(j_attribs->key_count < 32);
     uint attr_m[7];
     memset(attr_m,0,sizeof(attr_m));
     uint i;
@@ -1532,9 +1554,9 @@ static uint gltf_mesh_parse_primitive_attributes(json_object *j_attribs, struct 
             tz = ctz(attr_m[i]);
             attr_m[i] &= ~(1<<tz);
 
-            idx = ((j_attribs->keys[tz].cstr[ATTR_KEY_LENS[i]+1] - '0') & max_if(i > 2)) + cnt;
+            idx = ((j_attribs->keys[tz].cstr[ATTR_KEY_LENS[i]+1] - '0') & max_if(!gltf_single_attr(i))) + cnt;
             attribs[idx].type = i;
-            attribs[idx].n = (j_attribs->keys[tz].cstr[ATTR_KEY_LENS[i]+1] - '0') | max_if(i < 3);
+            attribs[idx].n = (j_attribs->keys[tz].cstr[ATTR_KEY_LENS[i]+1] - '0') | max_if(gltf_single_attr(i));
             attribs[idx].accessor = j_attribs->values[tz].num;
 
             // sections in shader.c rely on this assert
