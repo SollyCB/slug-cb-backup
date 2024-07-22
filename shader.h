@@ -7,10 +7,17 @@
 
 #define SHADER_MATERIAL_UBO_SIZE sizeof(Material_Uniforms)
 
-#define SHADER_MAX_DESCRIPTOR_SET_COUNT 5
+#define SHADER_MAX_DESCRIPTOR_SET_COUNT_COLOR 5
+#define SHADER_MAX_DESCRIPTOR_SET_COUNT_DEPTH 1
 #define SHADER_MAX_DESCRIPTOR_SET_COUNT_OUTSIDE_MODEL_SCOPE 2
 #define SHADER_MAX_DESCRIPTOR_SET_BINDING_COUNT 1 // current max used bindings in a set
 #define SHADER_MAX_PUSH_CONSTANT_RANGE_COUNT 2
+
+#if SHADER_MAX_DESCRIPTOR_SET_COUNT_COLOR > SHADER_MAX_DESCRIPTOR_SET_COUNT_DEPTH
+    #define SHADER_MAX_DESCRIPTOR_SET_COUNT SHADER_MAX_DESCRIPTOR_SET_COUNT_COLOR
+#else
+    #define SHADER_MAX_DESCRIPTOR_SET_COUNT SHADER_MAX_DESCRIPTOR_SET_COUNT_DEPTH
+#endif
 
 // I need to think about what I want to do with the below and with shader.c
 // I am fairly certain that everything below this point is currently unused.

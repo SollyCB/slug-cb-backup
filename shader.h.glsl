@@ -7,7 +7,7 @@
 
 #define DIR_LIGHT_COUNT 1
 #define CSM_COUNT 4
-#define CSM_BLEND_BAND (25/2)
+#define CSM_BLEND_BAND (2)
 #define JOINT_COUNT 19
 #define MORPH_WEIGHT_COUNT 1
 #define SPLIT_SHADOW_MVP 0
@@ -131,8 +131,12 @@ layout(set = 0, binding = 0) uniform UBO_Vertex_Info { Vertex_Info vs_info; };
 #ifdef VERT // vertex shader only
 
 #ifdef VERTEX_INPUT
+    // @Note @TODO I think that I am creating descriptors for an
+    // array of uniform buffers as I was not previously making the
+    // member arrayed. So think that if the mesh instance count is
+    // > 1 then this will break.
     #ifdef DEPTH
-    layout(set = 1, binding = 0) uniform UBO_Transforms { Vertex_Transforms transforms[SHADER_MAX_MESH_INSTANCE_COUNT]; };
+    layout(set = 0, binding = 0) uniform UBO_Transforms { Vertex_Transforms transforms[SHADER_MAX_MESH_INSTANCE_COUNT]; };
     #else
     layout(set = 2, binding = 0) uniform UBO_Transforms { Vertex_Transforms transforms[SHADER_MAX_MESH_INSTANCE_COUNT]; };
     #endif

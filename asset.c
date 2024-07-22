@@ -124,7 +124,6 @@ void load_model_tf(struct thread_work_arg *arg)
     resources->pipelines           =            (VkPipeline*)(resources->samplers  + model->sampler_count);
 
     draw_info->pipelines = resources->pipelines;
-    draw_info->pipeline_layouts = NULL; // @TODO
 
     draw_info->mesh_instance_counts  =                             (uint*)(draw_info                        + 1);
     draw_info->mesh_primitive_counts =                                     draw_info->mesh_instance_counts  + model->mesh_count;
@@ -141,11 +140,20 @@ void load_model_tf(struct thread_work_arg *arg)
     for(uint i=0; i < model->mesh_count; ++i)
         for(uint j=0; j < model->meshes[i].primitive_count; ++j) {
             cnt = model->meshes[i].primitives[j].attribute_count;
+
+            uint joint_attr_count = 0;
+            for(uint k=GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_JOINTS;
+                model->meshes[i].primitives[j].attributes[k].type == GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_JOINTS;
+                ++k)
+                joint_attr_count++;
+
             for(uint k=0; k < model->meshes[i].primitives[j].target_count; ++k)
                 cnt += model->meshes[i].primitives[j].morph_targets[k].attribute_count;
 
-            draw_info->primitive_infos[pc].vertex_offset_count = cnt;
+            draw_info->primitive_infos[pc].vertex_offset_count_color = cnt;
             draw_info->primitive_infos[pc].vertex_offsets = (size_t*)(draw_info->primitive_infos + prim_count) + ac;
+
+            draw_info->primitive_infos[pc].vertex_offset_count_depth = 1 + 2 * joint_attr_count;
 
             ac += cnt;
             pc++;
@@ -205,20 +213,21 @@ void draw_model_color(VkCommandBuffer cmd, struct draw_model_info *info)
             #if NO_DESCRIPTOR_BUFFER
             vk_cmd_bind_descriptor_sets(cmd,
                     VK_PIPELINE_BIND_POINT_GRAPHICS,
-                    info->pipeline_layouts[pc],
+                    info->pll_color,
                     0,
-                    info->primitive_infos[pc].dsl_count,
-                    info->primitive_infos[pc].d_sets,
+                    info->primitive_infos[pc].ds_count_color,
+                    info->primitive_infos[pc].ds_color,
                     0, NULL);
             #else
             // @Optimise It might be inefficient to reset all offsets (or it might be a nop
             // since I am setting offsets to what they already are), but I am not sure about
             // the compatibility of my pipeline layouts, need to check that passage again.
+            log_print_error("descriptor binding unimplemented for descriptor buffer");
             vk_cmd_set_descriptor_buffer_offsets_ext(cmd,
                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                     info->pipeline_layouts[pc],
                     0,
-                    info->primitive_infos[pc].dsl_count,
+                    info->primitive_infos[pc].ds_count,
                     info->primitive_infos[pc].db_indices,
                     info->primitive_infos[pc].db_offsets);
             #endif
@@ -227,11 +236,9 @@ void draw_model_color(VkCommandBuffer cmd, struct draw_model_info *info)
                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                     info->pipelines[pc]);
 
-            assert(info->primitive_infos[pc].dsl_count);
-
             vk_cmd_bind_vertex_buffers(cmd,
                     0,
-                    info->primitive_infos[pc].vertex_offset_count,
+                    info->primitive_infos[pc].vertex_offset_count_color,
                     info->bind_buffers,
                     info->primitive_infos[pc].vertex_offsets);
 
@@ -263,12 +270,24 @@ void draw_model_depth(VkCommandBuffer cmd, struct draw_model_info *info, uint pa
     uint pc = 0;
     for(uint i=0; i < info->mesh_count; ++i)
         for(uint j=0; j < info->mesh_primitive_counts[i]; ++j) {
+            log_print_error_if(DESCRIPTOR_BUFFER,
+                    "@Todo Descriptor set/offset binding is unimplemented for descriptor buffers for depth pass");
+
+            vk_cmd_bind_descriptor_sets(cmd,
+                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    info->pll_depth,
+                    0,
+                    info->primitive_infos[pc].ds_count_depth,
+                    info->primitive_infos[pc].ds_depth,
+                    0, NULL);
+
             vk_cmd_bind_pipeline(cmd,
                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                     info->pipelines[pi]);
 
             vk_cmd_bind_vertex_buffers(cmd,
-                    0, 1,
+                    0,
+                    info->primitive_infos[pc].vertex_offset_count_depth,
                     info->bind_buffers,
                     info->primitive_infos[pc].vertex_offsets);
 
@@ -1112,6 +1131,8 @@ model_pipelines_transform_descriptors_and_draw_info(
     #endif
 
     draw_info->prim_count = pc;
+    draw_info->pll_color = gpu->layouts[PLL_COLOR].pll;
+    draw_info->pll_depth = gpu->layouts[PLL_DEPTH].pll;
 
     VkPipelineShaderStageCreateInfo depth_shaders[2] = {
         {
@@ -1281,38 +1302,6 @@ model_pipelines_transform_descriptors_and_draw_info(
     vb      =        (VkVertexInputBindingDescription*)(ia             + pc * 2);
     va      =      (VkVertexInputAttributeDescription*)(vb             + ac * 1);
 
-    {
-        #if 0 // @RemoveMe compile pipeline layouts at startup
-        #if SPLIT_SHADOW_MVP
-            VkPushConstantRange pcr = {
-                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-                .offset = 0,
-                .size = sizeof(matrix) * 3,
-            };
-            VkPipelineLayoutCreateInfo ci = {
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-                .pushConstantRangeCount = 1,
-                .pPushConstantRanges = &pcr,
-            };
-            VkResult check = vk_create_pipeline_layout(gpu->device, &ci, GAC, &resources->pipeline_layouts[pc]);
-            DEBUG_VK_OBJ_CREATION(vkCreatePipelineLayout, check);
-        #else
-            VkPushConstantRange pcr = {
-                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-                .offset = 0,
-                .size = sizeof(matrix),
-            };
-            VkPipelineLayoutCreateInfo ci = {
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-                .pushConstantRangeCount = 1,
-                .pPushConstantRanges = &pcr,
-            };
-            VkResult check = vk_create_pipeline_layout(gpu->device, &ci, GAC, &resources->pipeline_layouts[pc]);
-            DEBUG_VK_OBJ_CREATION(vkCreatePipelineLayout, check);
-        #endif
-        #endif
-    }
-
     VkDescriptorSetLayout dsl_buf[SHADER_MAX_DESCRIPTOR_SET_COUNT];
     pc = 0;
     ac = 0;
@@ -1367,9 +1356,10 @@ model_pipelines_transform_descriptors_and_draw_info(
         for(uint j=0; j < model->meshes[i].primitive_count; ++j) {
             gltf_mesh_primitive *prim = &model->meshes[i].primitives[j];
 
+            // @Note This does not work for JOINTS_N if N > 0
             vi[pc] = vi[pc - prim_count]; // if skinned, require joints and weights in depth shader
-            vi[pc].vertexBindingDescriptionCount = 1 + 2 * (model->meshes[i].joint_count > 0);
-            vi[pc].vertexAttributeDescriptionCount = 1 + 2 * (model->meshes[i].joint_count > 0);
+            vi[pc].vertexBindingDescriptionCount   = draw_info->primitive_infos[pc-prim_count].vertex_offset_count_depth;
+            vi[pc].vertexAttributeDescriptionCount = draw_info->primitive_infos[pc-prim_count].vertex_offset_count_depth;
 
             ia[pc] = ia[pc - prim_count];
 
@@ -1443,6 +1433,7 @@ static uint model_vertex_state_and_draw_info(
     VkPipelineVertexInputStateCreateInfo   *vi,
     VkPipelineInputAssemblyStateCreateInfo *ia)
 {
+    struct gpu *gpu = arg->gpu;
     gltf *model = arg->model;
     gltf_mesh_primitive *prim = &model->meshes[mesh_i].primitives[prim_i];
 
@@ -1458,58 +1449,55 @@ static uint model_vertex_state_and_draw_info(
         assert(prim->attributes[0].type == GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_POSITION);
     }
 
+    ret->ds_count_depth = 1;
+    ret->ds_depth[0] = offsets->rsc_ds[mesh_i]; // depth only requires the transforms ubo
+
     for(uint i=0; i < arg->dsl_count; ++i) {
         #if NO_DESCRIPTOR_BUFFER
-        ret->d_sets[i] = arg->d_sets[i];
+        ret->ds_color[i] = arg->d_sets[i];
         #else
         ret->db_offsets[i] = arg->db_offsets[i];
         ret->db_indices[i] = arg->db_indices[i];
         #endif
     }
-    ret->dsl_count = arg->dsl_count;
+    ret->ds_count_color = arg->dsl_count;
 
-    // @Robustness The below feels quite fragile. It is not automatically
-    // synced well with the auto shader generation. Plus its relying on this
-    // check which is fine, but then the setting of the indices itself is error
-    // prone: it would be easy to choose the wrong index or offset from the
-    // wrong field. The best thing would be to somehow make this a loop.
+    // @Robustness Idk how well this check actually serves its purpose,
+    // especially after I have made substantial changes to my descriptor setup.
     DESCRIPTOR_SET_ORDER_CHECK();
 
     #if NO_DESCRIPTOR_BUFFER
-    ret->d_sets[ret->dsl_count] = offsets->rsc_ds[mesh_i];
+    ret->ds_color[ret->ds_count_color] = offsets->rsc_ds[mesh_i];
     #else
     // @Note dsl offsets have already had their stage offset removed if it was there.
     ret->db_indices[ret->dsl_count] = DESCRIPTOR_BUFFER_RESOURCE_BIND_INDEX;
     ret->db_offsets[ret->dsl_count] = offsets->base_descriptor_resource +
                                       offsets->transforms_ubo_dsls[mesh_i];
+    log_print_error("descriptor buffer descriptors are unimplemented for depth pass");
     #endif
-    ret->dsl_count++;
+    ret->ds_count_color++;
 
     if (prim->material != Max_u32) {
         #if NO_DESCRIPTOR_BUFFER
-        ret->d_sets[ret->dsl_count] = offsets->rsc_ds[model->mesh_count + prim->material];
+        ret->ds_color[ret->ds_count_color] = offsets->rsc_ds[model->mesh_count + prim->material];
         #else
-        ret->db_indices[ret->dsl_count] = DESCRIPTOR_BUFFER_RESOURCE_BIND_INDEX;
-        ret->db_offsets[ret->dsl_count] = offsets->base_descriptor_resource +
+        ret->db_indices[ret->ds_count_color] = DESCRIPTOR_BUFFER_RESOURCE_BIND_INDEX;
+        ret->db_offsets[ret->ds_count_color] = offsets->base_descriptor_resource +
                                           offsets->material_ubo_dsl.b +
                                           offsets->material_ubo_dsl_stride * prim->material;
         #endif
-        ret->dsl_count++;
+        ret->ds_count_color++;
 
         #if NO_DESCRIPTOR_BUFFER
-        ret->d_sets[ret->dsl_count] = offsets->tex_ds[prim->material];
+        ret->ds_color[ret->ds_count_color] = offsets->tex_ds[prim->material];
         #else
-        ret->db_indices[ret->dsl_count] = DESCRIPTOR_BUFFER_SAMPLER_BIND_INDEX;
-        ret->db_offsets[ret->dsl_count] = offsets->base_descriptor_sampler +
+        ret->db_indices[ret->ds_count_color] = DESCRIPTOR_BUFFER_SAMPLER_BIND_INDEX;
+        ret->db_offsets[ret->ds_count_color] = offsets->base_descriptor_sampler +
                                           offsets->material_textures_dsls[prim->material];
         #endif
-        ret->dsl_count += 1; // flag_check(materials[prim->material].flags, MODEL_MATERIAL_TEXTURED_BIT); <- @Deprecated Default texture is used if not declared.
+        ret->ds_count_color++;
     }
-
-    // @Note I am hard setting this for now, as I am always using this many. I previously planned to
-    // use different shaders all the time, but using just a couple of more versatile shaders is proving
-    // better for now.
-    ret->dsl_count = 5;
+    assert(ret->ds_count_color == 5 && ret->ds_count_depth == 1);
 
     *ia = (VkPipelineInputAssemblyStateCreateInfo) {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
@@ -1524,21 +1512,11 @@ static uint model_vertex_state_and_draw_info(
         gltf_accessor *accessor = &model->accessors[prim->attributes[i].accessor];
         gltf_buffer_view *buffer_view = &model->buffer_views[accessor->buffer_view];
 
-        #if 0
-        if (prim->attributes[i].type == GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_JOINTS) {
-            println("joints %u", accessor->vkformat);
-            println("stride %u", accessor->byte_stride);
-        }
-        if (prim->attributes[i].type == GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_WEIGHTS) {
-            println("weights %u", accessor->vkformat);
-            println("stride %u", accessor->byte_stride);
-        }
-        #endif
-
         ret->vertex_offsets[ac] = offsets->base_bind +
                                   offsets->buffers[buffer_view->buffer] +
                                   buffer_view->byte_offset +
                                   accessor->byte_offset;
+
         bindings[ac] = (VkVertexInputBindingDescription) {
             .binding = ac,
             .stride = buffer_view->byte_stride ? buffer_view->byte_stride : accessor->byte_stride, // Why can this not be zero...? Why bother with the format??

@@ -202,7 +202,6 @@ enum {
 };
 
 enum {
-    ASSET_DSL_DEPTH_VS_INFO,
     ASSET_DSL_DEPTH_TRANSFORMS,
 };
 

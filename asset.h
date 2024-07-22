@@ -97,18 +97,23 @@ struct load_model_arg {
 };
 
 struct model_primitive_draw_info {
-    bool         draw_indexed;
-    uint         draw_count;
-    uint         vertex_offset_count;
-    uint         dsl_count;
-    VkIndexType  index_type;
-    size_t       index_offset;
-    size_t      *vertex_offsets;
+    bool             draw_indexed;
+    uint             draw_count;
+    uint             vertex_offset_count_color;
+    uint             vertex_offset_count_depth;
+    uint             ds_count_color;
+    uint             ds_count_depth;
+    VkIndexType      index_type;
+    size_t           index_offset;
+    size_t          *vertex_offsets;
     #if NO_DESCRIPTOR_BUFFER
-    VkDescriptorSet d_sets[SHADER_MAX_DESCRIPTOR_SET_COUNT];
+    VkDescriptorSet  ds_color[SHADER_MAX_DESCRIPTOR_SET_COUNT_COLOR];
+    VkDescriptorSet  ds_depth[SHADER_MAX_DESCRIPTOR_SET_COUNT_DEPTH];
     #else
-    uint         db_indices[SHADER_MAX_DESCRIPTOR_SET_COUNT];
-    size_t       db_offsets[SHADER_MAX_DESCRIPTOR_SET_COUNT];
+    uint             db_indices_color[SHADER_MAX_DESCRIPTOR_SET_COUNT_COLOR];
+    size_t           db_offsets_color[SHADER_MAX_DESCRIPTOR_SET_COUNT_COLOR];
+    uint             db_indices_depth[SHADER_MAX_DESCRIPTOR_SET_COUNT_DEPTH];
+    size_t           db_offsets_depth[SHADER_MAX_DESCRIPTOR_SET_COUNT_DEPTH];
     #endif
 };
 
@@ -118,9 +123,10 @@ struct draw_model_info {
     uint                             *mesh_instance_counts;
     uint                             *mesh_primitive_counts;
     VkPipeline                       *pipelines;
-    VkPipelineLayout                 *pipeline_layouts;
     struct model_primitive_draw_info *primitive_infos;
     VkBuffer                         *bind_buffers;
+    VkPipelineLayout                  pll_color;
+    VkPipelineLayout                  pll_depth;
 };
 
 struct load_model_ret {

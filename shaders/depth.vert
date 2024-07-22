@@ -4,6 +4,9 @@
 #define VERTEX_INPUT
 #include "../shader.h.glsl"
 
+// @Test I now have the infrastructure in place to pass the vs_info uniform to
+// the depth shader. Maybe this is more efficient than push constants.
+
 layout(push_constant) uniform pc {
     #if SPLIT_SHADOW_MVP
     mat4 m,v,p;

@@ -1345,7 +1345,6 @@ static inline int shader_kind(string s)
         return -1;
 }
 
-
 static void compile_shaders(struct gpu *gpu, allocator *temp)
 {
     uint64 used = allocator_used(temp);
@@ -1487,13 +1486,7 @@ struct pll_decl PLLS[PLL_COUNT] = {
         .dsl_count = 5,
     }, { // PLL_DEPTH,
         .dsls = { // vertex info
-            {   .count = 1,
-                .bindings = {
-                    {.binding = 0,
-                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                     .descriptorCount = 1,
-                     .stageFlags = VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT}},
-            }, { // transforms
+            { // transforms
                 .count = 1,
                 .bindings = {
                     {.binding = 0,
@@ -1507,7 +1500,7 @@ struct pll_decl PLLS[PLL_COUNT] = {
              .offset = 0,
              .size = SPLIT_SHADOW_MVP ? 3 * sizeof(matrix) : sizeof(matrix)},
         },
-        .dsl_count = 2,
+        .dsl_count = 1,
         .pcr_count = 1,
     }, { // PLL_FLOOR,
         .dsls = { // vertex info
@@ -1523,7 +1516,7 @@ struct pll_decl PLLS[PLL_COUNT] = {
                 .bindings = {
                     {.binding = 0,
                      .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                     .descriptorCount = 1,
+                     .descriptorCount = DIR_LIGHT_COUNT * CSM_COUNT,
                      .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT}}
             },
         },
@@ -2745,7 +2738,7 @@ void do_shadow_pass(VkCommandBuffer cmd, struct shadow_pass_info *info, allocato
                                   &info->light_proj[idx]);
             #else
             vk_cmd_push_constants(cmd,
-                                  info->lmr->draw_info->pipeline_layouts[info->lmr->draw_info->prim_count],
+                                  info->lmr->draw_info->pll_depth,
                                   VK_SHADER_STAGE_VERTEX_BIT,
                                   0,
                                   sizeof(matrix),
@@ -3164,27 +3157,6 @@ void draw_box(VkCommandBuffer cmd, struct gpu *gpu, struct box *box, bool wirefr
         matrix m;
         vector c;
     } pc;
-
-    #if 0 // @RemoveMe Compile pipeline layouts at startup
-    {
-        VkPushConstantRange pcr = {
-            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-            .offset = 0,
-            .size = sizeof(pc),
-        };
-
-        VkPipelineLayoutCreateInfo ci = {
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-            .pushConstantRangeCount = 1,
-            .pPushConstantRanges = &pcr,
-        };
-
-        VkResult check = vk_create_pipeline_layout(gpu->device, &ci, GAC, &layout);
-        DEBUG_VK_OBJ_CREATION(vkCreatePipelineLayout, check);
-
-        rsc->layout = layout;
-    }
-    #endif
 
     VkPipeline pl;
     {
