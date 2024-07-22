@@ -12,8 +12,7 @@ void main() {
     vec4 pos = vec4(in_position, 1);
 
     #ifdef SKINNED
-    mat4 skin = skin_calc();
-    mat4 ws = vs_info.model * skin;
+    mat4 ws = vs_info.model * skin_calc();
     #else
     mat4 ws = vs_info.model * transforms[gl_InstanceIndex].joints[0];
     #endif

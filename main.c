@@ -243,13 +243,11 @@ int main() {
                 vector3(0, 0, 0),
                 quaternion(0, vector3(0, 1, 0)),
                 vector3(1,1,1),
-                // vector3(sinf(t / 4) * 0.5 + 1, sinf(t / 2) * 0.5 + 1, sinf(t / 3) * 0.5 + 1),
                 &model_trs
             );
             convert_trs(&model_trs, &mat_model);
 
-            matrix rot;
-            // vector q = hamilton_product(quaternion(-PI/2, vector3(0, 1, 0)), quaternion(-PI/2, vector3(1, 0, 0)));
+            matrix rot; // fix gltf orientation
             vector q = quaternion(-PI, vector3(0, 0, 1));
             rotation_matrix(q, &rot);
             mul_matrix(&mat_model, &rot, &mat_model);
@@ -357,17 +355,25 @@ int main() {
 
         uint scene = 0;
 
+        struct animation_info animations[1] = {
+            {
+                .index = 0,
+                .time = 0.2,
+                .weight = 1,
+            }
+        };
+
         struct load_model_arg lma = {
             .flags = LOAD_MODEL_BLIT_MIPMAPS_BIT,
             .dsl_count = 2,
-            .animation_count = 0,
+            .animation_count = carrlen(animations),
             .scene_count = model.scene_count,
             .subpass_mask = LOAD_MODEL_SUBPASS_DRAW,
             .color_subpass = 0,
             .depth_pass_count = shadow_maps.count * CSM_COUNT,
             .model = &model,
             .gpu = &pr.gpu,
-            .animations = NULL,
+            .animations = animations,
             .scenes = &scene,
             .dsls[0] = vs_info_desc.dsl,
             .dsls[1] = shadow_maps.dsl,

@@ -1618,9 +1618,9 @@ static inline void model_node_global_transforms(
 
     // @Optimise It would be really nice to remove all these branches. Maybe the setup
     // of the data layout before this function can be better.
-    if (xforms_mask[node>>6] & (one << (node & 63)))
+    if (xforms_mask[node>>6] & (one << (node & 63))) {
         mul_matrix(parent_xform, &anim_xforms[node], &global_xforms[node]);
-    else
+    } else {
         if (nodes[node].flags & GLTF_NODE_MATRIX_BIT) {
             mul_matrix(parent_xform, &nodes[node].mat, &global_xforms[node]);
         } else if (nodes[node].flags & GLTF_NODE_TRS_BIT) {
@@ -1629,6 +1629,7 @@ static inline void model_node_global_transforms(
         } else {
             copy_matrix(&global_xforms[node], parent_xform);
         }
+    }
 
     log_print_error_if(nodes[node].mesh == Max_u32 && nodes[node].skin != Max_u32,
                        "node declares a skin but not a mesh.");
@@ -1769,6 +1770,7 @@ static void model_node_transforms(
             model_node_global_transforms(anim_masks.xforms, anim_arg.xforms, global_xforms,
                                         scene_meshes, &IDENTITY_MATRIX, model->nodes,
                                         model->scenes[arg->scenes[i]].nodes[j], &mesh_mask);
+
             uint pc = popcnt(mesh_mask);
             for(uint k=0; k < pc; ++k) {
                 uint tz = ctz(mesh_mask);
@@ -2055,11 +2057,12 @@ static void model_animations(
                         input->max_min.max[0],
                         input->count,
                         (float*)model_get_accessor_data(gpu, model, sampler->input, offsets));
+                println("%u, %f", timestep.frame_i, timestep.lerp_constant);
 
                 gltf_accessor *output = &model->accessors[sampler->output];
 
                 // The below 'if else' block relies on this assertion.
-                assert(GLTF_ANIMATION_PATH_WEIGHTS_BIT != 0x08 && "animation path flag bits have changed");
+                assert(GLTF_ANIMATION_PATH_WEIGHTS_BIT == 0x08 && "animation path flag bits have changed");
 
                 if (tz == 3) {
                     model_anim_weights(
@@ -2083,7 +2086,7 @@ static void model_animations(
                     ret->xforms[node>>6] |= one << (node & 63);
                 }
             }
-            mask = ~(anim->targets[i].path_mask | GLTF_ANIMATION_PATH_WEIGHTS_BIT);
+            mask = anim->targets[i].path_mask & ~(GLTF_ANIMATION_PATH_WEIGHTS_BIT);
             pc = popcnt(mask);
             for(uint k=0; k < pc; ++k) {
                 uint tz = ctz(mask);
@@ -2113,14 +2116,16 @@ static void model_build_transform_ubo(uint mesh, struct model_build_transform_ub
         skin_mask &= ~(one<<tz);
 
         gltf_skin *skin = &model->skins[tz];
-        for(uint i=0; i < skin->joint_count; ++i)
+        for(uint i=0; i < skin->joint_count; ++i) {
             mul_matrix(arg->xforms + skin->joints[i],
                        arg->ibm    + arg->ibm_ofs[tz] + i,
                        arg->xforms + skin->joints[i]);
+            // @RemoveMe
+            // print_matrix(arg->xforms + skin->joints[i]);
+        }
         for(uint i=0; i < skin->joint_count; ++i) {
             memcpy(ubo_data + joints_trs_ofs + sizeof(*arg->xforms) * i,
                    arg->xforms + skin->joints[i], sizeof(*arg->xforms));
-            // print_matrix(arg->xforms + skin->joints[i]);
         }
     }
 
