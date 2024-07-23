@@ -1,0 +1,26 @@
+So when you encounter the skin in one node, then you compute the global
+transform of this node, as described in the link above, to obtain the
+globalTransform (and take into account the skeleton here - sorry, I still have
+        to sort out the details about that).
+
+Then you compute the global transform of the nodes that appear in the
+skin.joints array, to obtain the globalJointTransform for each.
+
+Then the joint matrix of a node j is computed as
+
+// The "^-1" here means the inverse of this transform
+jointMatrix(j) = globalTransform^-1 * globalJointTransform *
+inverseBindMatrix(j);
+
+As mentioned in the comment: In order to compute the joint matrix, you have to
+compute the inverse of the globalTransform. You can imagine this as
+"removing/eliminating any transform that you are not interested in, for the
+skinning computations".
+
+--------------------------------------------------------------------------------
+
+For each bone node i, you can calculate a local transformation as M_local(i) =
+T(i)*R(i)*S(i). You will get the joint matrices by applying the complete
+hierachy, so basically M_global(i) = M_global(parent(i)) * M_local(i) and can
+then construct the join matrices as M_joint(i) = inverse(globalTransform) *
+M_global(i) * inverseBindMatrix(i).

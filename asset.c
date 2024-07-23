@@ -1579,15 +1579,15 @@ struct model_scene_meshes {
 };
 
 struct model_build_transform_ubo_arg {
-    gltf                        *model;
-    uchar                       *ubo_data;
-    uint64                      *weight_anim_mask;
-    uint                        *ibm_ofs;
-    matrix                      *ibm; // inverse bind matrices
-    matrix                      *xforms;
-    uint                        *weight_offsets;
-    float                       *weight_data;
-    struct model_scene_meshes   *meshes;
+    gltf                         *model;
+    uchar                        *ubo_data;
+    struct model_animation_masks *anim_masks;
+    uint                         *ibm_ofs;
+    matrix                       *ibm; // inverse bind matrices
+    matrix                       *xforms;
+    uint                         *weight_offsets;
+    float                        *weight_data;
+    struct model_scene_meshes    *meshes;
 };
 
 static void model_animations(
@@ -1641,6 +1641,11 @@ static inline void model_node_global_transforms(
     struct model_scene_meshes *mesh = &meshes[nodes[node].mesh & mesh_test];
     mesh->node_mask[node>>6] |= (one & mesh_test) << (node & 63);
     mesh->skin_mask |= (one & skin_test) << (nodes[node].skin & skin_test);
+
+    if (node == 3 || node == 12 || node == 13 || node == 20) {
+        print("node %u: ", node);
+        print_matrix(&global_xforms[node]);
+    }
 
     for(uint i=0; i < nodes[node].child_count; ++i)
         model_node_global_transforms(xforms_mask, anim_xforms, global_xforms, meshes,
@@ -1720,7 +1725,11 @@ static void model_node_transforms(
     for(uint i=0; i < pc; ++i) {
         uint tz = ctz(skin_mask);
         skin_mask &= ~(1<<tz);
+
         gltf_skin *skin = &model->skins[tz];
+        if (skin->inverse_bind_matrices == Max_u32)
+            continue;
+
         float *data = (float*)model_get_accessor_data(gpu, model, skin->inverse_bind_matrices, offsets);
         load_count_matrices_ua(skin->joint_count, data, ibm);
         ibm_ofs[tz] = joint_count;
@@ -1748,7 +1757,7 @@ static void model_node_transforms(
     struct model_build_transform_ubo_arg ubo_build_arg;
     ubo_build_arg.model = model;
     ubo_build_arg.meshes = scene_meshes;
-    ubo_build_arg.weight_anim_mask = anim_masks.weights;
+    ubo_build_arg.anim_masks = &anim_masks;
     ubo_build_arg.xforms = global_xforms;
     ubo_build_arg.ibm_ofs = ibm_ofs;
     ubo_build_arg.ibm = ibm;
@@ -1782,12 +1791,17 @@ static void model_node_transforms(
                 mesh_counts[tz]++;
             }
         }
+
 }
 
 struct model_animation_timestep {
     uint  frame_i;
     float lerp_constant;
 };
+static inline void println_timestep(struct model_animation_timestep ts)
+{
+    println("[frame %u, lerp %f]", ts.frame_i, ts.lerp_constant);
+}
 
 // @Todo I do not know if I am supposed to do something special
 // if the animation time > max_time. It feels as though I should
@@ -1989,22 +2003,24 @@ model_anim_transform_fn MODEL_ANIM_TRANSFORM_FNS[3] = {
     model_anim_transform_scale,
 };
 
-static inline void model_node_translation(struct trs *trs, matrix *ret)
+static inline void model_node_translation(struct trs *trs, float w, matrix *ret)
 {
-    translation_matrix(trs->t, ret);
+    translation_matrix(scale_vector(trs->t, w), ret);
 }
 
-static inline void model_node_rotation(struct trs *trs, matrix *ret)
+static inline void model_node_rotation(struct trs *trs, float w, matrix *ret)
 {
-    rotation_matrix(trs->r, ret);
+    vector a = quaternion_axis(trs->r);
+    float t = quaternion_angle(trs->r) * w;
+    rotation_matrix(quaternion(t, a), ret);
 }
 
-static inline void model_node_scale(struct trs *trs, matrix *ret)
+static inline void model_node_scale(struct trs *trs, float w, matrix *ret)
 {
-    scale_matrix(trs->s, ret);
+    scale_matrix(scale_vector(trs->s, w), ret);
 }
 
-typedef void (*model_node_trs_fn)(struct trs *trs, matrix *ret);
+typedef void (*model_node_trs_fn)(struct trs *trs, float w, matrix *ret);
 model_node_trs_fn NODE_TRS_FNS[3] = {
     model_node_translation,
     model_node_rotation,
@@ -2057,7 +2073,7 @@ static void model_animations(
                         input->max_min.max[0],
                         input->count,
                         (float*)model_get_accessor_data(gpu, model, sampler->input, offsets));
-                println("%u, %f", timestep.frame_i, timestep.lerp_constant);
+                // println_timestep(timestep); // @RemoveMe
 
                 gltf_accessor *output = &model->accessors[sampler->output];
 
@@ -2071,7 +2087,7 @@ static void model_animations(
                             output->count,
                             model_get_accessor_data(gpu, model, sampler->output, offsets),
                             arg->weight_data + arg->weight_offsets[node],
-                            lm_arg->animations[j].weight);
+                            lm_arg->animations[j].weights[ANIMATION_WEIGHTS_WEIGHT]);
                     ret->weights[node>>6] |= one << (node & 63);
                 } else {
                     assert(GLTF_ANIMATION_PATH_TRANSLATION_BIT == 1 &&
@@ -2091,7 +2107,7 @@ static void model_animations(
             for(uint k=0; k < pc; ++k) {
                 uint tz = ctz(mask);
                 mask &= ~(1<<tz);
-                NODE_TRS_FNS[tz](&model->nodes[node].trs, &trs[tz]);
+                NODE_TRS_FNS[tz](&model->nodes[node].trs, lm_arg->animations[j].weights[tz], &trs[tz]);
             }
             mul_matrix(&trs[0], &trs[1], &trs[1]);
             mul_matrix(&trs[1], &trs[2], &trs[2]);
@@ -2116,13 +2132,35 @@ static void model_build_transform_ubo(uint mesh, struct model_build_transform_ub
         skin_mask &= ~(one<<tz);
 
         gltf_skin *skin = &model->skins[tz];
+        matrix global_invert;
+        log_print_error_if(skin->skeleton == Max_u32, "Go find the root yourself");
+        invert_transform(arg->xforms + skin->skeleton, &global_invert);
+
         for(uint i=0; i < skin->joint_count; ++i) {
-            mul_matrix(arg->xforms + skin->joints[i],
-                       arg->ibm    + arg->ibm_ofs[tz] + i,
+            // print("Invert: ");
+            // print_matrix(&global_invert); // @RemoveMe
+            // print("IBM: ");
+            // print_matrix(arg->ibm + arg->ibm_ofs[tz] + i); // @RemoveMe
+
+            // print("Before %u: ", i);
+            // print_matrix(arg->xforms + skin->joints[i]); // @RemoveMe
+
+            mul_matrix(&global_invert,
+                       arg->xforms + skin->joints[i],
                        arg->xforms + skin->joints[i]);
-            // @RemoveMe
-            // print_matrix(arg->xforms + skin->joints[i]);
+
+            assert(FRAMES_ELAPSED < 4);
+
+
+            if (skin->inverse_bind_matrices != Max_u32)
+                mul_matrix(arg->xforms + skin->joints[i],
+                           arg->ibm    + arg->ibm_ofs[tz] + i,
+                           arg->xforms + skin->joints[i]);
+
+            // print("After %u: ", i);
+            // print_matrix(arg->xforms + skin->joints[i]); // @RemoveMe
         }
+
         for(uint i=0; i < skin->joint_count; ++i) {
             memcpy(ubo_data + joints_trs_ofs + sizeof(*arg->xforms) * i,
                    arg->xforms + skin->joints[i], sizeof(*arg->xforms));
@@ -2149,7 +2187,7 @@ static void model_build_transform_ubo(uint mesh, struct model_build_transform_ub
             // would increase the run time of the animations function, but I think that is worth it
             // as I feel that this loop will run more times than the animation function.
             if (model->nodes[node_i].weight_count) {
-                if (arg->weight_anim_mask[node_i>>6] & (one << (node_i & 63)))
+                if (arg->anim_masks->weights[node_i>>6] & (one << (node_i & 63)))
                     memcpy(ubo_data + node_w_ofs, arg->weight_data + arg->weight_offsets[node_i],
                            sizeof(*arg->weight_data) * model->nodes[node_i].weight_count);
                 else

@@ -355,11 +355,14 @@ int main() {
 
         uint scene = 0;
 
+        float times[] = {
+            0, 0.1, 0.2, 0.3, 0.4, 0.5,
+        };
         struct animation_info animations[1] = {
             {
                 .index = 0,
-                .time = 0.2,
-                .weight = 1,
+                .time = times[FRAMES_ELAPSED % carrlen(times)],
+                .weights = {1, 1, 1, 1},
             }
         };
 

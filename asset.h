@@ -65,10 +65,16 @@ enum {
     LOAD_MODEL_SUBPASS_COUNT = count_enum_flags(LOAD_MODEL_SUBPASS_LAST_MEMBER),
 };
 
+enum {
+    ANIMATION_WEIGHTS_TRANSLATION,
+    ANIMATION_WEIGHTS_ROTATION,
+    ANIMATION_WEIGHTS_SCALE,
+    ANIMATION_WEIGHTS_WEIGHT,
+};
 struct animation_info {
     uint  index;
     float time;
-    float weight;
+    float weights[4];
 };
 
 struct load_model_arg {

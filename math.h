@@ -344,6 +344,19 @@ static inline vector rotate_quaternion_axis(vector p, vector q)
     return vector4(v.x, v.y, v.z, p.w);
 }
 
+static inline float quaternion_angle(vector q)
+{
+    return acosf(q.w) * 2;
+}
+
+static inline vector quaternion_axis(vector q)
+{
+    float a = quaternion_angle(q);
+    vector r = scalar_div_vector(q, sinf(a/2));
+    r.w = 0;
+    return r;
+}
+
 static inline void copy_matrix(matrix *to, matrix *from)
 {
     __m128i a = _mm_load_si128((__m128i*)(from->m+0));
@@ -625,6 +638,17 @@ static inline bool invert(matrix *x, matrix *y)
             vector3(m[2][3], m[2][4], m[2][5]), y);
 
     return true;
+}
+
+static inline void invert_transform(matrix *m, matrix *r)
+{
+    matrix t;
+    invert(m, &t);
+    t.m[12] = -m->m[12];
+    t.m[13] = -m->m[13];
+    t.m[14] = -m->m[14];
+    t.m[15] = 1;
+    *r = t;
 }
 
 static inline void view_matrix(vector pos, vector dir, vector up, matrix *m)
