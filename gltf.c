@@ -158,8 +158,8 @@ struct gltf_index_data {
 };
 
 struct gltf_attr_data {
-    uint stride;
     uint count;
+    uint stride;
     uint offset;
     uint buffer;
 };
@@ -193,8 +193,8 @@ static struct gltf_attr_data gltf_attr_data(gltf *g, uint mesh, uint prim, gltf_
     gltf_buffer_view *pb = &g->buffer_views[pa->buffer_view];
 
     struct gltf_attr_data r;
-    r.stride = pb->byte_stride ? pb->byte_stride : pa->byte_stride;
     r.count  = pa->count;
+    r.stride = pb->byte_stride ? pb->byte_stride : pa->byte_stride;
     r.offset = pa->byte_offset + pb->byte_offset;
     r.buffer = pb->buffer;
     return r;
@@ -1537,14 +1537,18 @@ static uint gltf_mesh_parse_primitive_attributes(json_object *j_attribs, struct 
             max_if(memcmp(j_attribs->keys[i].cstr, "COLOR",GLTF_MESH_PRIMITIVE_ATTRIBUTE_KEY_LEN_COLOR) == 0);
     }
 
-    extra_attrs->norm = !attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_NORMAL];
-    extra_attrs->tang = !attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_TANGENT];
+    extra_attrs->norm = !attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_NORMAL] &&
+                         attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_TEXCOORD];
+    extra_attrs->tang = !attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_TANGENT] &&
+                         attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_TEXCOORD];
     uint extra_attr_cnt = extra_attrs->norm || extra_attrs->tang;
 
     // ensure tang and norm attribs are initialized (their accessor fields will
     // take the accessor of the 0th attr, but this is corrected later in parse_gltf)
-    attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_NORMAL]  |= 0x1 & maxif(!attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_NORMAL]);
-    attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_TANGENT] |= 0x1 & maxif(!attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_TANGENT]);
+    attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_NORMAL]  |= 0x1 & maxif(!attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_NORMAL] &&
+                                                                       attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_TEXCOORD]);
+    attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_TANGENT] |= 0x1 & maxif(!attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_TANGENT] &&
+                                                                       attr_m[GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_TEXCOORD]);
 
     uint cnt = 0;
     uint tz,pc,j,idx;

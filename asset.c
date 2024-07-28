@@ -619,7 +619,7 @@ static uint allocate_model_resources(
         result = LOAD_MODEL_RESULT_INSUFFICIENT_RESOURCE_DESCRIPTOR_MEMORY;
         goto fail;
     }
-    if (!sampler_dp_allocate(gpu, thread_id, model->material_count,
+    if (model->material_count && !sampler_dp_allocate(gpu, thread_id, model->material_count,
                 tex_dsls, offsets->tex_ds))
     {
         result = LOAD_MODEL_RESULT_INSUFFICIENT_SAMPLER_DESCRIPTOR_MEMORY;
@@ -1131,7 +1131,7 @@ model_pipelines_transform_descriptors_and_draw_info(
     #endif
 
     draw_info->prim_count = pc;
-    draw_info->pll_color = gpu->layouts[PLL_COLOR].pll;
+    draw_info->pll_color = model->material_count ? gpu->layouts[PLL_COLOR].pll : gpu->layouts[PLL_UNTEXTURED].pll;
     draw_info->pll_depth = gpu->layouts[PLL_DEPTH].pll;
 
     VkPipelineShaderStageCreateInfo depth_shaders[2] = {
@@ -1309,20 +1309,37 @@ model_pipelines_transform_descriptors_and_draw_info(
         for(uint j=0; j < model->meshes[i].primitive_count; ++j) {
             gltf_mesh_primitive *prim = &model->meshes[i].primitives[j];
 
-            shaders[pc] = (struct model_shaders) {
-                .vertex = (VkPipelineShaderStageCreateInfo) {
-                    .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                    .stage = VK_SHADER_STAGE_VERTEX_BIT,
-                    .module = model->meshes[i].joint_count ? gpu->shaders[SHADERS_COLOR_SKINNED_VERT] : gpu->shaders[SHADERS_COLOR_VERT],
-                    .pName = SHADER_ENTRY_POINT,
-                },
-                .fragment = (VkPipelineShaderStageCreateInfo) {
-                    .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                    .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-                    .module = gpu->shaders[SHADERS_COLOR_FRAG],
-                    .pName = SHADER_ENTRY_POINT,
-                },
-            };
+            if (prim->material == Max_u32) {
+                shaders[pc] = (struct model_shaders) {
+                    .vertex = (VkPipelineShaderStageCreateInfo) {
+                        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                        .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                        .module = gpu->shaders[SHADERS_UNTEXTURED_VERT],
+                        .pName = SHADER_ENTRY_POINT,
+                    },
+                    .fragment = (VkPipelineShaderStageCreateInfo) {
+                        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                        .module = gpu->shaders[SHADERS_UNTEXTURED_FRAG],
+                        .pName = SHADER_ENTRY_POINT,
+                    },
+                };
+            } else {
+                shaders[pc] = (struct model_shaders) {
+                    .vertex = (VkPipelineShaderStageCreateInfo) {
+                        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                        .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                        .module = model->meshes[i].joint_count ? gpu->shaders[SHADERS_COLOR_SKINNED_VERT] : gpu->shaders[SHADERS_COLOR_VERT],
+                        .pName = SHADER_ENTRY_POINT,
+                    },
+                    .fragment = (VkPipelineShaderStageCreateInfo) {
+                        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                        .module = gpu->shaders[SHADERS_COLOR_FRAG],
+                        .pName = SHADER_ENTRY_POINT,
+                    },
+                };
+            }
 
             vi[pc].pVertexBindingDescriptions   = vb + ac;
             vi[pc].pVertexAttributeDescriptions = va + ac;
@@ -1339,12 +1356,12 @@ model_pipelines_transform_descriptors_and_draw_info(
                 .pVertexInputState   = &vi[pc],
                 .pInputAssemblyState = &ia[pc],
                 .pViewportState      = &color_viewport,
-                .pRasterizationState = &color_rasterization[flag_check(materials[prim->material].flags, MODEL_MATERIAL_CULL_BACK_BIT)],
+                .pRasterizationState = model->material_count ? &color_rasterization[flag_check(materials[prim->material & maxif(prim->material+1)].flags, MODEL_MATERIAL_CULL_BACK_BIT)] : &color_rasterization[0],
                 .pMultisampleState   = &multisample,
                 .pDepthStencilState  = &color_depth,
-                .pColorBlendState    = &color_blend[flag_check(materials[prim->material].flags, MODEL_MATERIAL_BLEND_BIT)],
+                .pColorBlendState    = &color_blend[flag_check(materials[prim->material & maxif(prim->material+1)].flags, MODEL_MATERIAL_BLEND_BIT)],
                 .pDynamicState       = &dyn,
-                .layout              = gpu->layouts[PLL_COLOR].pll,
+                .layout              = model->material_count ? gpu->layouts[PLL_COLOR].pll : gpu->layouts[PLL_UNTEXTURED].pll,
                 .renderPass          = arg->color_renderpass,
                 .subpass             = arg->color_subpass,
             };
@@ -1452,52 +1469,62 @@ static uint model_vertex_state_and_draw_info(
     ret->ds_count_depth = 1;
     ret->ds_depth[0] = offsets->rsc_ds[mesh_i]; // depth only requires the transforms ubo
 
-    for(uint i=0; i < arg->dsl_count; ++i) {
-        #if NO_DESCRIPTOR_BUFFER
-        ret->ds_color[i] = arg->d_sets[i];
-        #else
-        ret->db_offsets[i] = arg->db_offsets[i];
-        ret->db_indices[i] = arg->db_indices[i];
-        #endif
-    }
-    ret->ds_count_color = arg->dsl_count;
-
-    // @Robustness Idk how well this check actually serves its purpose,
-    // especially after I have made substantial changes to my descriptor setup.
-    DESCRIPTOR_SET_ORDER_CHECK();
-
-    #if NO_DESCRIPTOR_BUFFER
-    ret->ds_color[ret->ds_count_color] = offsets->rsc_ds[mesh_i];
-    #else
-    // @Note dsl offsets have already had their stage offset removed if it was there.
-    ret->db_indices[ret->dsl_count] = DESCRIPTOR_BUFFER_RESOURCE_BIND_INDEX;
-    ret->db_offsets[ret->dsl_count] = offsets->base_descriptor_resource +
-                                      offsets->transforms_ubo_dsls[mesh_i];
-    log_print_error("descriptor buffer descriptors are unimplemented for depth pass");
-    #endif
-    ret->ds_count_color++;
-
     if (prim->material != Max_u32) {
         #if NO_DESCRIPTOR_BUFFER
-        ret->ds_color[ret->ds_count_color] = offsets->rsc_ds[model->mesh_count + prim->material];
-        #else
-        ret->db_indices[ret->ds_count_color] = DESCRIPTOR_BUFFER_RESOURCE_BIND_INDEX;
-        ret->db_offsets[ret->ds_count_color] = offsets->base_descriptor_resource +
-                                          offsets->material_ubo_dsl.b +
-                                          offsets->material_ubo_dsl_stride * prim->material;
-        #endif
-        ret->ds_count_color++;
+            for(uint i=0; i < arg->dsl_count; ++i) {
+                ret->ds_color[i] = arg->d_sets[i];
+            }
+            ret->ds_count_color = arg->dsl_count;
 
-        #if NO_DESCRIPTOR_BUFFER
-        ret->ds_color[ret->ds_count_color] = offsets->tex_ds[prim->material];
+            // @Robustness Idk how well this check actually serves its purpose,
+            // especially after I have made substantial changes to my descriptor setup.
+            DESCRIPTOR_SET_ORDER_CHECK();
+
+            ret->ds_color[ret->ds_count_color] = offsets->rsc_ds[mesh_i];
+            ret->ds_count_color++;
+
+            ret->ds_color[ret->ds_count_color] = offsets->rsc_ds[model->mesh_count + (prim->material & maxif(prim->material+1))];
+            ret->ds_count_color++;
+
+            ret->ds_color[ret->ds_count_color] = offsets->tex_ds[prim->material & maxif(prim->material+1)];
+            ret->ds_count_color++;
         #else
-        ret->db_indices[ret->ds_count_color] = DESCRIPTOR_BUFFER_SAMPLER_BIND_INDEX;
-        ret->db_offsets[ret->ds_count_color] = offsets->base_descriptor_sampler +
-                                          offsets->material_textures_dsls[prim->material];
+            for(uint i=0; i < arg->dsl_count; ++i) {
+                ret->db_offsets[i] = arg->db_offsets[i];
+                ret->db_indices[i] = arg->db_indices[i];
+            }
+            ret->ds_count_color = arg->dsl_count;
+
+            // @Robustness Idk how well this check actually serves its purpose,
+            // especially after I have made substantial changes to my descriptor setup.
+            DESCRIPTOR_SET_ORDER_CHECK();
+
+            // @Note dsl offsets have already had their stage offset removed if it was there.
+            ret->db_indices[ret->dsl_count] = DESCRIPTOR_BUFFER_RESOURCE_BIND_INDEX;
+            ret->db_offsets[ret->dsl_count] = offsets->base_descriptor_resource +
+                                              offsets->transforms_ubo_dsls[mesh_i];
+            log_print_error("descriptor buffer descriptors are unimplemented for depth pass");
+            ret->ds_count_color++;
+
+            ret->db_indices[ret->ds_count_color] = DESCRIPTOR_BUFFER_RESOURCE_BIND_INDEX;
+            ret->db_offsets[ret->ds_count_color] = offsets->base_descriptor_resource +
+                                              offsets->material_ubo_dsl.b +
+                                              offsets->material_ubo_dsl_stride * (prim->material & maxif(prim->material+1));
+            ret->ds_count_color++;
+
+            ret->db_indices[ret->ds_count_color] = DESCRIPTOR_BUFFER_SAMPLER_BIND_INDEX;
+            ret->db_offsets[ret->ds_count_color] = offsets->base_descriptor_sampler +
+                                              offsets->material_textures_dsls[prim->material & maxif(prim->material+1)];
+            ret->ds_count_color++;
         #endif
-        ret->ds_count_color++;
+    } else { // Untextured test model
+        ret->ds_count_depth = 1;
+        ret->ds_depth[0] = offsets->rsc_ds[mesh_i]; // depth only requires the transforms ubo
+
+        ret->ds_count_color = 2; // untextured skinned models only require vs_info and transforms
+        ret->ds_color[0] = arg->d_sets[0];
+        ret->ds_color[1] = offsets->rsc_ds[mesh_i];
     }
-    assert(ret->ds_count_color == 5 && ret->ds_count_depth == 1);
 
     *ia = (VkPipelineInputAssemblyStateCreateInfo) {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
@@ -1803,10 +1830,6 @@ static inline void println_timestep(struct model_animation_timestep ts)
     println("[frame %u, lerp %f]", ts.frame_i, ts.lerp_constant);
 }
 
-// @Todo I do not know if I am supposed to do something special
-// if the animation time > max_time. It feels as though I should
-// be lerping frame 0 and frame n for a repeating animation like
-// a walk, but then again that also seems impossible.
 inline static
 struct model_animation_timestep get_model_animation_timestep(
     float  time,
@@ -1815,8 +1838,13 @@ struct model_animation_timestep get_model_animation_timestep(
     uint   count,
     float *data)
 {
-    // @Todo Not sure if this is correct, see above.
-    time = time > max ? time - max : time;
+    // @Hack @Todo This is just a cheap way of getting looping for now. Later I
+    // will make it be controlled externally so that the playing of animations
+    // can be better controlled.  Right now this causes a small skip between
+    // frame 0 and frame N-1, the animation does not fade back into itself
+    // because this function alone cannot see how long the animation has been
+    // playing. 'time' is just the running time of the program rn.
+    time -= max * floorf(time / max);
 
     // gltf spec, clamp animation to frame 0 if time < min
     if (time <= min)
@@ -1827,10 +1855,12 @@ struct model_animation_timestep get_model_animation_timestep(
         if (data[i] > time)
             break;
 
-    return (struct model_animation_timestep) {
+    struct model_animation_timestep ts = {
         .frame_i = i-1,
         .lerp_constant = (time - data[i-1]) / (data[i] - data[i-1]),
     };
+
+    return ts;
 }
 
 // @Todo I am not sure if I am supposed to the divide with an integer and then cast
@@ -1957,7 +1987,7 @@ convert_accessor(uint ofs, uint accessor_flags, void *data, uint count, float *r
 #endif
 }
 
-static inline void model_anim_transform_translation(struct model_animation_timestep timestep,
+static inline void model_anim_transform_translation(struct model_animation_timestep timestep, float weight,
                                                     uint accessor_flags, float* data, matrix* ret)
 {
     float *uvec1 = data + (timestep.frame_i+0) * 3;
@@ -1965,10 +1995,10 @@ static inline void model_anim_transform_translation(struct model_animation_times
     vector v1 = get_vector(uvec1[0], uvec1[1], uvec1[2], 0);
     vector v2 = get_vector(uvec2[0], uvec2[1], uvec2[2], 0);
     vector vt = lerp_vector(v1, v2, timestep.lerp_constant);
-    translation_matrix(vt, ret);
+    translation_matrix(scale_vector(vt, weight), ret);
 }
 
-static inline void model_anim_transform_rotation(struct model_animation_timestep timestep,
+static inline void model_anim_transform_rotation(struct model_animation_timestep timestep, float weight,
                                                  uint accessor_flags, float* data, matrix* ret)
 {
 /*
@@ -1981,11 +2011,14 @@ static inline void model_anim_transform_rotation(struct model_animation_timestep
     vector q2 = {0};
     convert_accessor((timestep.frame_i+0) * 4, accessor_flags, data, 4, (float*)&q1);
     convert_accessor((timestep.frame_i+1) * 4, accessor_flags, data, 4, (float*)&q2);
+
     vector q = lerp_vector(q1, q2, timestep.lerp_constant);
-    rotation_matrix(q, ret);
+    float t = quaternion_angle(q);
+    vector a = feq(t, 0) ? vector3(0, 0, 1) : quaternion_axis(q);
+    rotation_matrix(quaternion(t * weight, a), ret);
 }
 
-static inline void model_anim_transform_scale(struct model_animation_timestep timestep,
+static inline void model_anim_transform_scale(struct model_animation_timestep timestep, float weight,
                                               uint accessor_flags, float* data, matrix* ret)
 {
     float *uvec1 = data + (timestep.frame_i+0) * 3;
@@ -1993,34 +2026,32 @@ static inline void model_anim_transform_scale(struct model_animation_timestep ti
     vector v1 = get_vector(uvec1[0], uvec1[1], uvec1[2], 0);
     vector v2 = get_vector(uvec2[0], uvec2[1], uvec2[2], 0);
     vector vs = lerp_vector(v1, v2, timestep.lerp_constant);
-    scale_matrix(vs, ret);
+    scale_matrix(scale_vector(vs, weight), ret);
 }
 
-typedef void (*model_anim_transform_fn)(struct model_animation_timestep, uint, float*, matrix*);
+typedef void (*model_anim_transform_fn)(struct model_animation_timestep, float, uint, float*, matrix*);
 model_anim_transform_fn MODEL_ANIM_TRANSFORM_FNS[3] = {
     model_anim_transform_translation,
     model_anim_transform_rotation,
     model_anim_transform_scale,
 };
 
-static inline void model_node_translation(struct trs *trs, float w, matrix *ret)
+static inline void model_node_translation(struct trs *trs, matrix *ret)
 {
-    translation_matrix(scale_vector(trs->t, w), ret);
+    translation_matrix(trs->t, ret);
 }
 
-static inline void model_node_rotation(struct trs *trs, float w, matrix *ret)
+static inline void model_node_rotation(struct trs *trs, matrix *ret)
 {
-    vector a = quaternion_axis(trs->r);
-    float t = quaternion_angle(trs->r) * w;
-    rotation_matrix(quaternion(t, a), ret);
+    rotation_matrix(trs->r, ret);
 }
 
-static inline void model_node_scale(struct trs *trs, float w, matrix *ret)
+static inline void model_node_scale(struct trs *trs, matrix *ret)
 {
-    scale_matrix(scale_vector(trs->s, w), ret);
+    scale_matrix(trs->s, ret);
 }
 
-typedef void (*model_node_trs_fn)(struct trs *trs, float w, matrix *ret);
+typedef void (*model_node_trs_fn)(struct trs *trs, matrix *ret);
 model_node_trs_fn NODE_TRS_FNS[3] = {
     model_node_translation,
     model_node_rotation,
@@ -2136,32 +2167,31 @@ static void model_build_transform_ubo(uint mesh, struct model_build_transform_ub
 
         gltf_skin *skin = &model->skins[tz];
         matrix global_invert;
-        log_print_error_if(skin->skeleton == Max_u32, "Go find the root yourself");
-        invert_transform(arg->xforms + skin->skeleton, &global_invert);
+
+        // log_print_error_if(skin->skeleton == Max_u32, "Go find the root yourself");
+        if (skin->skeleton == Max_u32) { // @Hack I am only doing this for using SimpleSkin model because I know its layout
+            static bool skeleton_check = 0;
+            if (!skeleton_check) {
+                println("**WARNING** This skinned model does not declare skeleton node. This is not being properly handled yet unless said model is SimpleSkin");
+                skeleton_check = 1;
+            }
+            identity_matrix(&global_invert);
+        } else {
+            invert_transform(arg->xforms + skin->skeleton, &global_invert);
+        }
 
         for(uint i=0; i < skin->joint_count; ++i) {
-            // print("Invert: ");
-            // print_matrix(&global_invert); // @RemoveMe
-            // print("IBM: ");
-            // print_matrix(arg->ibm + arg->ibm_ofs[tz] + i); // @RemoveMe
+            // mul_matrix(&global_invert,
+            //            arg->xforms + skin->joints[i],
+            //            arg->xforms + skin->joints[i]);
 
-            // print("Before %u: ", i);
-            // print_matrix(arg->xforms + skin->joints[i]); // @RemoveMe
-
-            mul_matrix(&global_invert,
-                       arg->xforms + skin->joints[i],
-                       arg->xforms + skin->joints[i]);
-
-            assert(FRAMES_ELAPSED < 4);
+            // assert(FRAMES_ELAPSED < 4);
 
 
             if (skin->inverse_bind_matrices != Max_u32)
                 mul_matrix(arg->xforms + skin->joints[i],
                            arg->ibm    + arg->ibm_ofs[tz] + i,
                            arg->xforms + skin->joints[i]);
-
-            // print("After %u: ", i);
-            // print_matrix(arg->xforms + skin->joints[i]); // @RemoveMe
         }
 
         for(uint i=0; i < skin->joint_count; ++i) {

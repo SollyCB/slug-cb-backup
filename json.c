@@ -123,8 +123,8 @@ static inline uint32 json_skip_to_value(const char *data) {
     return ret;
 }
 
-// file size * 2 seems large enough to hold the C translation
-#define JSON_ALLOCATION_SIZE_MULTIPLIER 2
+// file size * 2 seems large enough to hold the C translation -- nvm, had to increase it 28 Jul 2024
+#define JSON_ALLOCATION_SIZE_MULTIPLIER 4
 
 json parse_json(struct file *f, allocator *alloc, struct allocation *mem_used)
 {

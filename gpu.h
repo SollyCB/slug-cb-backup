@@ -163,6 +163,8 @@ typedef enum {
     SHADERS_BOX_FRAG,
     SHADERS_HTP_VERT,
     SHADERS_HTP_FRAG,
+    SHADERS_UNTEXTURED_VERT,
+    SHADERS_UNTEXTURED_FRAG,
     SHADER_COUNT,
 } shader_index;
 
@@ -178,6 +180,7 @@ typedef enum {
     PLL_FLOOR,
     PLL_BOX,
     PLL_HTP,
+    PLL_UNTEXTURED,
     PLL_COUNT,
 } pll_index;
 

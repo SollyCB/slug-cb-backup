@@ -1333,6 +1333,12 @@ struct shader_decl SHADERS[SHADER_COUNT] = {
     {.flags   = SHADER_NO_INCLUDE_BIT,
      .src_uri = {.cstr = "shaders/htp.frag",                .len = strlen("shaders/htp.frag")},
      .dst_uri = {.cstr = "shaders/htp.frag.spv",            .len = strlen("shaders/htp.frag.spv")}},
+    {.flags   = SHADER_NO_INCLUDE_BIT,
+     .src_uri = {.cstr = "shaders/untextured.vert",         .len = strlen("shaders/untextured.vert")},
+     .dst_uri = {.cstr = "shaders/untextured.vert.spv",     .len = strlen("shaders/untextured.vert.spv")}},
+    {.flags   = SHADER_NO_INCLUDE_BIT,
+     .src_uri = {.cstr = "shaders/untextured.frag",         .len = strlen("shaders/untextured.frag")},
+     .dst_uri = {.cstr = "shaders/untextured.frag.spv",     .len = strlen("shaders/untextured.frag.spv")}},
 };
 
 static inline int shader_kind(string s)
@@ -1374,6 +1380,7 @@ static void compile_shaders(struct gpu *gpu, allocator *temp)
         incl_sz += sz;
     }
 
+    bool compiled = false;
     for(uint i=0; i < SHADER_COUNT; ++i) {
         if (file_exists(SHADERS[i].dst_uri.cstr) &&
             ts_after(file_last_modified(SHADERS[i].dst_uri.cstr),
@@ -1383,6 +1390,7 @@ static void compile_shaders(struct gpu *gpu, allocator *temp)
             gpu->shaders[i] = create_shader_module(gpu, f.size, f.data);
         } else {
             println("Recompiling shader %s", SHADERS[i].src_uri.cstr);
+            compiled = true;
 
             int fd = file_open(SHADERS[i].src_uri.cstr, READ);
             uint sz = file_size_fd(fd); assert(sz + incl_sz < allocation_size && "increase allocation_size");
@@ -1439,6 +1447,9 @@ static void compile_shaders(struct gpu *gpu, allocator *temp)
             file_open_write_create(SHADERS[i].dst_uri.cstr, 0, len, spv);
         }
     }
+    if (!compiled)
+        return;
+
     allocator_reset_linear_to(temp, used);
     shaderc_result_release(r);
     shaderc_compiler_release(c);
@@ -1545,7 +1556,25 @@ struct pll_decl PLLS[PLL_COUNT] = {
         },
         .dsl_count = 1,
         .pcr_count = 1,
-    },
+    }, { // PLL_UNTEXTURED,
+        .dsls = { // vertex info
+            {   .count = 1,
+                .bindings = {
+                    {.binding = 0,
+                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                     .descriptorCount = 1,
+                     .stageFlags = VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT}},
+            }, {
+                .count = 1,
+                .bindings = {
+                    {.binding = 0,
+                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                     .descriptorCount = 1,
+                     .stageFlags = VK_SHADER_STAGE_VERTEX_BIT}},
+            }
+        },
+        .dsl_count = 2,
+    }
 };
 
 static void create_layouts(struct gpu *gpu)

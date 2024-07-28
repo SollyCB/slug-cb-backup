@@ -188,7 +188,7 @@ int main() {
     float s = 0;
     float u = 5;
 
-    float t = 0;
+    float t = get_float_time_proc();
     float dt = 0;
 
     struct box scene_bb;
@@ -250,7 +250,7 @@ int main() {
             matrix rot; // fix gltf orientation
             vector q = quaternion(-PI, vector3(0, 0, 1));
             rotation_matrix(q, &rot);
-            mul_matrix(&mat_model, &rot, &mat_model);
+            // mul_matrix(&mat_model, &rot, &mat_model);
 
             update_vs_info_mat_model(&pr.gpu, vs_info_desc.bb_offset, &mat_model);
             update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &mat_view);
@@ -355,13 +355,10 @@ int main() {
 
         uint scene = 0;
 
-        float times[] = {
-            0, 0.1, 0.2, 0.3, 0.4, 0.5,
-        };
         struct animation_info animations[1] = {
             {
                 .index = 0,
-                .time = times[FRAMES_ELAPSED % carrlen(times)],
+                .time = t / 2,
                 .weights = {1, 1, 1, 1},
             }
         };
@@ -452,10 +449,13 @@ int main() {
 
             begin_color_renderpass(draw_cmd, &color_rp, pr.gpu.settings.scissor);
 
-            #if NO_DESCRIPTOR_BUFFER
-            draw_floor(draw_cmd, &pr.gpu, color_rp.rp, 0, 2, lma.dsls, lma.d_sets, &df_rsc);
-            #else
-            draw_floor(draw_cmd, &pr.gpu, color_rp.rp, 0, lma.dsls, lma.db_indices, lma.db_offsets, &df_rsc);
+            #define DRAW_FLOOR 0
+            #if DRAW_FLOOR
+                #if NO_DESCRIPTOR_BUFFER
+                draw_floor(draw_cmd, &pr.gpu, color_rp.rp, 0, 2, lma.dsls, lma.d_sets, &df_rsc);
+                #else
+                draw_floor(draw_cmd, &pr.gpu, color_rp.rp, 0, lma.dsls, lma.db_indices, lma.db_offsets, &df_rsc);
+                #endif
             #endif
 
             draw_model_color(draw_cmd, lmr.draw_info);
@@ -573,7 +573,9 @@ int main() {
         signal_thread_true(&t_cleanup[FRAME_I]);
         reset_descriptor_pools(&pr.gpu);
 
+        #if DRAW_FLOOR
         draw_floor_cleanup(&pr.gpu, &df_rsc);
+        #endif
 
         #if DCF
         for(uint i=0; i < carrlen(vf_rsc); ++i)

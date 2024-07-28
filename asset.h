@@ -9,6 +9,7 @@ enum {
     MODEL_CUBE_TESTING,
     MODEL_CESIUM_MAN,
     MODEL_CESIUM_MAN_TESTING,
+    MODEL_SIMPLE_SKIN,
 };
 
 const char *MODEL_FILES[] = {
@@ -16,21 +17,9 @@ const char *MODEL_FILES[] = {
     "models/cube-static-testing/Cube.gltf",
     "models/cesium-man/CesiumMan.gltf",
     "models/cesium-man-testing/CesiumMan.gltf",
+    "models/simple-skin/SimpleSkin.gltf",
 };
-
-#if 1
-    #if 1
-        #define MODEL MODEL_CESIUM_MAN_TESTING
-    #else
-        #define MODEL MODEL_CESIUM_MAN,
-    #endif
-#else
-    #if 1
-        #define MODEL MODEL_CUBE_TESTING
-    #else
-        #define MODEL MODEL_CUBE
-    #endif
-#endif
+#define MODEL MODEL_SIMPLE_SKIN
 
 enum {
     LOAD_MODEL_RESULT_INCOMPLETE,
