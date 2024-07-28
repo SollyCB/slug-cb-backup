@@ -2096,18 +2096,21 @@ static void model_animations(
                     // @Optimise @Test Maybe this is faster as a switch?
                     MODEL_ANIM_TRANSFORM_FNS[tz](
                             timestep,
+                            lm_arg->animations[j].weights[tz],
                             output->flags,
                             (float*)model_get_accessor_data(gpu, model, sampler->output, offsets),
                             &trs[tz]);
                     ret->xforms[node>>6] |= one << (node & 63);
                 }
             }
-            mask = anim->targets[i].path_mask & ~(GLTF_ANIMATION_PATH_WEIGHTS_BIT);
+
+            // if unanimated, get default transform
+            mask = ~(anim->targets[i].path_mask | GLTF_ANIMATION_PATH_WEIGHTS_BIT) & GLTF_ANIMATION_PATH_BITS;
             pc = popcnt(mask);
             for(uint k=0; k < pc; ++k) {
                 uint tz = ctz(mask);
                 mask &= ~(1<<tz);
-                NODE_TRS_FNS[tz](&model->nodes[node].trs, lm_arg->animations[j].weights[tz], &trs[tz]);
+                NODE_TRS_FNS[tz](&model->nodes[node].trs, &trs[tz]);
             }
             mul_matrix(&trs[0], &trs[1], &trs[1]);
             mul_matrix(&trs[1], &trs[2], &trs[2]);
