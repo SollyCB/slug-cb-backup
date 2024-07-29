@@ -242,7 +242,7 @@ int main() {
             get_trs(
                 vector3(0, MODEL == MODEL_CUBE_TESTING ? 3 : 0, 0),
                 quaternion(0, vector3(0, 1, 0)),
-                vector3(1,1,1),
+                scale_vector(vector3(1,1,1), 10),
                 &model_trs
             );
             convert_trs(&model_trs, &mat_model);
@@ -269,8 +269,8 @@ int main() {
                 minmax_frustum_points(&sub_frusta[i], &light_view_mat, &minmax_frustum_x[i], &minmax_frustum_y[i]);
 
                 // world units per texel (not totally sure if these are the correct numbers to use but it seems to work)
-                float wupt_x = fabsf(minmax_frustum_x[i].max - minmax_frustum_x[i].min) / pr.gpu.settings.shadow_maps.width;
-                float wupt_y = fabsf(minmax_frustum_y[i].max - minmax_frustum_y[i].min) / pr.gpu.settings.shadow_maps.height;
+                float wupt_x = fabsf(minmax_frustum_x[i].max - minmax_frustum_x[i].min) / pr.gpu.settings.shadow_maps.dim;
+                float wupt_y = fabsf(minmax_frustum_y[i].max - minmax_frustum_y[i].min) / pr.gpu.settings.shadow_maps.dim;
 
                 // move light in texel sized increments
                 minmax_frustum_x[i].max /= wupt_x;
@@ -318,10 +318,10 @@ int main() {
             }
 
             if (cam.mode == CAMERA_MODE_LIGHT) {
-                vs_info->dlcx[1] = true;
-                vs_info->dlcx[2] = cam.csi;
+                vs_info->dlcs[1] = true;
+                vs_info->dlcs[2] = cam.csi;
             } else {
-                vs_info->dlcx[1] = false;
+                vs_info->dlcs[1] = false;
             }
         }
 

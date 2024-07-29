@@ -187,8 +187,7 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
     gpu->shader_dir = load_shader_dir(gpu, gpu->alloc_heap);
     #endif
 
-    gpu->settings.shadow_maps.width = 4096 / 4;
-    gpu->settings.shadow_maps.height = 4096 / 4;
+    gpu->settings.shadow_maps.dim = 4096 / 4;
 
     compile_shaders(gpu, gpu->alloc_temp);
     create_layouts(gpu);
@@ -1142,7 +1141,9 @@ Vertex_Info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vertex
 
     Vertex_Info *vs = (Vertex_Info*)(gpu->mem.bind_buffer.data + ret->bb_offset);
 
-    vs->dlcx[0] = 1;
+    vs->dlcs[3] = gpu->settings.shadow_maps.dim;
+
+    vs->dlcs[0] = 1;
     vs->dir_lights[0].position = vector4(7, 9, 15,  1);
     vs->dir_lights[0].color    = scale_vector(vector4(10.0, 10.0, 10.0, 0), 1.0);
 
@@ -2175,7 +2176,7 @@ bool create_shadow_maps(struct gpu *gpu, VkCommandBuffer transfer_cmd, VkCommand
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
             .imageType = VK_IMAGE_TYPE_2D,
             .format = GPU_SHADOW_ATTACHMENT_FORMAT,
-            .extent = (VkExtent3D){gpu->settings.shadow_maps.width,gpu->settings.shadow_maps.height,1},
+            .extent = (VkExtent3D){gpu->settings.shadow_maps.dim,gpu->settings.shadow_maps.dim,1},
             .mipLevels = 1,
             .arrayLayers = 1,
             .samples = VK_SAMPLE_COUNT_1_BIT,
@@ -2659,8 +2660,8 @@ void create_shadow_renderpass(struct gpu *gpu, struct shadow_maps *shadow_maps, 
         .renderPass      = rp->rp,
         .attachmentCount = shadow_maps->count * CSM_COUNT,
         .pAttachments    = shadow_maps->views,
-        .width           = gpu->settings.shadow_maps.width,
-        .height          = gpu->settings.shadow_maps.height,
+        .width           = gpu->settings.shadow_maps.dim,
+        .height          = gpu->settings.shadow_maps.dim,
         .layers          = 1,
     };
     {
@@ -2708,7 +2709,7 @@ void begin_color_renderpass(VkCommandBuffer cmd, struct renderpass *rp, VkRect2D
 
 void begin_shadow_renderpass(VkCommandBuffer cmd, struct renderpass *rp, struct gpu *gpu, uint count, allocator *alloc)
 {
-    assert(gpu->settings.shadow_maps.width && gpu->settings.shadow_maps.height);
+    assert(gpu->settings.shadow_maps.dim && gpu->settings.shadow_maps.dim);
 
     VkClearValue *clears = sallocate(alloc, *clears, count);
 
@@ -2726,8 +2727,8 @@ void begin_shadow_renderpass(VkCommandBuffer cmd, struct renderpass *rp, struct 
         .framebuffer = rp->fb,
         .clearValueCount = count,
         .pClearValues = clears,
-        .renderArea.extent = (VkExtent2D) {.width  = gpu->settings.shadow_maps.width,
-                                           .height = gpu->settings.shadow_maps.height},
+        .renderArea.extent = (VkExtent2D) {.width  = gpu->settings.shadow_maps.dim,
+                                           .height = gpu->settings.shadow_maps.dim},
     };
     vk_cmd_begin_renderpass(cmd, &bi, VK_SUBPASS_CONTENTS_INLINE);
 }

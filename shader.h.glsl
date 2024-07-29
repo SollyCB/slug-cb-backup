@@ -53,7 +53,7 @@ struct Vertex_Info {
 
     In_Directional_Light dir_lights[DIR_LIGHT_COUNT];
 
-    uvec4 dlcx; // dir light count, use light view, light view cascade index, null
+    uvec4 dlcs; // dir light count, use light view, light view cascade index, shadow map dimensions
 };
 
 struct Vertex_Transforms {
@@ -188,7 +188,7 @@ vec3 cascade_i() {
     float fz = fs_info.view_frag_pos.z;
     vec4  d  = vs_info.cascade_boundaries;
 
-    #if 1 // My implementation is superior I think.
+    #if 0 // My implementation is cooler
     int  j = 4 - int(dot(vec4(fz > d.x, fz > d.y, fz > d.z, fz > d.w), vec4(1,1,1,1)));
     int  i = max(j - 1, 0);
     vec4 b = vec4(fz-d.x,fz-d.y,fz-d.z,fz-d.w); // positive == before far plane
@@ -202,7 +202,6 @@ vec3 cascade_i() {
 
     return vec3(sdi + 1 * int(bf < 0), min(sdi + 1 * int(bf < 1), CSM_COUNT-1), clamp(1 - bf, 0, 1));
     #else
-
     int c0 = 4 - int(dot(vec4(fz > d.x, fz > d.y, fz > d.z, fz > d.w), vec4(1,1,1,1)));
     float bf = 1 - (abs(fz - d[c0]) / CSM_BLEND_BAND);
 

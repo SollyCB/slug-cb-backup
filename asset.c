@@ -1170,15 +1170,15 @@ model_pipelines_transform_descriptors_and_draw_info(
     };
 
     VkViewport dvp = {
-        .width = gpu->settings.shadow_maps.width,
-        .height = gpu->settings.shadow_maps.height,
+        .width = gpu->settings.shadow_maps.dim,
+        .height = gpu->settings.shadow_maps.dim,
         .minDepth = 0,
         .maxDepth = 1,
     };
 
     VkRect2D dsci = {
-        .extent = (VkExtent2D) {.width  = gpu->settings.shadow_maps.width,
-                                .height = gpu->settings.shadow_maps.height,}
+        .extent = (VkExtent2D) {.width  = gpu->settings.shadow_maps.dim,
+                                .height = gpu->settings.shadow_maps.dim,}
     };
 
     VkPipelineViewportStateCreateInfo depth_viewport = {

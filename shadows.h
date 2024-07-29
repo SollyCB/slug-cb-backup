@@ -33,13 +33,13 @@ static inline void transform_frustum(struct frustum *f, matrix *m)
 
 static inline void scene_bounding_box(struct box *bb)
 {
-    float max_x =  40;
-    float max_y =  40;
-    float max_z = -40;
+    float max_x =  50;
+    float max_y =  50;
+    float max_z = -50;
 
-    float min_x = -40;
+    float min_x = -50;
     float min_y =   0;
-    float min_z =  40;
+    float min_z =  50;
 
     bb->p[0] = vector4(min_x, min_y, max_z, 1);
     bb->p[1] = vector4(min_x, min_y, min_z, 1);

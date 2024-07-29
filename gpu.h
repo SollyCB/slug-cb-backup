@@ -41,8 +41,7 @@ struct gpu_settings {
     uint32                pl_dynamic_state_count;
     VkDynamicState        pl_dynamic_states;
     struct {
-        uint width;
-        uint height;
+        uint dim;
     } shadow_maps;
 };
 

@@ -20,8 +20,8 @@ void main() {
     vec4 world_pos = ws * pos;
     vec4 view_pos = vs_info.view * world_pos;
 
-    if (vs_info.dlcx[1] != 0)
-        gl_Position = vs_info.dir_lights[0].space[vs_info.dlcx[2]] * world_pos;
+    if (vs_info.dlcs[1] != 0)
+        gl_Position = vs_info.dir_lights[0].space[vs_info.dlcs[2]] * world_pos;
     else
         gl_Position = vs_info.proj * view_pos;
 
@@ -40,9 +40,9 @@ void main() {
 
     fs_info.view_frag_pos = view_pos;
     fs_info.world_frag_pos = world_pos;
-    dir_light_count = vs_info.dlcx.x;
+    dir_light_count = vs_info.dlcs.x;
 
-    for(uint i=0; i < vs_info.dlcx.x; ++i) {
+    for(uint i=0; i < vs_info.dlcs.x; ++i) {
         fs_info.dir_lights[i].color = vec3(vs_info.dir_lights[i].color);
         fs_info.dir_lights[i].ts_light_pos = tbn * vec3(vs_info.dir_lights[i].position);
     }

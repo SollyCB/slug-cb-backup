@@ -26,7 +26,7 @@ struct Vertex_Info {
 
     In_Directional_Light dir_lights[DIR_LIGHT_COUNT];
 
-    uvec4 dlcx; // dir light count, use light view, light view cascade index, null
+    uvec4 dlcs; // dir light count, use light view, light view cascade index, null
 };
 
 struct Vertex_Transforms {
