@@ -1669,11 +1669,6 @@ static inline void model_node_global_transforms(
     mesh->node_mask[node>>6] |= (one & mesh_test) << (node & 63);
     mesh->skin_mask |= (one & skin_test) << (nodes[node].skin & skin_test);
 
-    if (node == 3 || node == 12 || node == 13 || node == 20) {
-        print("node %u: ", node);
-        print_matrix(&global_xforms[node]);
-    }
-
     for(uint i=0; i < nodes[node].child_count; ++i)
         model_node_global_transforms(xforms_mask, anim_xforms, global_xforms, meshes,
                 &global_xforms[node], nodes, nodes[node].children[i], mesh_mask);
@@ -2104,7 +2099,6 @@ static void model_animations(
                         input->max_min.max[0],
                         input->count,
                         (float*)model_get_accessor_data(gpu, model, sampler->input, offsets));
-                // println_timestep(timestep); // @RemoveMe
 
                 gltf_accessor *output = &model->accessors[sampler->output];
 
@@ -2181,12 +2175,9 @@ static void model_build_transform_ubo(uint mesh, struct model_build_transform_ub
         }
 
         for(uint i=0; i < skin->joint_count; ++i) {
-            // mul_matrix(&global_invert,
-            //            arg->xforms + skin->joints[i],
-            //            arg->xforms + skin->joints[i]);
-
-            // assert(FRAMES_ELAPSED < 4);
-
+            mul_matrix(&global_invert,
+                       arg->xforms + skin->joints[i],
+                       arg->xforms + skin->joints[i]);
 
             if (skin->inverse_bind_matrices != Max_u32)
                 mul_matrix(arg->xforms + skin->joints[i],

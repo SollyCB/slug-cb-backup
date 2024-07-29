@@ -248,9 +248,9 @@ int main() {
             convert_trs(&model_trs, &mat_model);
 
             matrix rot; // fix gltf orientation
-            vector q = quaternion(-PI, vector3(0, 0, 1));
+            vector q = quaternion(-PI/2, vector3(1, 0, 0));
             rotation_matrix(q, &rot);
-            // mul_matrix(&mat_model, &rot, &mat_model);
+            mul_matrix(&mat_model, &rot, &mat_model);
 
             update_vs_info_mat_model(&pr.gpu, vs_info_desc.bb_offset, &mat_model);
             update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &mat_view);
@@ -449,7 +449,7 @@ int main() {
 
             begin_color_renderpass(draw_cmd, &color_rp, pr.gpu.settings.scissor);
 
-            #define DRAW_FLOOR 0
+            #define DRAW_FLOOR 1
             #if DRAW_FLOOR
                 #if NO_DESCRIPTOR_BUFFER
                 draw_floor(draw_cmd, &pr.gpu, color_rp.rp, 0, 2, lma.dsls, lma.d_sets, &df_rsc);

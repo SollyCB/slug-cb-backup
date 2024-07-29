@@ -19,7 +19,7 @@ const char *MODEL_FILES[] = {
     "models/cesium-man-testing/CesiumMan.gltf",
     "models/simple-skin/SimpleSkin.gltf",
 };
-#define MODEL MODEL_SIMPLE_SKIN
+#define MODEL MODEL_CESIUM_MAN_TESTING
 
 enum {
     LOAD_MODEL_RESULT_INCOMPLETE,
