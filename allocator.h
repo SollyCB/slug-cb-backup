@@ -4,10 +4,8 @@
 #include "defs.h"
 #include "assert.h"
 
-GCC_IGNORE_WARNINGS_BEGIN
 #define tlsf_assert assert
 #include "external/tlsf.h"
-GCC_IGNORE_WARNINGS_END
 
 #define ALLOCATOR_ALIGNMENT 16
 

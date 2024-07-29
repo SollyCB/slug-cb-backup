@@ -480,7 +480,7 @@ static void gpu_create_device_and_queues(struct gpu *gpu)
     graphics_queue_create_info.pQueuePriorities = &queue_priorities;
 
     uint queue_info_count = 1;
-    VkDeviceQueueCreateInfo transfer_queue_create_info;
+    VkDeviceQueueCreateInfo transfer_queue_create_info = {};
 
     if (transfer_queue_index != graphics_queue_index) {
         gpu->flags |= GPU_DISCRETE_TRANSFER_BIT;
@@ -1144,9 +1144,9 @@ Vertex_Info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vertex
 
     vs->dlcx[0] = 1;
     vs->dir_lights[0].position = vector4(7, 9, 15,  1);
-    vs->dir_lights[0].color    = scale_vector(vector4(20.0, 20.0, 20.0, 0), 1.0);
+    vs->dir_lights[0].color    = scale_vector(vector4(10.0, 10.0, 10.0, 0), 1.0);
 
-    vs->ambient = scale_vector(vector3(1, 1, 1), 0.5);
+    vs->ambient = scale_vector(vector3(1, 1, 1), 1.5);
 
     matrix model;
     identity_matrix(&model);
@@ -2893,7 +2893,7 @@ bool htp_allocate_resources(
         }
         #endif
 
-        size_t vert_src_ofs;
+        size_t vert_src_ofs = 0;
         if (stage_sz) {
             vert_src_ofs = gpu_buffer_allocate(gpu, &gpu->mem.transfer_buffer, stage_sz);
             if (vert_src_ofs == GPU_BUF_ALLOC_FAIL) {

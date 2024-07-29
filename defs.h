@@ -8,19 +8,6 @@ extern int SCR_W;
 extern float ASPECT_RATIO;
 extern float FOV;
 
-#ifndef _WIN32
-    #define PRAGMA(arg) _Pragma(arg)
-
-    #define GCC_IGNORE_WARNINGS_BEGIN \
-        PRAGMA("GCC diagnostic push") \
-        PRAGMA("GCC diagnostic ignored \"-Wall\"")
-
-    #define GCC_IGNORE_WARNINGS_END \
-        PRAGMA("GCC diagnostic pop")
-#else
-    #define PRAGMA(arg) __pragma(arg)
-#endif
-
 #define ASPECT_RATIO ((float)SCR_H / SCR_W)
 #define PERSPECTIVE_NEAR 0.1
 #define PERSPECTIVE_FAR  100.0

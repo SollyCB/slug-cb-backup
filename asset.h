@@ -10,6 +10,7 @@ enum {
     MODEL_CESIUM_MAN,
     MODEL_CESIUM_MAN_TESTING,
     MODEL_SIMPLE_SKIN,
+    MODEL_FLIGHT_HELMET,
 };
 
 const char *MODEL_FILES[] = {
@@ -18,6 +19,7 @@ const char *MODEL_FILES[] = {
     "models/cesium-man/CesiumMan.gltf",
     "models/cesium-man-testing/CesiumMan.gltf",
     "models/simple-skin/SimpleSkin.gltf",
+    "models/flight-helmet-testing/FlightHelmet.gltf",
 };
 #define MODEL MODEL_CESIUM_MAN_TESTING
 

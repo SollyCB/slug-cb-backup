@@ -154,6 +154,7 @@ static void print_parse_int(Print_Config *config, uint64 i, int *buf_pos, char *
         *buf_pos += 1;
     }
 }
+
 inline static void print_parse_signed_int(Print_Config *config, int64 i, int *buf_pos, char *print_buffer) {
     if (i < 0) {
         print_buffer[*buf_pos] = '-';
@@ -207,7 +208,7 @@ void string_format_backend(char *format_buffer, const char *fmt, va_list args) {
     char c;
     char *s;
     uint64 u;
-    int64 i;
+    int64 i = 0;
     double f;
 
     Print_Config config = {};

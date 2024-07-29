@@ -240,7 +240,7 @@ int main() {
 
             struct trs model_trs;
             get_trs(
-                vector3(0, 0, 0),
+                vector3(0, MODEL == MODEL_CUBE_TESTING ? 3 : 0, 0),
                 quaternion(0, vector3(0, 1, 0)),
                 vector3(1,1,1),
                 &model_trs
@@ -354,19 +354,24 @@ int main() {
         create_shadow_renderpass(&pr.gpu, &shadow_maps, &depth_rp);
 
         uint scene = 0;
+        uint animation_count;
+        struct animation_info animations[1];
 
-        struct animation_info animations[1] = {
-            {
+        if (MODEL == MODEL_CESIUM_MAN_TESTING) {
+            animations[0] = (struct animation_info) {
                 .index = 0,
                 .time = t / 2,
                 .weights = {1, 1, 1, 1},
-            }
-        };
+            };
+            animation_count = 1;
+        } else {
+            animation_count = 0;
+        }
 
         struct load_model_arg lma = {
             .flags = LOAD_MODEL_BLIT_MIPMAPS_BIT,
             .dsl_count = 2,
-            .animation_count = carrlen(animations),
+            .animation_count = animation_count,
             .scene_count = model.scene_count,
             .subpass_mask = LOAD_MODEL_SUBPASS_DRAW,
             .color_subpass = 0,
@@ -411,7 +416,7 @@ int main() {
         thread_add_work_high(&pr.threads, 1, &w_load_model);
 
         while(lmi.ret->result == LOAD_MODEL_RESULT_INCOMPLETE)
-            ;
+            _mm_mfence();
 
         {
             if (!FRAMES_ELAPSED) { // upload default texture on first frame
@@ -605,6 +610,7 @@ int main() {
 
         FRAMES_ELAPSED++;
         FRAME_I = FRAMES_ELAPSED & 1;
+        // println("Frame %i", FRAMES_ELAPSED);
 
         {
             #if 0 // Throttle frame rate

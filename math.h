@@ -585,7 +585,7 @@ static inline bool invert(matrix *x, matrix *y)
 
     for(uint j=0; j < 3; ++j) {
         float max = 0;
-        uint r;
+        uint r = Max_u32;
         for(uint row=j; row < 3; ++row)
             if (fabs(m[row][j]) > max) {
                 max = fabs(m[row][j]);
