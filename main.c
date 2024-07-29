@@ -242,7 +242,7 @@ int main() {
             get_trs(
                 vector3(0, MODEL == MODEL_CUBE_TESTING ? 3 : 0, 0),
                 quaternion(0, vector3(0, 1, 0)),
-                scale_vector(vector3(1,1,1), 10),
+                scale_vector(vector3(1,1,1), 5),
                 &model_trs
             );
             convert_trs(&model_trs, &mat_model);

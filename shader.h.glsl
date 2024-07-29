@@ -229,10 +229,32 @@ float in_shadow(uint li) {
     p.xy = p.xy * 0.5 + 0.5;
     q.xy = q.xy * 0.5 + 0.5;
 
+    #if 1 // Some attempt at further pcf sampling.
     float a = texture(nonuniformEXT(shadow_maps[li * CSM_COUNT + ca]), p);
     float b = texture(nonuniformEXT(shadow_maps[li * CSM_COUNT + cb]), q);
 
     return mix(a, b, c);
+    #else
+    vec2 coords[] = {
+        vec2(-1, -1),
+        vec2( 1, -1),
+        vec2(-1,  1),
+        vec2( 1,  1),
+    };
+    float ofs = 1 / vs_info.dlcs[3];
+
+    float a = texture(nonuniformEXT(shadow_maps[li * CSM_COUNT + ca]), p) * 0.2;
+    float b = texture(nonuniformEXT(shadow_maps[li * CSM_COUNT + cb]), q) * 0.2;
+
+    for(uint i=0; i < 4; ++i) {
+        vec3 j = vec3(p.x + ofs * coords[i].x, p.y + ofs * coords[i].y, p.z);
+        vec3 k = vec3(q.x + ofs * coords[i].x, q.y + ofs * coords[i].y, q.z);
+        a += texture(nonuniformEXT(shadow_maps[li * CSM_COUNT + ca]), j) * 0.2;
+        b += texture(nonuniformEXT(shadow_maps[li * CSM_COUNT + cb]), k) * 0.2;
+    }
+
+    return mix(a, b, c);
+    #endif
 }
 
 void pmatubo() {

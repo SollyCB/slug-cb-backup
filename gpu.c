@@ -1383,9 +1383,11 @@ static void compile_shaders(struct gpu *gpu, allocator *temp)
 
     bool compiled = false;
     for(uint i=0; i < SHADER_COUNT; ++i) {
-        if (file_exists(SHADERS[i].dst_uri.cstr) &&
+        if (file_exists(SHADERS[i].dst_uri.cstr)                                                         &&
+           (ts_after(file_last_modified(SHADERS[i].dst_uri.cstr),
+                     file_last_modified("shader.h.glsl")) || (SHADERS[i].flags & SHADER_NO_INCLUDE_BIT)) &&
             ts_after(file_last_modified(SHADERS[i].dst_uri.cstr),
-                      file_last_modified(SHADERS[i].src_uri.cstr)))
+                     file_last_modified(SHADERS[i].src_uri.cstr)))
         {
             struct file f = file_read_all(SHADERS[i].dst_uri.cstr, temp);
             gpu->shaders[i] = create_shader_module(gpu, f.size, f.data);
