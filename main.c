@@ -209,7 +209,7 @@ int main() {
             // vs_info->dir_lights[0].position = rotate_passive(vs_info->dir_lights[0].position, q);
 
             vector light_tgt = vector4(0, 0, 0, 1);
-            view_matrix(vs_info->dir_lights[0].position,
+            view_matrix(normalize(vs_info->dir_lights[0].position),
                         normalize(sub_vector(light_tgt, vs_info->dir_lights[0].position)),
                         vector3(0, 1, 0), &light_view_mat);
         }
@@ -239,10 +239,11 @@ int main() {
             }
 
             struct trs model_trs;
+            float scale_mul = 5;
             get_trs(
-                vector3(0, MODEL == MODEL_CUBE_TESTING ? 3 : 0, 0),
+                vector3(0, MODEL == MODEL_CUBE_TESTING ? 3 * scale_mul : 0, 0),
                 quaternion(0, vector3(0, 1, 0)),
-                scale_vector(vector3(1,1,1), 5),
+                scale_vector(vector3(1,1,1), scale_mul),
                 &model_trs
             );
             convert_trs(&model_trs, &mat_model);
@@ -416,7 +417,7 @@ int main() {
         thread_add_work_high(&pr.threads, 1, &w_load_model);
 
         while(lmi.ret->result == LOAD_MODEL_RESULT_INCOMPLETE)
-            _mm_mfence();
+            _mm_lfence();
 
         {
             if (!FRAMES_ELAPSED) { // upload default texture on first frame
@@ -575,7 +576,7 @@ int main() {
         }
 
         fence_wait_secs_and_reset(&pr.gpu, fence, 3);
-        signal_thread_true(&t_cleanup[FRAME_I]);
+        signal_thread_true(&t_cleanup[FRAME_I]); // only if loading assets every frame
         reset_descriptor_pools(&pr.gpu);
 
         #if DRAW_FLOOR

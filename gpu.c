@@ -1144,7 +1144,7 @@ Vertex_Info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vertex
     vs->dlcs[3] = gpu->settings.shadow_maps.dim;
 
     vs->dlcs[0] = 1;
-    vs->dir_lights[0].position = vector4(7, 9, 15,  1);
+    vs->dir_lights[0].position = vector4(50, 50, 50,  1);
     vs->dir_lights[0].color    = scale_vector(vector4(10.0, 10.0, 10.0, 0), 1.0);
 
     vs->ambient = scale_vector(vector3(1, 1, 1), 1.5);

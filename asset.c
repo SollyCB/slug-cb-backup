@@ -1190,8 +1190,8 @@ model_pipelines_transform_descriptors_and_draw_info(
     };
 
     bool  depth_bias_enable   = true;
-    float depth_bias_constant = 1.05;
-    float depth_bias_slope    = 1.05;
+    float depth_bias_constant = 1.0005;
+    float depth_bias_slope    = 1.0005;
 
     // @Todo This is supposed to be an 'over' operator blend. I am assuming
     // that that is the same as the vulkan VK_BLEND_OVER.
