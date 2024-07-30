@@ -101,6 +101,7 @@ struct gpu_memory {
 
     struct gpu_device_memory texture_memory;
 
+    // @TODO Per thread buffers
     struct gpu_buffer bind_buffer; // index, vertex, uniform
     struct gpu_buffer transfer_buffer;
     struct gpu_buffer descriptor_buffer_resource;
@@ -291,6 +292,9 @@ void gpu_destroy_sampler(struct gpu *gpu, VkSampler sampler);
 bool resource_dp_allocate(struct gpu *gpu, uint thread_i, uint count, VkDescriptorSetLayout *layouts, VkDescriptorSet *sets);
 bool sampler_dp_allocate(struct gpu *gpu, uint thread_i, uint count, VkDescriptorSetLayout *layouts, VkDescriptorSet *sets);
 
+#define dp_reset_fn(name) void name(struct gpu *gpu, uint thread_i)
+typedef dp_reset_fn(dp_reset);
+
 void resource_dp_reset(struct gpu *gpu, uint thread_i)
 {
     vk_reset_descriptor_pool(gpu->device, gpu->resource_dp[thread_i], 0x0);
@@ -300,7 +304,26 @@ void sampler_dp_reset(struct gpu *gpu, uint thread_i)
     vk_reset_descriptor_pool(gpu->device, gpu->sampler_dp[thread_i], 0x0);
 }
 
-void reset_descriptor_pools(struct gpu *gpu)
+enum {
+    DP_RESOURCE,
+    DP_SAMPLER,
+};
+void reset_descriptor_pool(struct gpu *gpu, int type, uint i)
+{
+    dp_reset *reset_fn[] = {
+        resource_dp_reset,
+        sampler_dp_reset,
+    };
+    reset_fn[type](gpu, i);
+}
+
+void reset_descriptor_pools(struct gpu *gpu, uint i)
+{
+    resource_dp_reset(gpu, i);
+    sampler_dp_reset(gpu, i);
+}
+
+void reset_all_descriptor_pools(struct gpu *gpu)
 {
     for(uint i=0; i < THREAD_COUNT+1; ++i) {
         resource_dp_reset(gpu, i);

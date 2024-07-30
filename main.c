@@ -181,7 +181,8 @@ int main() {
     matrix light_space[CSM_COUNT];
     #endif
 
-    bool32 t_cleanup[2] = {0};
+    bool32 t_cleanup_assets[2] = {0};
+    bool32 t_cleanup_pipelines[2] = {0};
 
     bool jumping = 0;
     float tim = 0;
@@ -195,6 +196,9 @@ int main() {
     struct frustum camera_frustum;
     struct frustum sub_frusta[CSM_COUNT];
     struct minmax minmax_frustum_x[CSM_COUNT],minmax_frustum_y[CSM_COUNT], light_nearfar_planes[CSM_COUNT];
+
+    struct load_model_ret lmr = {0};
+
 
     // for(uint frame_index=0; frame_index < 2; ++frame_index) {
     while(1) {
@@ -398,13 +402,13 @@ int main() {
             .scissor = pr.gpu.settings.scissor,
         };
 
-        signal_thread_false(&t_cleanup[FRAME_I]);
+        signal_thread_false(&t_cleanup_assets[FRAME_I]);
+        signal_thread_false(&t_cleanup_pipelines[FRAME_I]);
 
-        struct load_model_ret lmr = {
-            .cmd_graphics = graphics_cmd,
-            .cmd_transfer = transfer_cmd,
-            .thread_cleanup_resources = &t_cleanup[FRAME_I],
-        };
+        lmr.cmd_graphics = graphics_cmd;
+        lmr.cmd_transfer = transfer_cmd;
+        lmr.thread_free_assets    = &t_cleanup_assets[FRAME_I];
+        lmr.thread_free_pipelines = &t_cleanup_pipelines[FRAME_I];
 
         struct load_model_info lmi = {
             .arg = &lma,
@@ -576,8 +580,13 @@ int main() {
         }
 
         fence_wait_secs_and_reset(&pr.gpu, fence, 3);
-        signal_thread_true(&t_cleanup[FRAME_I]); // only if loading assets every frame
-        reset_descriptor_pools(&pr.gpu);
+
+        #if 0 // only if loading assets every frame
+        model_signal_cleanup(&lmr);
+        #endif
+
+        reset_descriptor_pools(&pr.gpu, 0);
+        model_signal_pipeline_cleanup(&lmr);
 
         #if DRAW_FLOOR
         draw_floor_cleanup(&pr.gpu, &df_rsc);

@@ -10,7 +10,7 @@
 #include "asset.h"
 #include "vulkan_errors.h"
 
-struct model_memory_offsets {
+struct model_offsets {
     size_t           base_stage;
     size_t           base_bind;
     size_t           base_descriptor_resource;
@@ -31,17 +31,24 @@ struct model_memory_offsets {
     uint64           skin_mask;
 };
 
-struct model_resources { // @TODO Check what members are actually being used for cleanup, e.g. mesh_count
-    uint                   image_count;
-    uint                   sampler_count;
-    uint                   mesh_count;
-    uint                   pipeline_count;
-    void                  *free_me;
-    allocator             *alloc;
-    struct gpu            *gpu;
-    struct gpu_texture    *images;
-    VkSampler             *samplers;
-    VkPipeline            *pipelines;
+enum {
+    MODEL_RESOURCES_VALID_ASSETS_BIT    = 0x01,
+    MODEL_RESOURCES_VALID_PIPELINES_BIT = 0x02,
+    MODEL_RESOURCES_ALL_VALID_BIT       = MODEL_RESOURCES_VALID_ASSETS_BIT    |
+                                          MODEL_RESOURCES_VALID_PIPELINES_BIT,
+};
+struct model_resources {
+    uint                flags;
+    uint                image_count;
+    uint                sampler_count;
+    uint                mesh_count;
+    uint                pipeline_count;
+    void               *free_me;
+    allocator          *alloc;
+    struct gpu         *gpu;
+    struct gpu_texture *images;
+    VkSampler          *samplers;
+    VkPipeline         *pipelines;
 };
 
 struct model_texture_descriptors {
@@ -60,16 +67,27 @@ struct model_material {
 };
 
 static uint load_model(
-    struct load_model_arg  *arg,
-    struct load_model_ret  *ret,
-    struct model_resources *resources,
-    struct allocators      *allocs,
-    struct draw_model_info *draw_info,
-    uint                    thread_id);
+    struct load_model_arg *arg,
+    struct load_model_ret *ret,
+    struct allocators     *allocs,
+    uint                   thread_id);
 
-static void model_cleanup(struct model_resources *resources);
+static void  model_free_assets(struct model_resources *resources);
+static void* model_free_assets_tf(struct thread_work_arg *arg);
+static void* model_free_pipelines_tf(struct thread_work_arg *arg);
 
-static void* model_cleanup_tf(struct thread_work_arg *arg);
+void model_signal_cleanup(struct load_model_ret *ret)
+{
+    ret->result = LOAD_MODEL_RESULT_INCOMPLETE;
+    signal_thread_true(ret->thread_free_assets);
+    signal_thread_true(ret->thread_free_pipelines);
+}
+
+void model_signal_pipeline_cleanup(struct load_model_ret *ret)
+{
+    ret->result = LOAD_MODEL_RESULT_INCOMPLETE;
+    signal_thread_true(ret->thread_free_pipelines);
+}
 
 void load_model_tf(struct thread_work_arg *arg)
 {
@@ -77,91 +95,129 @@ void load_model_tf(struct thread_work_arg *arg)
     lmi->ret->result = LOAD_MODEL_RESULT_INCOMPLETE;
 
     gltf *model = lmi->arg->model;
-    uint prim_count = 0;
-    uint attr_count = 0;
-    uint attr_count_upper_bound = 0;
-    uint cnt = 0;
-    for(uint i=0; i < model->mesh_count; ++i) {
-        prim_count += model->meshes[i].primitive_count;
-        for(uint j=0; j < model->meshes[i].primitive_count; ++j) {
-            cnt += model->meshes[i].primitives[j].attribute_count;
-            for(uint k=0; k < model->meshes[i].primitives[j].target_count; ++k)
-                cnt += model->meshes[i].primitives[j].morph_targets[k].attribute_count;
+
+    if (!lmi->ret->resources || !(lmi->ret->resources->flags & MODEL_RESOURCES_VALID_ASSETS_BIT)) {
+        uint prim_count = 0;
+        uint attr_count = 0;
+        uint attr_count_upper_bound = 0;
+        uint cnt = 0;
+        for(uint i=0; i < model->mesh_count; ++i) {
+            prim_count += model->meshes[i].primitive_count;
+            for(uint j=0; j < model->meshes[i].primitive_count; ++j) {
+                cnt += model->meshes[i].primitives[j].attribute_count;
+                for(uint k=0; k < model->meshes[i].primitives[j].target_count; ++k)
+                    cnt += model->meshes[i].primitives[j].morph_targets[k].attribute_count;
+            }
+            attr_count_upper_bound = cnt > attr_count_upper_bound ? cnt : attr_count_upper_bound;
+            attr_count += cnt;
         }
-        attr_count_upper_bound = cnt > attr_count_upper_bound ? cnt : attr_count_upper_bound;
-        attr_count += cnt;
+
+        uint pipeline_count = prim_count + (prim_count * lmi->arg->depth_pass_count);
+        uint pipeline_layout_count = prim_count + 2;
+
+        // vulkan handles are typedef'd pointers which makes the linter complain.
+        struct model_resources *resources;
+        uint resources_size = sizeof(*resources)                      * 1                       +
+                              sizeof(*resources->images)              *  model->image_count     +
+                              sizeof(*resources->samplers)            *  model->sampler_count   +
+                              sizeof(*resources->pipelines)           *  pipeline_count;
+
+        struct draw_model_info *draw_info;
+        uint draw_infos_size = sizeof(*draw_info)                                  * 1                      +
+                               sizeof(*draw_info->mesh_instance_counts)            * model->mesh_count      +
+                               sizeof(*draw_info->mesh_primitive_counts)           * model->mesh_count      +
+                               sizeof(*draw_info->bind_buffers)                    * attr_count_upper_bound + // NOLINT - sizeof(vulkan_handle)
+                               sizeof(*draw_info->primitive_infos)                 * prim_count             +
+                               sizeof(*draw_info->primitive_infos->vertex_offsets) * attr_count;
+
+        struct model_offsets *offsets;
+        #if NO_DESCRIPTOR_BUFFER
+        uint offset_size = sizeof(*offsets)                       *  1                                          +
+                           sizeof(*offsets->buffers)              *  model->buffer_count                        +
+                           sizeof(*offsets->transforms_ubos)      *  model->mesh_count                          +
+                           sizeof(*offsets->mesh_instance_counts) *  model->mesh_count                          +
+                           sizeof(*offsets->rsc_ds)               * (model->mesh_count + model->material_count) +
+                           sizeof(*offsets->tex_ds)               *  model->material_count;
+        #else
+        uint offset_size = sizeof(*offsets)                         * 1                     +
+                           sizeof(*offsets->buffers)                * model->buffer_count   +
+                           sizeof(*offsets->transforms_ubos)        * model->mesh_count     +
+                           sizeof(*offsets->transforms_ubo_dsls)    * model->mesh_count     +
+                           sizeof(*offsets->mesh_instance_counts)   * model->mesh_count     +
+                           sizeof(*offsets->material_textures_dsls) * model->material_count;
+        #endif
+
+        resources = allocate(arg->allocs.persistent, resources_size + draw_infos_size + offset_size);
+        draw_info = (struct draw_model_info*)((uchar*)resources + resources_size);
+        offsets   = (struct model_offsets*)((char*)draw_info + draw_infos_size);
+
+        memset(resources, 0, sizeof(*resources));
+        memset(draw_info, 0, sizeof(*draw_info));
+        memset(offsets,   0, sizeof(*offsets));
+
+        resources->alloc = arg->allocs.persistent;
+        resources->gpu = lmi->arg->gpu;
+
+        resources->images              =    (struct gpu_texture*)(resources            + 1);
+        resources->samplers            =             (VkSampler*)(resources->images    + model->image_count);
+        resources->pipelines           =            (VkPipeline*)(resources->samplers  + model->sampler_count);
+
+        draw_info->pipelines = resources->pipelines;
+
+        draw_info->mesh_instance_counts  =                             (uint*)(draw_info                        + 1);
+        draw_info->mesh_primitive_counts =                                     draw_info->mesh_instance_counts  + model->mesh_count;
+        draw_info->bind_buffers          =                         (VkBuffer*)(draw_info->mesh_primitive_counts + model->mesh_count);
+        draw_info->primitive_infos       = (struct model_primitive_draw_info*)(draw_info->bind_buffers          + attr_count_upper_bound);
+
+        #if NO_DESCRIPTOR_BUFFER
+        offsets->buffers              =            (uint*)(offsets + 1);
+        offsets->transforms_ubos      =                    offsets->buffers         + model->buffer_count;
+        offsets->mesh_instance_counts =                    offsets->transforms_ubos + model->mesh_count;
+        offsets->tex_ds               = (VkDescriptorSet*)(offsets->mesh_instance_counts + model->mesh_count);
+        offsets->rsc_ds               = (VkDescriptorSet*)(offsets->tex_ds               + model->material_count);
+        #else
+        offsets->buffers                = offsets + 1;
+        offsets->transforms_ubos        = offsets->buffers              + model->buffer_count;
+        offsets->transforms_ubo_dsls    = offsets->transforms_ubos      + model->mesh_count;
+        offsets->mesh_instance_counts   = offsets->transforms_ubo_dsls  + model->mesh_count;
+        offsets->material_textures_dsls = offsets->mesh_instance_counts + model->mesh_count;
+        #endif
+
+        for(uint i=0; i < attr_count_upper_bound; ++i)
+            draw_info->bind_buffers[i] = lmi->arg->gpu->mem.bind_buffer.buf;
+
+        resources->pipeline_count = pipeline_count;
+
+        uint ac = 0;
+        uint pc = 0;
+        for(uint i=0; i < model->mesh_count; ++i)
+            for(uint j=0; j < model->meshes[i].primitive_count; ++j) {
+                cnt = model->meshes[i].primitives[j].attribute_count;
+
+                uint joint_attr_count = 0;
+                for(uint k=GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_JOINTS;
+                    model->meshes[i].primitives[j].attributes[k].type == GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_JOINTS;
+                    ++k)
+                    joint_attr_count++;
+
+                for(uint k=0; k < model->meshes[i].primitives[j].target_count; ++k)
+                    cnt += model->meshes[i].primitives[j].morph_targets[k].attribute_count;
+
+                draw_info->primitive_infos[pc].vertex_offset_count_color = cnt;
+                draw_info->primitive_infos[pc].vertex_offsets = (size_t*)(draw_info->primitive_infos + prim_count) + ac;
+
+                draw_info->primitive_infos[pc].vertex_offset_count_depth = 1 + 2 * joint_attr_count;
+
+                ac += cnt;
+                pc++;
+            }
+
+        lmi->ret->resources = resources;
+        lmi->ret->offsets   = offsets;
+        lmi->ret->draw_info = draw_info;
     }
 
-    uint pipeline_count = prim_count + (prim_count * lmi->arg->depth_pass_count);
-    uint pipeline_layout_count = prim_count + 2;
-
-    // vulkan handles are typedef'd pointers which makes the linter complain.
-    struct model_resources *resources;
-    uint resources_size = sizeof(*resources)                      * 1                       +
-                          sizeof(*resources->images)              *  model->image_count     +
-                          sizeof(*resources->samplers)            *  model->sampler_count   +
-                          sizeof(*resources->pipelines)           *  pipeline_count;
-
-    struct draw_model_info *draw_info;
-    uint draw_infos_size = sizeof(*draw_info)                                  * 1                      +
-                           sizeof(*draw_info->mesh_instance_counts)            * model->mesh_count      +
-                           sizeof(*draw_info->mesh_primitive_counts)           * model->mesh_count      +
-                           sizeof(*draw_info->bind_buffers)                    * attr_count_upper_bound + // NOLINT - sizeof(vulkan_handle)
-                           sizeof(*draw_info->primitive_infos)                 * prim_count             +
-                           sizeof(*draw_info->primitive_infos->vertex_offsets) * attr_count;
-
-    resources = allocate(arg->allocs.persistent, resources_size + draw_infos_size);
-    draw_info = (struct draw_model_info*)((uchar*)resources + resources_size);
-
-    memset(resources, 0, sizeof(*resources));
-    memset(draw_info, 0, sizeof(*draw_info));
-
-    resources->alloc = arg->allocs.persistent;
-    resources->gpu = lmi->arg->gpu;
-
-    resources->images              =    (struct gpu_texture*)(resources            + 1);
-    resources->samplers            =             (VkSampler*)(resources->images    + model->image_count);
-    resources->pipelines           =            (VkPipeline*)(resources->samplers  + model->sampler_count);
-
-    draw_info->pipelines = resources->pipelines;
-
-    draw_info->mesh_instance_counts  =                             (uint*)(draw_info                        + 1);
-    draw_info->mesh_primitive_counts =                                     draw_info->mesh_instance_counts  + model->mesh_count;
-    draw_info->bind_buffers          =                         (VkBuffer*)(draw_info->mesh_primitive_counts + model->mesh_count);
-    draw_info->primitive_infos       = (struct model_primitive_draw_info*)(draw_info->bind_buffers          + attr_count_upper_bound);
-
-    for(uint i=0; i < attr_count_upper_bound; ++i)
-        draw_info->bind_buffers[i] = lmi->arg->gpu->mem.bind_buffer.buf;
-
-    resources->pipeline_count = pipeline_count;
-
-    uint ac = 0;
-    uint pc = 0;
-    for(uint i=0; i < model->mesh_count; ++i)
-        for(uint j=0; j < model->meshes[i].primitive_count; ++j) {
-            cnt = model->meshes[i].primitives[j].attribute_count;
-
-            uint joint_attr_count = 0;
-            for(uint k=GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_JOINTS;
-                model->meshes[i].primitives[j].attributes[k].type == GLTF_MESH_PRIMITIVE_ATTRIBUTE_TYPE_JOINTS;
-                ++k)
-                joint_attr_count++;
-
-            for(uint k=0; k < model->meshes[i].primitives[j].target_count; ++k)
-                cnt += model->meshes[i].primitives[j].morph_targets[k].attribute_count;
-
-            draw_info->primitive_infos[pc].vertex_offset_count_color = cnt;
-            draw_info->primitive_infos[pc].vertex_offsets = (size_t*)(draw_info->primitive_infos + prim_count) + ac;
-
-            draw_info->primitive_infos[pc].vertex_offset_count_depth = 1 + 2 * joint_attr_count;
-
-            ac += cnt;
-            pc++;
-        }
-
-    lmi->ret->draw_info = draw_info;
-
-    uint res = load_model(lmi->arg, lmi->ret, resources, &arg->allocs, draw_info, arg->self->id);
+    uint res = load_model(lmi->arg, lmi->ret, &arg->allocs, arg->self->id);
 
     lmi->ret->result = res;
 
@@ -173,36 +229,60 @@ void load_model_tf(struct thread_work_arg *arg)
     if (res != LOAD_MODEL_RESULT_SUCCESS)
         return;
 
-    struct private_thread_work w = {
-        .ready = lmi->ret->thread_cleanup_resources,
-        .work.fn = cast_work_fn(model_cleanup_tf),
-        .work.arg = cast_work_arg(resources),
+    struct private_thread_work w_assets = {
+        .ready = lmi->ret->thread_free_assets,
+        .work.fn = cast_work_fn(model_free_assets_tf),
+        .work.arg = cast_work_arg(lmi->ret->resources),
     };
-    thread_add_private_work(arg->self, &w);
+    thread_add_private_work(arg->self, &w_assets);
+
+    struct private_thread_work w_pipelines = {
+        .ready = lmi->ret->thread_free_pipelines,
+        .work.fn = cast_work_fn(model_free_pipelines_tf),
+        .work.arg = cast_work_arg(lmi->ret->resources),
+    };
+    thread_add_private_work(arg->self, &w_pipelines);
 }
 
-static void* model_cleanup_tf(struct thread_work_arg *arg)
+static void* model_free_assets_tf(struct thread_work_arg *arg)
 {
-    struct model_resources *resources = arg->arg;
-    model_cleanup(resources);
+    model_free_assets(arg->arg);
     return NULL;
 }
 
-static void model_cleanup(struct model_resources *resources)
+static void model_free_assets(struct model_resources *resources)
 {
     struct gpu *gpu = resources->gpu;
 
-    for(uint i=0; i < resources->image_count; ++i)
-        gpu_destroy_image_and_view(gpu, &resources->images[i]);
+    if (resources->flags & MODEL_RESOURCES_VALID_ASSETS_BIT) {
+        for(uint i=0; i < resources->image_count; ++i)
+            gpu_destroy_image_and_view(gpu, &resources->images[i]);
 
-    for(uint i=0; i < resources->sampler_count; ++i)
-        gpu_destroy_sampler(gpu, resources->samplers[i]);
+        for(uint i=0; i < resources->sampler_count; ++i)
+            gpu_destroy_sampler(gpu, resources->samplers[i]);
 
-    for(uint i=0; i < resources->pipeline_count; ++i)
-        vk_destroy_pipeline(gpu->device, resources->pipelines[i], GAC);
+        if (resources->flags & MODEL_RESOURCES_VALID_PIPELINES_BIT) {
+            for(uint i=0;  i < resources->pipeline_count; ++i)
+                vk_destroy_pipeline(gpu->device, resources->pipelines[i], GAC);
+        }
 
-    allocator *alloc = resources->alloc;
-    deallocate(alloc, resources);
+        allocator *alloc = resources->alloc;
+        deallocate(alloc, resources);
+
+        resources->flags &= ~(MODEL_RESOURCES_VALID_ASSETS_BIT|MODEL_RESOURCES_VALID_PIPELINES_BIT);
+    }
+}
+
+static void* model_free_pipelines_tf(struct thread_work_arg *arg)
+{
+    struct model_resources *resources = arg->arg;
+    struct gpu *gpu = resources->gpu;
+    if (resources->flags & MODEL_RESOURCES_VALID_PIPELINES_BIT) {
+        for(uint i=0; i < resources->pipeline_count; ++i)
+            vk_destroy_pipeline(gpu->device, resources->pipelines[i], GAC);
+        resources->flags &= ~MODEL_RESOURCES_VALID_PIPELINES_BIT;
+    }
+    return NULL;
 }
 
 void draw_model_color(VkCommandBuffer cmd, struct draw_model_info *info)
@@ -315,12 +395,12 @@ void draw_model_depth(VkCommandBuffer cmd, struct draw_model_info *info, uint pa
 
 static uint
 allocate_model_resources(
-    struct load_model_arg       *arg,
-    struct load_model_ret       *ret,
-    struct model_memory_offsets *offsets,
-    struct model_resources      *resources,
-    struct allocators           *allocs,
-    uint                         thread_id);
+    struct load_model_arg  *arg,
+    struct load_model_ret  *ret,
+    struct model_offsets   *offsets,
+    struct model_resources *resources,
+    struct allocators      *allocs,
+    uint                    thread_id);
 
 static struct model_texture_descriptors
 get_model_texture_descriptors(
@@ -332,7 +412,7 @@ static struct model_material*
 material_descriptors_and_pipeline_info(
     struct load_model_arg            *arg,
     struct model_texture_descriptors  textures,
-    struct model_memory_offsets      *offsets,
+    struct model_offsets      *offsets,
     struct model_resources           *resources,
     struct allocators                *allocs);
 
@@ -340,7 +420,7 @@ static uint
 model_pipelines_transform_descriptors_and_draw_info(
     struct load_model_arg       *arg,
     struct model_resources      *resources,
-    struct model_memory_offsets *offsets,
+    struct model_offsets *offsets,
     struct model_material       *materials,
     struct allocators           *allocs,
     struct draw_model_info      *draw_info);
@@ -348,16 +428,14 @@ model_pipelines_transform_descriptors_and_draw_info(
 static void
 model_node_transforms(
     struct load_model_arg       *arg,
-    struct model_memory_offsets *offsets,
+    struct model_offsets *offsets,
     struct allocators           *allocs);
 
 static uint load_model(
-    struct load_model_arg  *arg,
-    struct load_model_ret  *ret,
-    struct model_resources *resources,
-    struct allocators      *allocs,
-    struct draw_model_info *draw_info,
-    uint                    thread_id)
+    struct load_model_arg *arg,
+    struct load_model_ret *ret,
+    struct allocators     *allocs,
+    uint                   thread_id)
 {
     // @Todo @Note Should allocation_mask be set or unset on failure?
     // Currently going for it will be set.
@@ -366,10 +444,17 @@ static uint load_model(
     uint64 mark = allocator_used(allocs->temp);
     uint result = LOAD_MODEL_RESULT_SUCCESS;
 
-    struct model_memory_offsets offsets;
-    result = allocate_model_resources(arg, ret, &offsets, resources, allocs, thread_id);
-    if (result != LOAD_MODEL_RESULT_SUCCESS)
-        goto fn_return;
+    struct model_offsets   *offsets   = ret->offsets;
+    struct model_resources *resources = ret->resources;
+    struct draw_model_info *draw_info = ret->draw_info;
+
+    if (!(resources->flags & MODEL_RESOURCES_VALID_ASSETS_BIT)) {
+        result = allocate_model_resources(arg, ret, offsets, resources, allocs, thread_id);
+        if (result != LOAD_MODEL_RESULT_SUCCESS)
+            goto fn_return;
+        else
+            resources->flags |= MODEL_RESOURCES_VALID_ASSETS_BIT;
+    }
 
     #if NO_DESCRIPTOR_BUFFER
     struct model_texture_descriptors texture_descriptors = {};
@@ -379,12 +464,15 @@ static uint load_model(
     #endif
 
     struct model_material *materials = material_descriptors_and_pipeline_info(
-            arg, texture_descriptors, &offsets, resources, allocs);
+            arg, texture_descriptors, offsets, resources, allocs);
 
-    model_pipelines_transform_descriptors_and_draw_info(arg, resources, &offsets,
-                                                        materials, allocs, draw_info);
+    if (!(resources->flags & MODEL_RESOURCES_VALID_PIPELINES_BIT)) {
+        model_pipelines_transform_descriptors_and_draw_info(arg, resources, offsets,
+                                                            materials, allocs, draw_info);
+        resources->flags |= MODEL_RESOURCES_VALID_PIPELINES_BIT;
+    }
 
-    model_node_transforms(arg, &offsets, allocs);
+    model_node_transforms(arg, offsets, allocs);
 
 fn_return: // goto label
     allocator_reset_linear_to(allocs->temp, mark);
@@ -399,7 +487,7 @@ fn_return: // goto label
 static uint allocate_model_resources(
     struct load_model_arg       *arg,
     struct load_model_ret       *ret,
-    struct model_memory_offsets *offsets,
+    struct model_offsets *offsets,
     struct model_resources      *resources,
     struct allocators           *allocs,
     uint                         thread_id)
@@ -414,54 +502,32 @@ static uint allocate_model_resources(
     #if NO_DESCRIPTOR_BUFFER
     VkDescriptorSetLayout *rsc_dsls;
     VkDescriptorSetLayout *tex_dsls;
-
-    void *offset_data = allocate(allocs->temp,
-            sizeof(*offsets->buffers)              *  model->buffer_count                        +
-            sizeof(*offsets->transforms_ubos)      *  model->mesh_count                          +
-            sizeof(*offsets->mesh_instance_counts) *  model->mesh_count                          +
-            sizeof(*offsets->rsc_ds)               * (model->mesh_count + model->material_count) +
-            sizeof(*offsets->tex_ds)               *  model->material_count                      +
-            sizeof(*image_offsets_stage)           *  model->image_count                         +
-            sizeof(*image_offsets_device)          *  model->image_count                         +
-            sizeof(*tex_dsls)                      *  model->material_count                      +
-            sizeof(*rsc_dsls)                      * (model->mesh_count + model->material_count)
-    );
-
-    offsets->buffers              = offset_data;
-    offsets->transforms_ubos      = offsets->buffers         + model->buffer_count;
-    offsets->mesh_instance_counts = offsets->transforms_ubos + model->mesh_count;
-
-    offsets->tex_ds = (VkDescriptorSet*)(offsets->mesh_instance_counts + model->mesh_count);
-    offsets->rsc_ds = (VkDescriptorSet*)(offsets->tex_ds               + model->material_count);
-
-    image_offsets_stage  = (uint*)(offsets->rsc_ds     + model->mesh_count + model->material_count);
-    image_offsets_device = (uint*)(image_offsets_stage + model->image_count);
-
-    tex_dsls = (VkDescriptorSetLayout*)(image_offsets_device + model->image_count);
-    rsc_dsls = (VkDescriptorSetLayout*)(tex_dsls             + model->material_count);
+    {
+        void *data = allocate(allocs->temp,
+                sizeof(*image_offsets_stage)  *  model->image_count    +
+                sizeof(*image_offsets_device) *  model->image_count    +
+                sizeof(*tex_dsls)             *  model->material_count +
+                sizeof(*rsc_dsls)             * (model->mesh_count + model->material_count)
+        );
+        image_offsets_stage  =                  (uint*)(data);
+        image_offsets_device =                  (uint*)(image_offsets_stage  + model->image_count);
+        tex_dsls             = (VkDescriptorSetLayout*)(image_offsets_device + model->image_count);
+        rsc_dsls             = (VkDescriptorSetLayout*)(tex_dsls             + model->material_count);
+    }
     #else
-    void *offset_data = allocate(allocs->temp,
-            sizeof(*offsets->buffers)                * model->buffer_count   +
-            sizeof(*offsets->transforms_ubos)        * model->mesh_count     +
-            sizeof(*offsets->transforms_ubo_dsls)    * model->mesh_count     +
-            sizeof(*offsets->mesh_instance_counts)   * model->mesh_count     +
-            sizeof(*offsets->material_textures_dsls) * model->material_count +
-            sizeof(*image_offsets_stage)             * model->image_count    +
-            sizeof(*image_offsets_device)            * model->image_count
-    );
-
-    offsets->buffers                = offset_data;
-    offsets->transforms_ubos        = offsets->buffers              + model->buffer_count;
-    offsets->transforms_ubo_dsls    = offsets->transforms_ubos      + model->mesh_count;
-    offsets->mesh_instance_counts   = offsets->transforms_ubo_dsls  + model->mesh_count;
-    offsets->material_textures_dsls = offsets->mesh_instance_counts + model->mesh_count;
-
-    image_offsets_stage  = offsets->material_textures_dsls + model->material_count;
-    image_offsets_device = image_offsets_stage             + model->image_count;
+    {
+        void *data = allocate(allocs->temp,
+                sizeof(*image_offsets_stage)  * model->image_count +
+                sizeof(*image_offsets_device) * model->image_count
+        );
+        image_offsets_stage  = data;
+        image_offsets_device = image_offsets_stage + model->image_count;
+    }
     #endif
 
     smemset(offsets->mesh_instance_counts, 0,
            *offsets->mesh_instance_counts, model->mesh_count);
+
     offsets->skin_mask = 0;
     for(uint i=0; i < arg->scene_count; ++i)
         for(uint j=0; j < model->scenes[arg->scenes[i]].node_count; ++j)
@@ -741,7 +807,7 @@ static uint allocate_model_resources(
     return LOAD_MODEL_RESULT_SUCCESS;
 
 fail: // goto label
-    model_cleanup(resources);
+    model_free_assets(resources);
     return result;
 }
 
@@ -817,7 +883,7 @@ get_model_texture_descriptors(
 static struct model_material* material_descriptors_and_pipeline_info(
     struct load_model_arg            *arg,
     struct model_texture_descriptors  textures,
-    struct model_memory_offsets      *offsets,
+    struct model_offsets      *offsets,
     struct model_resources           *resources,
     struct allocators                *allocs)
 {
@@ -1014,7 +1080,7 @@ struct model_shaders { // @Note This struct is cast to an array for the pipeline
 static uint model_vertex_state_and_draw_info(
     struct load_model_arg                  *arg,
     struct model_resources                 *resources,
-    struct model_memory_offsets            *offsets,
+    struct model_offsets            *offsets,
     struct model_material                  *materials,
     uint                                    mesh_i,
     uint                                    prim_i,
@@ -1028,7 +1094,7 @@ static uint
 model_pipelines_transform_descriptors_and_draw_info(
     struct load_model_arg       *arg,
     struct model_resources      *resources,
-    struct model_memory_offsets *offsets,
+    struct model_offsets *offsets,
     struct model_material       *materials,
     struct allocators           *allocs,
     struct draw_model_info      *draw_info)
@@ -1428,7 +1494,7 @@ inline static size_t model_get_accessor_ofs(
     struct gpu                  *gpu,
     gltf                        *model,
     uint                         accessor_i,
-    struct model_memory_offsets *offsets)
+    struct model_offsets *offsets)
 {
     gltf_accessor *acc = &model->accessors[accessor_i];
     gltf_buffer_view *bv = &model->buffer_views[acc->buffer_view];
@@ -1442,7 +1508,7 @@ inline static size_t model_get_accessor_ofs(
 static uint model_vertex_state_and_draw_info(
     struct load_model_arg                  *arg,
     struct model_resources                 *resources,
-    struct model_memory_offsets            *offsets,
+    struct model_offsets            *offsets,
     struct model_material                  *materials,
     uint                                    mesh_i,
     uint                                    prim_i,
@@ -1619,7 +1685,7 @@ struct model_build_transform_ubo_arg {
 
 static void model_animations(
     struct load_model_arg        *lm_arg,
-    struct model_memory_offsets  *offsets,
+    struct model_offsets  *offsets,
     struct model_animations_arg  *arg,
     struct model_animation_masks *ret);
 
@@ -1678,7 +1744,7 @@ inline static uchar* model_get_accessor_data(
     struct gpu                  *gpu,
     gltf                        *model,
     uint                         accessor_i,
-    struct model_memory_offsets *offsets)
+    struct model_offsets *offsets)
 {
     gltf_accessor *acc = &model->accessors[accessor_i];
     gltf_buffer_view *bv = &model->buffer_views[acc->buffer_view];
@@ -1695,7 +1761,7 @@ inline static uchar* model_get_accessor_data(
 
 static void model_node_transforms(
     struct load_model_arg       *arg,
-    struct model_memory_offsets *offsets,
+    struct model_offsets *offsets,
     struct allocators           *allocs)
 {
     struct gpu *gpu = arg->gpu;
@@ -2066,8 +2132,8 @@ model_anim_weights(struct model_animation_timestep timestep, uint accessor_flags
 }
 
 static void model_animations(
-    struct load_model_arg     *lm_arg,
-    struct model_memory_offsets  *offsets,
+    struct load_model_arg        *lm_arg,
+    struct model_offsets         *offsets,
     struct model_animations_arg  *arg,
     struct model_animation_masks *ret)
 {

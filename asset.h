@@ -132,7 +132,10 @@ struct load_model_ret {
     VkCommandBuffer         cmd_transfer;
     VkCommandBuffer         cmd_graphics;
     struct draw_model_info *draw_info;
-    bool32                 *thread_cleanup_resources;
+    struct model_resources *resources;
+    struct model_offsets   *offsets;
+    bool32                 *thread_free_assets;
+    bool32                 *thread_free_pipelines;
 };
 
 struct load_model_info {
@@ -153,6 +156,8 @@ void load_model_tf(struct thread_work_arg *arg);
 
 void draw_model_color(VkCommandBuffer cmd, struct draw_model_info *info);
 void draw_model_depth(VkCommandBuffer cmd, struct draw_model_info *info, uint pass);
+void model_signal_cleanup(struct load_model_ret *ret);
+void model_signal_pipeline_cleanup(struct load_model_ret *ret);
 
 #endif
 
