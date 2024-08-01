@@ -57,7 +57,7 @@ void main() {
 
         vec3 matbrdf = spec + diff;
 
-        matbrdf *= in_shadow(i);
+        // matbrdf *= in_shadow(i);
         matbrdf *= 1 + material_ubo.mrno.w * (occlusion - 1);
         matbrdf *= emissive;
 
