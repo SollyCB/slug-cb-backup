@@ -2840,8 +2840,6 @@ void queue_submit_info(
 
 bool htp_allocate_resources(
     struct gpu        *gpu,
-    struct renderpass *rp,
-    uint               subpass,
     VkCommandBuffer    transfer_cmd,
     VkCommandBuffer    graphics_cmd,
     struct htp_rsc    *rsc)
@@ -2849,12 +2847,11 @@ bool htp_allocate_resources(
     memset(rsc, 0, sizeof(*rsc));
     VkResult check;
     {
-        rsc->dsl = gpu->layouts[PLL_HTP].dsls[HTP_DSL_INPUT_ATTACHMENT];
-        rsc->pipeline_layout = gpu->layouts[PLL_HTP].pll;
-
         #if DESCRIPTOR_BUFFER
         size_t dsl_sz;
-        vk_get_descriptor_set_layout_size_ext(gpu->device, rsc->dsl, &dsl_sz);
+        vk_get_descriptor_set_layout_size_ext(gpu->device,
+                gpu->layouts[PLL_HTP].dsls[HTP_DSL_INPUT_ATTACHMENT],
+                &dsl_sz);
         dsl_sz = align(dsl_sz, gpu->descriptors.props.descriptorBufferOffsetAlignment);
         #endif
 
@@ -2876,7 +2873,10 @@ bool htp_allocate_resources(
             stage_sz = vert_sz;
 
         #if NO_DESCRIPTOR_BUFFER
-        if (!sampler_dp_allocate(gpu, 0, 1, &rsc->dsl, &rsc->d_set)) {
+        if (!sampler_dp_allocate(gpu, 0, 1,
+                   &gpu->layouts[PLL_HTP].dsls[HTP_DSL_INPUT_ATTACHMENT],
+                   &rsc->d_set))
+        {
             log_print_error("Failed to allocate hdr to present descriptors.");
             goto fail;
         }
@@ -2967,34 +2967,24 @@ bool htp_allocate_resources(
         }
         #endif
     }
+    return true;
+fail:
+    return false;
+}
 
-    {
-        struct file f;
-        VkShaderModuleCreateInfo ci = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-
-        f = file_read_bin_all("shaders/htp.vert.spv", gpu->alloc_temp);
-        ci.codeSize = f.size,
-        ci.pCode = (uint32*)f.data,
-        check = vk_create_shader_module(gpu->device, &ci, GAC, &rsc->shader_modules[0]);
-        DEBUG_VK_OBJ_CREATION(vkCreateShaderModule, check);
-
-        f = file_read_bin_all("shaders/htp.frag.spv", gpu->alloc_temp);
-        ci.codeSize = f.size,
-        ci.pCode = (uint32*)f.data,
-        check = vk_create_shader_module(gpu->device, &ci, GAC, &rsc->shader_modules[1]);
-        DEBUG_VK_OBJ_CREATION(vkCreateShaderModule, check);
-    }
+void htp_create_pipeline(struct gpu *gpu, struct renderpass *rp, uint subpass, struct htp_rsc *rsc)
+{
     VkPipelineShaderStageCreateInfo shader_stages[] = {
         {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = VK_SHADER_STAGE_VERTEX_BIT,
-            .module = rsc->shader_modules[0],
+            .module = gpu->shaders[SHADERS_HTP_VERT],
             .pName = SHADER_ENTRY_POINT,
         },
         {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-            .module = rsc->shader_modules[1],
+            .module = gpu->shaders[SHADERS_HTP_FRAG],
             .pName = SHADER_ENTRY_POINT,
         },
     };
@@ -3062,26 +3052,17 @@ bool htp_allocate_resources(
             .pDepthStencilState = &depth_stencil,
             .pColorBlendState = &blend,
             .pDynamicState = &dynamic,
-            .layout = rsc->pipeline_layout,
+            .layout = gpu->layouts[PLL_HTP].pll,
             .renderPass = rp->rp,
             .subpass = subpass,
         };
-        check = vk_create_graphics_pipelines(gpu->device, gpu->pipeline_cache, 1, &ci, GAC, &rsc->pipeline);
+        VkResult check = vk_create_graphics_pipelines(gpu->device, gpu->pipeline_cache, 1, &ci, GAC, &rsc->pipeline);
         DEBUG_VK_OBJ_CREATION(vkCreateGraphicsPipelines, check);
     }
-    return true;
-fail:
-    htp_free_resources(gpu, rsc);
-    return false;
 }
 
-void htp_free_resources(struct gpu *gpu, struct htp_rsc *rsc)
+void htp_destroy_pipeline(struct gpu *gpu, struct htp_rsc *rsc)
 {
-    #if 0 // @RemoveMe Shaders now stored on gpu.
-    for(uint i=0; i < carrlen(rsc->shader_modules); ++i)
-        if (rsc->shader_modules[i])
-            vk_destroy_shader_module(gpu->device, rsc->shader_modules[i], GAC);
-    #endif
     if (rsc->pipeline)
         vk_destroy_pipeline(gpu->device, rsc->pipeline, GAC);
 }
@@ -3094,12 +3075,12 @@ void htp_commands(VkCommandBuffer cmd, struct gpu *gpu, struct htp_rsc *rsc)
     vk_cmd_bind_vertex_buffers(cmd, 0, 1, &gpu->mem.bind_buffer.buf, &rsc->vertex_offset);
     #if NO_DESCRIPTOR_BUFFER
     vk_cmd_bind_descriptor_sets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-            rsc->pipeline_layout, 0, 1, &rsc->d_set, 0, NULL);
+            gpu->layouts[PLL_HTP].pll, 0, 1, &rsc->d_set, 0, NULL);
     #else
-    vk_cmd_set_descriptor_buffer_offsets_ext(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, rsc->pipeline_layout,
-                                             0, 1, &db_i, &rsc->db_offset);
+    vk_cmd_set_descriptor_buffer_offsets_ext(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, gpu->layouts[PLL_HTP].pll,
+                                              0, 1, &db_i, &rsc->db_offset);
     #endif
-    vk_cmd_push_constants(cmd, rsc->pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, 16, &exposure);
+    vk_cmd_push_constants(cmd, gpu->layouts[PLL_HTP].pll, VK_SHADER_STAGE_FRAGMENT_BIT, 0, 16, &exposure);
     vk_cmd_draw(cmd, 6, 1, 0, 0);
 }
 

@@ -96,7 +96,10 @@ void load_model_tf(struct thread_work_arg *arg)
 
     gltf *model = lmi->arg->model;
 
-    if (!lmi->ret->resources || !(lmi->ret->resources->flags & MODEL_RESOURCES_VALID_ASSETS_BIT)) {
+    bool allocate_resources = !lmi->ret->resources || !(lmi->ret->resources->flags & MODEL_RESOURCES_VALID_ASSETS_BIT);
+    bool create_pipelines   = !lmi->ret->resources || !(lmi->ret->resources->flags & MODEL_RESOURCES_VALID_PIPELINES_BIT);
+
+    if (allocate_resources) {
         uint prim_count = 0;
         uint attr_count = 0;
         uint attr_count_upper_bound = 0;
@@ -229,19 +232,23 @@ void load_model_tf(struct thread_work_arg *arg)
     if (res != LOAD_MODEL_RESULT_SUCCESS)
         return;
 
-    struct private_thread_work w_assets = {
-        .ready = lmi->ret->thread_free_assets,
-        .work.fn = cast_work_fn(model_free_assets_tf),
-        .work.arg = cast_work_arg(lmi->ret->resources),
-    };
-    thread_add_private_work(arg->self, &w_assets);
+    if (allocate_resources) {
+        struct private_thread_work w_assets = {
+            .ready = lmi->ret->thread_free_assets,
+            .work.fn = cast_work_fn(model_free_assets_tf),
+            .work.arg = cast_work_arg(lmi->ret->resources),
+        };
+        thread_add_private_work(arg->self, &w_assets);
+    }
 
-    struct private_thread_work w_pipelines = {
-        .ready = lmi->ret->thread_free_pipelines,
-        .work.fn = cast_work_fn(model_free_pipelines_tf),
-        .work.arg = cast_work_arg(lmi->ret->resources),
-    };
-    thread_add_private_work(arg->self, &w_pipelines);
+    if (create_pipelines) {
+        struct private_thread_work w_pipelines = {
+            .ready = lmi->ret->thread_free_pipelines,
+            .work.fn = cast_work_fn(model_free_pipelines_tf),
+            .work.arg = cast_work_arg(lmi->ret->resources),
+        };
+        thread_add_private_work(arg->self, &w_pipelines);
+    }
 }
 
 static void* model_free_assets_tf(struct thread_work_arg *arg)
@@ -1348,19 +1355,21 @@ model_pipelines_transform_descriptors_and_draw_info(
 
     // @Optimise If descriptor buffers are off, this is the second allocation in this function.
     // Not huge deal as this is a large function and each allocation sizeable but still.
+    VkGraphicsPipelineCreateInfo *pipeline_infos;
     struct model_shaders *shaders;
     VkPipelineVertexInputStateCreateInfo *vi;
     VkPipelineInputAssemblyStateCreateInfo *ia;
     VkVertexInputBindingDescription *vb;
     VkVertexInputAttributeDescription *va;
 
-    VkGraphicsPipelineCreateInfo *pipeline_infos = allocate(allocs->temp,
-            sizeof(*pipeline_infos) * pc * (arg->depth_pass_count + 1) +
-            sizeof(*shaders)        * pc * 1                           +
-            sizeof(*vi)             * pc * 2                           +
-            sizeof(*ia)             * pc * 2                           +
-            sizeof(*vb)             * ac * 1                           +
-            sizeof(*va)             * ac * 1);
+    uint infos_size = sizeof(*pipeline_infos) * pc * (arg->depth_pass_count + 1) +
+                      sizeof(*shaders)        * pc * 1                           +
+                      sizeof(*vi)             * pc * 2                           +
+                      sizeof(*ia)             * pc * 2                           +
+                      sizeof(*vb)             * ac * 1                           +
+                      sizeof(*va)             * ac * 1;
+    pipeline_infos = allocate(allocs->temp, infos_size);
+    memset(pipeline_infos, 0, infos_size);
 
     shaders =                   (struct model_shaders*)(pipeline_infos + pc * (arg->depth_pass_count + 1));
     vi      =   (VkPipelineVertexInputStateCreateInfo*)(shaders        + pc * 1);
@@ -1439,7 +1448,6 @@ model_pipelines_transform_descriptors_and_draw_info(
         for(uint j=0; j < model->meshes[i].primitive_count; ++j) {
             gltf_mesh_primitive *prim = &model->meshes[i].primitives[j];
 
-            // @Note This does not work for JOINTS_N if N > 0
             vi[pc] = vi[pc - prim_count]; // if skinned, require joints and weights in depth shader
             vi[pc].vertexBindingDescriptionCount   = draw_info->primitive_infos[pc-prim_count].vertex_offset_count_depth;
             vi[pc].vertexAttributeDescriptionCount = draw_info->primitive_infos[pc-prim_count].vertex_offset_count_depth;

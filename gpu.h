@@ -340,28 +340,24 @@ static inline size_t gpu_buffer_align(struct gpu *gpu, size_t size)
 }
 
 struct htp_rsc { // hdr_to_present_resources silly name, but others are too long
-    VkShaderModule        shader_modules[2];
-    VkDescriptorSetLayout dsl;
-    VkPipelineLayout      pipeline_layout;
-    VkPipeline            pipeline;
+    VkPipeline      pipeline;
+    size_t          vertex_offset;
     #if NO_DESCRIPTOR_BUFFER
-    VkDescriptorSet       d_set;
+    VkDescriptorSet d_set;
     #else
-    size_t                db_offset;
+    size_t          db_offset;
     #endif
-    size_t                vertex_offset;
 };
 
-struct renderpass;
 bool htp_allocate_resources(
     struct gpu        *gpu,
-    struct renderpass *rp,
-    uint               subpass,
     VkCommandBuffer    transfer_cmd,
     VkCommandBuffer    graphics_cmd,
     struct htp_rsc    *rsc);
 
-void htp_free_resources(struct gpu *gpu, struct htp_rsc *rsc);
+struct renderpass;
+void htp_create_pipeline(struct gpu *gpu, struct renderpass *rp, uint subpass, struct htp_rsc *rsc);
+void htp_destroy_pipeline(struct gpu *gpu, struct htp_rsc *rsc);
 void htp_commands(VkCommandBuffer cmd, struct gpu *gpu, struct htp_rsc *rsc);
 
 struct vertex_info_descriptor { // @BadName

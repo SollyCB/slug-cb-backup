@@ -199,13 +199,32 @@ int main() {
 
     struct load_model_ret lmr = {0};
 
+    VkCommandBuffer transfer_cmd;
+    VkCommandBuffer cmds_graphics[2];
+    {
+        allocate_command_buffers(&pr.gpu, transfer_pool, 1, &transfer_cmd);
+        allocate_command_buffers(&pr.gpu, graphics_pool, 2, cmds_graphics);
+        begin_onetime_command_buffers(1, &transfer_cmd);
+        begin_onetime_command_buffers(2, cmds_graphics);
+    }
+
+    VkCommandBuffer graphics_cmd = cmds_graphics[0];
+    VkCommandBuffer draw_cmd = cmds_graphics[1];
+
+    struct htp_rsc htp_rsc;
+    if (!htp_allocate_resources(&pr.gpu, transfer_cmd, graphics_cmd, &htp_rsc))
+        return -1;
+
+    struct shadow_maps shadow_maps = {.count = 1};
+    if (!create_shadow_maps(&pr.gpu, transfer_cmd, graphics_cmd, &shadow_maps))
+        return -1;
 
     // for(uint frame_index=0; frame_index < 2; ++frame_index) {
     while(1) {
         poll_glfw();
 
         allocator_reset_linear(&pr.allocs.temp);
-        reset_gpu_buffers(&pr.gpu);
+        // reset_gpu_buffers(&pr.gpu);
 
         matrix light_view_mat;
         { // update light view, pos
@@ -333,30 +352,21 @@ int main() {
         pr.gpu.swapchain.i = next_swapchain_image(&pr.gpu, sem_have_swapchain_image, fence);
         fence_wait_secs_and_reset(&pr.gpu, fence, 1); // Is there an optimal place to wait on this?
 
+        if (FRAMES_ELAPSED) {
+            allocate_command_buffers(&pr.gpu, transfer_pool, 1, &transfer_cmd);
+            allocate_command_buffers(&pr.gpu, graphics_pool, 2, cmds_graphics);
+            begin_onetime_command_buffers(1, &transfer_cmd);
+            begin_onetime_command_buffers(2, cmds_graphics);
+            graphics_cmd = cmds_graphics[0];
+            draw_cmd = cmds_graphics[1];
+        }
+
         struct renderpass color_rp;
-        create_color_renderpass(&pr.gpu, &color_rp);
-
-        VkCommandBuffer transfer_cmd;
-        allocate_command_buffers(&pr.gpu, transfer_pool, 1, &transfer_cmd);
-
-        VkCommandBuffer cmds_graphics[2];
-        allocate_command_buffers(&pr.gpu, graphics_pool, 2, cmds_graphics);
-
-        VkCommandBuffer graphics_cmd = cmds_graphics[0];
-        VkCommandBuffer draw_cmd = cmds_graphics[1];
-        begin_onetime_command_buffers(1, &transfer_cmd);
-        begin_onetime_command_buffers(2, cmds_graphics);
-
-        struct htp_rsc htp_rsc;
-        if (!htp_allocate_resources(&pr.gpu, &color_rp, HTP_SUBPASS, transfer_cmd, graphics_cmd, &htp_rsc))
-            return -1;
-
-        struct shadow_maps shadow_maps = {.count = 1};
-        if (!create_shadow_maps(&pr.gpu, transfer_cmd, graphics_cmd, &shadow_maps))
-            return -1;
-
         struct renderpass depth_rp;
+        create_color_renderpass(&pr.gpu, &color_rp);
         create_shadow_renderpass(&pr.gpu, &shadow_maps, &depth_rp);
+
+        htp_create_pipeline(&pr.gpu, &color_rp, HTP_SUBPASS, &htp_rsc);
 
         uint scene = 0;
         uint animation_count;
@@ -581,11 +591,6 @@ int main() {
 
         fence_wait_secs_and_reset(&pr.gpu, fence, 3);
 
-        #if 0 // only if loading assets every frame
-        model_signal_cleanup(&lmr);
-        #endif
-
-        reset_descriptor_pools(&pr.gpu, 0);
         model_signal_pipeline_cleanup(&lmr);
 
         #if DRAW_FLOOR
@@ -612,11 +617,11 @@ int main() {
 
         destroy_renderpass(&pr.gpu, &color_rp);
         destroy_renderpass(&pr.gpu, &depth_rp);
-        htp_free_resources(&pr.gpu, &htp_rsc);
-        free_shadow_maps(&pr.gpu, &shadow_maps);
 
         reset_command_pool(&pr.gpu, transfer_pool);
         reset_command_pool(&pr.gpu, graphics_pool);
+
+        htp_destroy_pipeline(&pr.gpu, &htp_rsc);
 
         FRAMES_ELAPSED++;
         FRAME_I = FRAMES_ELAPSED & 1;
@@ -635,6 +640,10 @@ int main() {
             ;
     }
     exit(0);
+
+    htp_destroy_pipeline(&pr.gpu, &htp_rsc);
+    free_shadow_maps(&pr.gpu, &shadow_maps);
+    reset_descriptor_pools(&pr.gpu, 0);
 
     vk_destroy_command_pool(pr.gpu.device, transfer_pool, GAC);
     vk_destroy_command_pool(pr.gpu.device, graphics_pool, GAC);
