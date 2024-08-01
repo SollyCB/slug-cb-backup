@@ -541,11 +541,11 @@ static void gpu_create_device_and_queues(struct gpu *gpu)
                        SHADER_MAX_DESCRIPTOR_SET_COUNT, gpu->props.limits.maxBoundDescriptorSets);
 } // func create_device()
 
-#define GPU_SHADOW_ATTACHMENT_WIDTH 640
+#define GPU_SHADOW_ATTACHMENT_WIDTH  640
 #define GPU_SHADOW_ATTACHMENT_HEIGHT 480
-#define GPU_BIND_BUFFER_SIZE 1048576 // align(1000000, 16)
-#define GPU_TRANSFER_BUFFER_SIZE align(32000000, 16)
-#define GPU_TEXTURE_MEMORY_SIZE align(64000000, 16)
+#define GPU_BIND_BUFFER_SIZE      align(500000000, 16)
+#define GPU_TRANSFER_BUFFER_SIZE  align(500000000, 16)
+#define GPU_TEXTURE_MEMORY_SIZE  align(1000000000, 16)
 #define GPU_DESCRIPTOR_BUFFER_SIZE_RESOURCE 1048576 / 2 // align(100000, 16)
 #define GPU_DESCRIPTOR_BUFFER_SIZE_SAMPLER 1048576 / 2 // align(100000, 16)
 
@@ -1144,10 +1144,10 @@ Vertex_Info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vertex
     vs->dlcs[3] = gpu->settings.shadow_maps.dim;
 
     vs->dlcs[0] = 1;
-    vs->dir_lights[0].position = vector4(50, 50, 50,  1);
-    vs->dir_lights[0].color    = scale_vector(vector4(10.0, 10.0, 10.0, 0), 1.0);
+    vs->dir_lights[0].position = vector4(0, 50, 50,  1);
+    vs->dir_lights[0].color    = scale_vector(vector4(1.0, 1.0, 1.0, 0), 2.5);
 
-    vs->ambient = scale_vector(vector3(1, 1, 1), 1.5);
+    vs->ambient = scale_vector(vector3(1, 1, 1), 0.1);
 
     matrix model;
     identity_matrix(&model);

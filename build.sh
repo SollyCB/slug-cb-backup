@@ -2,7 +2,7 @@
 
 {set -xe} 2>/dev/null
 
-CF="-g -mbmi -msse4.1 -pthread -mlzcnt -fstack-protector-all -O0 -Wall -Wextra -Wnarrowing -Werror \
+CF="-g -mbmi -msse4.1 -pthread -mlzcnt -fstack-protector-all -O3 -Wall -Wextra -Wnarrowing -Werror \
     -Wno-unused -Wunused-value -Wno-missing-field-initializers -Wno-cast-function-type -Wno-unused-parameter"
 
 # why the fuck do I have to specify the full path for shaderc?? Because its static???

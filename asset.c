@@ -89,6 +89,35 @@ void model_signal_pipeline_cleanup(struct load_model_ret *ret)
     signal_thread_true(ret->thread_free_pipelines);
 }
 
+void check_load_result(uint r)
+{
+    switch(r) {
+        case LOAD_MODEL_RESULT_SUCCESS:
+            break;
+        case LOAD_MODEL_RESULT_INSUFFICIENT_IMAGE_MEMORY:
+            log_print_error("Load model returned LOAD_MODEL_RESULT_INSUFFICIENT_IMAGE_MEMORY");
+            break;
+        case LOAD_MODEL_RESULT_INSUFFICIENT_STAGE_MEMORY:
+            log_print_error("Load model returned LOAD_MODEL_RESULT_INSUFFICIENT_STAGE_MEMORY");
+            break;
+        case LOAD_MODEL_RESULT_INSUFFICIENT_BIND_MEMORY:
+            log_print_error("Load model returned LOAD_MODEL_RESULT_INSUFFICIENT_BIND_MEMORY");
+            break;
+        case LOAD_MODEL_RESULT_INSUFFICIENT_RESOURCE_DESCRIPTOR_MEMORY:
+            log_print_error("Load model returned LOAD_MODEL_RESULT_INSUFFICIENT_RESOURCE_DESCRIPTOR_MEMORY");
+            break;
+        case LOAD_MODEL_RESULT_INSUFFICIENT_SAMPLER_DESCRIPTOR_MEMORY:
+            log_print_error("Load model returned LOAD_MODEL_RESULT_INSUFFICIENT_SAMPLER_DESCRIPTOR_MEMORY");
+            break;
+        case LOAD_MODEL_RESULT_EXCEEDED_MAX_SAMPLER_COUNT:
+            log_print_error("Load model returned LOAD_MODEL_RESULT_EXCEEDED_MAX_SAMPLER_COUNT");
+            break;
+        default:
+            log_print_error("Invalid case");
+            break;
+    }
+}
+
 void load_model_tf(struct thread_work_arg *arg)
 {
     struct load_model_info *lmi = arg->arg;

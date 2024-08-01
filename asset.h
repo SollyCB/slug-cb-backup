@@ -21,8 +21,9 @@ const char *MODEL_FILES[] = {
     "models/simple-skin/SimpleSkin.gltf",
     "models/flight-helmet-testing/FlightHelmet.gltf",
 };
-#define MODEL MODEL_CESIUM_MAN_TESTING
+// #define MODEL MODEL_CESIUM_MAN_TESTING
 // #define MODEL MODEL_CUBE_TESTING
+#define MODEL MODEL_FLIGHT_HELMET
 
 enum {
     LOAD_MODEL_RESULT_INCOMPLETE,
@@ -159,6 +160,12 @@ void draw_model_color(VkCommandBuffer cmd, struct draw_model_info *info);
 void draw_model_depth(VkCommandBuffer cmd, struct draw_model_info *info, uint pass);
 void model_signal_cleanup(struct load_model_ret *ret);
 void model_signal_pipeline_cleanup(struct load_model_ret *ret);
+
+#if DEBUG
+void check_load_result(uint r);
+#else
+#define check_load_result(r)
+#endif
 
 #endif
 

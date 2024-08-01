@@ -274,7 +274,8 @@ int main() {
             matrix rot; // fix gltf orientation
             vector q = quaternion(-PI/2, vector3(1, 0, 0));
             rotation_matrix(q, &rot);
-            mul_matrix(&mat_model, &rot, &mat_model);
+            if (MODEL != MODEL_FLIGHT_HELMET)
+                mul_matrix(&mat_model, &rot, &mat_model);
 
             update_vs_info_mat_model(&pr.gpu, vs_info_desc.bb_offset, &mat_model);
             update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &mat_view);
@@ -432,6 +433,7 @@ int main() {
 
         while(lmi.ret->result == LOAD_MODEL_RESULT_INCOMPLETE)
             _mm_lfence();
+        check_load_result(lmi.ret->result);
 
         {
             if (!FRAMES_ELAPSED) { // upload default texture on first frame
