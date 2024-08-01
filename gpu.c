@@ -187,7 +187,7 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
     gpu->shader_dir = load_shader_dir(gpu, gpu->alloc_heap);
     #endif
 
-    gpu->settings.shadow_maps.dim = 4096 / 4;
+    gpu->settings.shadow_maps.dim = 4096 / 2;
 
     compile_shaders(gpu, gpu->alloc_temp);
     create_layouts(gpu);
