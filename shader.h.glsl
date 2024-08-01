@@ -87,6 +87,8 @@ static inline uint vt_ubo_ofs(bool weights)
 #extension GL_EXT_debug_printf : enable
 
 #define PI 3.1415926
+#define feq(x, y) (abs(x - y) < 0.000001)
+
 float sq(float x) { return x * x; }
 float heaviside(float x) { return x > 0 ? 1 : 0; }
 

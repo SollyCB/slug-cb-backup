@@ -14,11 +14,12 @@ void main() {
     float metallic = metallic_roughness.b * material_ubo.mrno.x;
     float roughness = metallic_roughness.g * material_ubo.mrno.y;
 
-    vec3  normal    = normalize(texture(material_textures[2], fs_info.texcoord).xyz * material_ubo.mrno.z);
+    vec3  normal    = texture(material_textures[2], fs_info.texcoord).xyz * material_ubo.mrno.z;
     float occlusion = texture(material_textures[3], fs_info.texcoord).r;
     vec3  emissive  = texture(material_textures[4], fs_info.texcoord).rgb * material_ubo.eeea.xyz;
 
-    emissive = bool(length(emissive)) ? emissive : vec3(1);
+    occlusion = bool(!feq(0, occlusion)) ? occlusion : 1;
+    emissive  = bool(!feq(length(emissive), 0)) ? emissive : vec3(1);
 
     /* V is the normalized vector from the shading location to the eye
      * L is the normalized vector from the shading location to the light
@@ -27,7 +28,7 @@ void main() {
     vec3 light = base_color.xyz * vs_info.ambient.xyz;
 
     vec3 V = normalize(fs_info.tang_eye_pos.xyz - fs_info.tang_frag_pos);
-    vec3 N = bool(length(normal)) ? normal : fs_info.tang_normal;
+    vec3 N = bool(!feq(length(normal), 0)) ? normalize(normal) : fs_info.tang_normal;
 
     float a = sq(roughness);
 
