@@ -1075,28 +1075,6 @@ static struct model_material* material_descriptors_and_pipeline_info(
         if ((gpu->flags & GPU_DESCRIPTOR_BUFFER_NOT_HOST_VISIBLE_BIT) && pc)
             offsets->material_textures_dsls[i] -= offsets->material_textures_dsls[0]; // no longer need the stage offset
         #endif
-
-        // @Deprecated I am deprecating this is in favor of using 1px black
-        // image in place of no image.  Reduces the number of potential shader
-        // count combinations.
-        #if 0
-        f &= GLTF_MATERIAL_TEXTURE_BITS;
-        uint pc = popcnt(f);
-        gltf_texture_info *texture_infos = &model->materials[i].base_color;
-
-        for(uint j=0; j < pc; ++j) {
-            uint tz = ctz(f);
-            f &= ~(1<<tz);
-
-            ds_cis_arrcpy(gpu, texture_dsl_data + offsets->material_textures_dsls[i], j, pc,
-                          textures.data + textures.stride * texture_infos[tz].texture);
-
-        }
-        // no longer need the stage offset
-        // @Bug Moving this outside of the loop might have broken smtg, I have not tested yet.
-        if ((gpu->flags & GPU_DESCRIPTOR_BUFFER_NOT_HOST_VISIBLE_BIT) && pc)
-            offsets->material_textures_dsls[i] -= offsets->material_textures_dsls[0];
-        #endif
     }
 
     #if NO_DESCRIPTOR_BUFFER
@@ -1292,8 +1270,8 @@ model_pipelines_transform_descriptors_and_draw_info(
     };
 
     bool  depth_bias_enable   = true;
-    float depth_bias_constant = 1.0005;
-    float depth_bias_slope    = 1.0005;
+    float depth_bias_constant = 1.05;
+    float depth_bias_slope    = 1.05;
 
     // @Todo This is supposed to be an 'over' operator blend. I am assuming
     // that that is the same as the vulkan VK_BLEND_OVER.

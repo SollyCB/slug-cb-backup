@@ -1185,7 +1185,7 @@ Vertex_Info* init_vs_info(struct gpu *gpu, vector pos, vector fwd, struct vertex
     vs->dlcs[3] = gpu->settings.shadow_maps.dim;
 
     vs->dlcs[0] = 1;
-    vs->dir_lights[0].position = vector4(0, 50, 50,  1);
+    vs->dir_lights[0].position = vector4(50, 50, 50,  1);
     vs->dir_lights[0].color    = scale_vector(vector4(1.0, 1.0, 1.0, 0), 2.5);
 
     vs->ambient = scale_vector(vector3(1, 1, 1), 0.2);
@@ -2463,7 +2463,6 @@ VkSampler gpu_create_gltf_sampler(struct gpu *gpu, gltf_sampler *info)
     ci.addressModeU = (VkSamplerAddressMode)info->wrap_u;
     ci.addressModeV = (VkSamplerAddressMode)info->wrap_v;
 
-    // @Todo I do not really know what a lot of this stuff really does...
     ci.minLod = 0;
     ci.maxLod = VK_LOD_CLAMP_NONE;
     ci.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;

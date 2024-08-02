@@ -229,7 +229,7 @@ int main() {
         matrix light_view_mat;
         { // update light view, pos
             vector q = quaternion(dt / 10, vector3(0, 1, 0));
-            vs_info->dir_lights[0].position = rotate_passive(vs_info->dir_lights[0].position, q);
+            // vs_info->dir_lights[0].position = rotate_passive(vs_info->dir_lights[0].position, q);
 
             vector light_tgt = vector4(0, 0, 0, 1);
             view_matrix(normalize(vs_info->dir_lights[0].position),
