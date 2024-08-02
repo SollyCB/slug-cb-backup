@@ -41,6 +41,9 @@ struct gpu_settings {
     uint32                pl_dynamic_state_count;
     VkDynamicState        pl_dynamic_states;
     struct {
+        VkSampleCountFlagBits sample_count;
+    } color_buffer;
+    struct {
         uint dim;
     } shadow_maps;
 };
@@ -83,15 +86,18 @@ struct gpu_buffer {
 #define GPU_BIND_BUFFER_COUNT          FRAME_COUNT
 #define GPU_TRANSFER_BUFFER_COUNT      FRAME_COUNT
 
-struct gpu_memory {
+struct gpu_memory { // @Todo Could do the vkAllocateMemory in one, not 10 or whatever.
     VkImageView hdr_color_views    [GPU_HDR_COLOR_ATTACHMENT_COUNT];
+    VkImageView resolve_views      [GPU_HDR_COLOR_ATTACHMENT_COUNT];
     VkImageView depth_views        [GPU_DEPTH_ATTACHMENT_COUNT];
     VkImageView shadow_views       [GPU_SHADOW_ATTACHMENT_COUNT];
 
     VkDeviceMemory depth_mems      [GPU_DEPTH_ATTACHMENT_COUNT];
     VkDeviceMemory hdr_color_mems  [GPU_HDR_COLOR_ATTACHMENT_COUNT];
+    VkDeviceMemory resolve_mems    [GPU_HDR_COLOR_ATTACHMENT_COUNT];
 
     VkImage hdr_color_attachments  [GPU_HDR_COLOR_ATTACHMENT_COUNT];
+    VkImage resolve_attachments    [GPU_HDR_COLOR_ATTACHMENT_COUNT];
     VkImage depth_attachments      [GPU_DEPTH_ATTACHMENT_COUNT];
     VkImage shadow_attachments     [GPU_SHADOW_ATTACHMENT_COUNT];
 
@@ -101,7 +107,7 @@ struct gpu_memory {
 
     struct gpu_device_memory texture_memory;
 
-    // @TODO Per thread buffers
+    // @Todo Per thread buffers
     struct gpu_buffer bind_buffer; // index, vertex, uniform
     struct gpu_buffer transfer_buffer;
     struct gpu_buffer descriptor_buffer_resource;
@@ -218,7 +224,7 @@ struct gpu {
     struct gpu_descriptors descriptors;
 
     uint64 flags;
-    uint64 hotload_flags; // hot load set bits
+    uint64 hotload_flags;
     struct gpu_settings settings;
     VkPhysicalDeviceProperties props;
 

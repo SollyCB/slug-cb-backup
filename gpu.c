@@ -103,6 +103,9 @@ void init_gpu(struct gpu *gpu, struct init_gpu_args *args) {
     gpu_create_swapchain(gpu, args->glfw);
     gpu_reset_viewport_and_scissor_to_window_extent(gpu);
 
+    gpu->settings.color_buffer.sample_count = VK_SAMPLE_COUNT_8_BIT;
+    log_print_error_if(!(gpu->props.limits.framebufferColorSampleCounts & gpu->settings.color_buffer.sample_count),
+            "color buffer sample count is not supported");
     gpu_create_memory_resources(gpu);
 
     gpu_load_pipeline_cache(gpu);
@@ -256,21 +259,6 @@ static void gpu_create_instance(struct gpu *gpu)
 
     const uint enabled_ext_cnt = 0;
     const char *enabled_ext_names[] = {};
-#endif
-
-#if 0
-    uint cnt;
-    vk_enumerate_instance_extension_properties(NULL, &cnt, NULL);
-    VkExtensionProperties props[cnt];
-    vk_enumerate_instance_extension_properties(NULL, &cnt, props);
-    for(uint j = 0; j < cnt; ++j)
-        println("%s", props[j].extensionName);
-    uint cnt;
-    vkEnumerateInstanceLayerProperties(&cnt, NULL);
-    VkLayerProperties props_l[cnt];
-    vkEnumerateInstanceLayerProperties(&cnt, props_l);
-    for(uint j = 0; j < cnt; ++j)
-        println("%s", props_l[j].layerName);
 #endif
 
     uint glfw_ext_cnt;
@@ -607,7 +595,7 @@ static void gpu_create_memory_resources(struct gpu *gpu)
         image_info.imageType = VK_IMAGE_TYPE_2D;
         image_info.mipLevels = 1;
         image_info.arrayLayers = 1;
-        image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+        image_info.samples = gpu->settings.color_buffer.sample_count;
         image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
         image_info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
         image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -618,7 +606,6 @@ static void gpu_create_memory_resources(struct gpu *gpu)
             check = vk_create_image(d, &image_info, GAC, &gpu->mem.depth_attachments[i]);
             DEBUG_VK_OBJ_CREATION(vkCreateImage, check);
         }
-        // @Todo shadow
 
         vkGetPhysicalDeviceMemoryProperties(gpu->physical_device, &pd_props);
         VkMemoryRequirements mr;
@@ -661,7 +648,7 @@ static void gpu_create_memory_resources(struct gpu *gpu)
         image_info.imageType = VK_IMAGE_TYPE_2D;
         image_info.mipLevels = 1;
         image_info.arrayLayers = 1;
-        image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+        image_info.samples = gpu->settings.color_buffer.sample_count;
         image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
         image_info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
         image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -709,7 +696,61 @@ static void gpu_create_memory_resources(struct gpu *gpu)
             check = vk_create_image_view(d, &view_info, GAC, &gpu->mem.hdr_color_views[i]);
             DEBUG_VK_OBJ_CREATION(vkCreateImage, check);
         }
-    } // HDR Color Attachments
+    }
+
+    { // Resolve Attachments
+        image_info.imageType = VK_IMAGE_TYPE_2D;
+        image_info.mipLevels = 1;
+        image_info.arrayLayers = 1;
+        image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+        image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+        image_info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+        image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        image_info.extent = (VkExtent3D){gpu->swapchain.info.imageExtent.width, gpu->swapchain.info.imageExtent.height, 1};
+        image_info.format = GPU_HDR_COLOR_ATTACHMENT_FORMAT;
+
+        uint i;
+        for(i = 0; i < GPU_HDR_COLOR_ATTACHMENT_COUNT; ++i) {
+            check = vk_create_image(d, &image_info, GAC, &gpu->mem.resolve_attachments[i]);
+            DEBUG_VK_OBJ_CREATION(vkCreateImage, check);
+        }
+
+        vkGetPhysicalDeviceMemoryProperties(gpu->physical_device, &pd_props);
+        VkMemoryRequirements mr;
+        vkGetImageMemoryRequirements(d, gpu->mem.resolve_attachments[0], &mr);
+
+        uint t_idx = gpu_get_memory_type(mr.memoryTypeBits, prefer_device, !prefer_host, gpu->flags, &pd_props);
+
+        alloc_info.pNext = &allocate_flags;
+        alloc_info.allocationSize = mr.size;
+        alloc_info.memoryTypeIndex = t_idx;
+
+        for(i = 0; i < GPU_HDR_COLOR_ATTACHMENT_COUNT; ++i) {
+            check = vkAllocateMemory(d, &alloc_info, GAC, &gpu->mem.resolve_mems[i]);
+            DEBUG_VK_OBJ_CREATION(vkAllocateMemory, check);
+            vkBindImageMemory(d, gpu->mem.resolve_attachments[i], gpu->mem.resolve_mems[i], 0);
+            DEBUG_VK_OBJ_CREATION(vkBindImageMemory, check);
+        }
+
+        VkImageSubresourceRange subresource = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1,
+        };
+
+        VkImageViewCreateInfo view_info = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+        view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        view_info.format = GPU_HDR_COLOR_ATTACHMENT_FORMAT;
+        view_info.subresourceRange = subresource;
+
+        for(i=0;i<GPU_HDR_COLOR_ATTACHMENT_COUNT;++i) {
+            view_info.image = gpu->mem.resolve_attachments[i];
+            check = vk_create_image_view(d, &view_info, GAC, &gpu->mem.resolve_views[i]);
+            DEBUG_VK_OBJ_CREATION(vkCreateImage, check);
+        }
+    }
 
     // Texture Memory
     image_info.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
@@ -2444,7 +2485,7 @@ void create_color_renderpass(struct gpu *gpu, struct renderpass *rp)
     VkAttachmentDescription attachment_descs[] = {
         { // Depth
             .format = VK_FORMAT_D16_UNORM,
-            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .samples = gpu->settings.color_buffer.sample_count,
             .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
             .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
             .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
@@ -2454,8 +2495,18 @@ void create_color_renderpass(struct gpu *gpu, struct renderpass *rp)
         },
         { // HDR
             .format = GPU_HDR_COLOR_ATTACHMENT_FORMAT,
-            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .samples = gpu->settings.color_buffer.sample_count,
             .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        },
+        { // Resolve
+            .format = GPU_HDR_COLOR_ATTACHMENT_FORMAT,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
             .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
             .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
             .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -2474,10 +2525,11 @@ void create_color_renderpass(struct gpu *gpu, struct renderpass *rp)
         }
     };
 
-    VkAttachmentReference depth_ref     = {0, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
-    VkAttachmentReference hdr_ref       = {1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
-    VkAttachmentReference hdr_input_ref = {1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    VkAttachmentReference present_ref   = {2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+    VkAttachmentReference depth_ref   = {0, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+    VkAttachmentReference hdr_ref     = {1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+    VkAttachmentReference res_ref     = {2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+    VkAttachmentReference input_ref   = {2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    VkAttachmentReference present_ref = {3, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
 
     VkSubpassDescription subpass_descriptions[] = {
         {
@@ -2485,11 +2537,12 @@ void create_color_renderpass(struct gpu *gpu, struct renderpass *rp)
             .colorAttachmentCount = 1,
             .pColorAttachments = &hdr_ref,
             .pDepthStencilAttachment = &depth_ref,
+            .pResolveAttachments = &res_ref,
         },
         {
             .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
             .inputAttachmentCount = 1,
-            .pInputAttachments    = &hdr_input_ref,
+            .pInputAttachments    = &input_ref,
             .colorAttachmentCount = 1,
             .pColorAttachments    = &present_ref,
         }
@@ -2541,15 +2594,6 @@ void create_color_renderpass(struct gpu *gpu, struct renderpass *rp)
             .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
             .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
         },
-        /*{
-            .srcSubpass = 1,
-            .dstSubpass = 1,
-            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            .dstStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, // VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            .dstAccessMask = VK_ACCESS_NONE, // VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
-        },*/
     };
 
     {
@@ -2570,6 +2614,7 @@ void create_color_renderpass(struct gpu *gpu, struct renderpass *rp)
     VkImageView views[] = {
         gpu->mem.depth_views[FRAME_I],
         gpu->mem.hdr_color_views[FRAME_I],
+        gpu->mem.resolve_views[FRAME_I],
         gpu->swapchain.image_views[gpu->swapchain.i],
     };
 
@@ -2679,6 +2724,14 @@ void begin_color_renderpass(VkCommandBuffer cmd, struct renderpass *rp, VkRect2D
             .depthStencil = (VkClearDepthStencilValue) {
                 .depth = 1,
                 .stencil = 0,
+            }
+        },
+        (VkClearValue) {
+            .color = (VkClearColorValue) {
+                .float32[0] = 0.0,
+                .float32[1] = 0.0,
+                .float32[2] = 0.0,
+                .float32[3] = 0.0,
             }
         },
         (VkClearValue) {
@@ -2929,7 +2982,7 @@ bool htp_allocate_resources(
         }
 
         VkDescriptorImageInfo ii = {
-            .imageView = gpu->mem.hdr_color_views[FRAME_I],
+            .imageView = gpu->mem.resolve_views[FRAME_I],
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         };
         #if NO_DESCRIPTOR_BUFFER
@@ -3143,7 +3196,7 @@ void draw_box(VkCommandBuffer cmd, struct gpu *gpu, struct box *box, bool wirefr
 
     VkPipelineMultisampleStateCreateInfo mu = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+        .rasterizationSamples = gpu->settings.color_buffer.sample_count,
     };
 
     VkPipelineDepthStencilStateCreateInfo ds = {
@@ -3275,7 +3328,7 @@ void draw_box_cleanup(struct gpu *gpu, struct draw_box_rsc *rsc)
  \
     VkPipelineMultisampleStateCreateInfo mu = { \
         .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO, \
-        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT, \
+        .rasterizationSamples = gpu->settings.color_buffer.sample_count, \
     }; \
  \
     VkPipelineDepthStencilStateCreateInfo ds = { \

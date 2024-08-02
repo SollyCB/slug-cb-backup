@@ -1336,8 +1336,12 @@ model_pipelines_transform_descriptors_and_draw_info(
             .depthBiasSlopeFactor = depth_bias_slope,
     };
 
-    // @Todo I want to look at multisampling. Idk how important it is for a good image.
-    VkPipelineMultisampleStateCreateInfo multisample = {
+    VkPipelineMultisampleStateCreateInfo color_multisample = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+        .rasterizationSamples = gpu->settings.color_buffer.sample_count,
+    };
+
+    VkPipelineMultisampleStateCreateInfo depth_multisample = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
         .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
     };
@@ -1461,7 +1465,7 @@ model_pipelines_transform_descriptors_and_draw_info(
                 .pInputAssemblyState = &ia[pc],
                 .pViewportState      = &color_viewport,
                 .pRasterizationState = model->material_count ? &color_rasterization[flag_check(materials[prim->material & maxif(prim->material+1)].flags, MODEL_MATERIAL_CULL_BACK_BIT)] : &color_rasterization[0],
-                .pMultisampleState   = &multisample,
+                .pMultisampleState   = &color_multisample,
                 .pDepthStencilState  = &color_depth,
                 .pColorBlendState    = &color_blend[flag_check(materials[prim->material & maxif(prim->material+1)].flags, MODEL_MATERIAL_BLEND_BIT)],
                 .pDynamicState       = &dyn,
@@ -1492,7 +1496,7 @@ model_pipelines_transform_descriptors_and_draw_info(
                 .pInputAssemblyState = &ia[pc],
                 .pViewportState      = &depth_viewport,
                 .pRasterizationState = &depth_rasterization,
-                .pMultisampleState   = &multisample,
+                .pMultisampleState   = &depth_multisample,
                 .pDepthStencilState  = &depth_depth,
                 .pColorBlendState    = &depth_blend,
                 .pDynamicState       = &dyn,
