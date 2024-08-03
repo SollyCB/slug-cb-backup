@@ -1538,7 +1538,13 @@ struct pll_decl PLLS[PLL_COUNT] = {
                      .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT}},
             }
         },
+        .pcrs = {
+            {.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+             .offset = 0,
+             .size = 4},
+        },
         .dsl_count = 5,
+        .pcr_count = 1,
     }, { // PLL_DEPTH,
         .dsls = { // vertex info
             { // transforms

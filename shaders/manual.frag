@@ -6,6 +6,10 @@
 layout(location = 25) in vec3 dbg_norm;
 layout(location = 26) in vec4 dbg_tang;
 
+layout(push_constant) uniform pc {
+    uint material_flags;
+};
+
 void main() {
 
     vec4 base_color = texture(material_textures[0], fs_info.texcoord) * material_ubo.bbbb;
@@ -57,7 +61,7 @@ void main() {
 
         vec3 matbrdf = spec + diff;
 
-        // matbrdf *= in_shadow(i);
+        matbrdf *= in_shadow(i);
         matbrdf *= 1 + material_ubo.mrno.w * (occlusion - 1);
         matbrdf *= emissive;
 
