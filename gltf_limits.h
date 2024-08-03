@@ -1,6 +1,7 @@
 #ifndef GLTF_LIMITS_H_
 #define GLTF_LIMITS_H_
 
+#define GLTF_JOINT_COUNT 24
 #define GLTF_MAX_NODE_COUNT 128
 #define GLTF_MAX_MESH_COUNT 32
 #define GLTF_U64_NODE_MASK 2

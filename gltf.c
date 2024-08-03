@@ -240,7 +240,6 @@ void parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_con
     struct file f = file_read_char_all(file_name, temp);
     struct allocation json_allocation;
     json j = parse_json(&f, temp, &json_allocation);
-    // print_json(&j);
 
     uint indices[GLTF_PROPERTY_COUNT];
     struct gltf_required_size req_size = gltf_required_size(&j, temp, indices);
@@ -252,6 +251,7 @@ void parse_gltf(const char *file_name, struct shader_dir *dir, struct shader_con
     struct gltf_extra_attrs *extra_attrs = sallocate(temp, *extra_attrs, req_size.extra_mesh_attrs + 1);
     memset(extra_attrs, 0, sizeof(*extra_attrs) * req_size.extra_mesh_attrs);
 
+    req_size.size = align(req_size.size, getpagesize());
     g->meta.size = req_size.size;
     g->meta.data = allocate(persistent, g->meta.size);
 
@@ -595,8 +595,11 @@ static size_t gltf_required_size_meshes(json *j, uint *index, struct gltf_requir
         weight_cnt = j_meshes[i0].values[ki].arr.len & max32_if_true(tmp != Max_u32);
         weights_size += alloc_align(sizeof(float) * weight_cnt); // I do not want to align each float.
     }
-    return cnt * alloc_align_type(gltf_mesh) +
-        total_prim_cnt * alloc_align_type(gltf_mesh_primitive) +
+
+    total_attrib_cnt += extra_info->extra_mesh_attrs;
+
+    return           cnt * alloc_align_type(gltf_mesh) +
+          total_prim_cnt * alloc_align_type(gltf_mesh_primitive) +
         total_attrib_cnt * alloc_align_type(gltf_mesh_primitive_attribute) +
         total_target_cnt * alloc_align_type(gltf_mesh_primitive_morph_target) +
         weights_size;
@@ -1942,8 +1945,8 @@ static void gltf_parse_skins(uint index, json *j, allocator *alloc, gltf *g)
         log_print_error_if(ki == Max_u32, "skin.joints must be defined");
         skins[i].joint_count = j_skins[i].values[ki].arr.len;
         skins[i].joints = sallocate(alloc, *skins->joints, skins[i].joint_count);
-        log_print_error_if(skins[i].joint_count > JOINT_COUNT,
-                "vertex shader supports %i joint, model uses %u", JOINT_COUNT, skins[i].joint_count);
+        log_print_error_if(skins[i].joint_count > GLTF_JOINT_COUNT,
+                "vertex shader supports %i joint, model uses %u", GLTF_JOINT_COUNT, skins[i].joint_count);
         for(i2=0; i2 < skins[i].joint_count; ++i2)
             skins[i].joints[i2] = j_skins[i].values[ki].arr.nums[i2];
 

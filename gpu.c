@@ -2110,7 +2110,11 @@ void gpu_blit_gltf_texture_mipmaps(gltf *model, struct gpu_texture *images, VkCo
 
         blit_info.srcImage = images[image].vkimage;
         blit_info.dstImage = images[image].vkimage;
-        blit_info.filter = (VkFilter)model->samplers[model->textures[i].sampler].mag_filter; // lame?
+
+        if (model->textures[i].sampler == Max_u32)
+            blit_info.filter = (VkFilter)GLTF_SAMPLER_FILTER_NEAREST;
+        else
+            blit_info.filter = (VkFilter)model->samplers[model->textures[i].sampler].mag_filter;
 
         dep.pImageMemoryBarriers = &barr;
 

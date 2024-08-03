@@ -274,8 +274,21 @@ int main() {
             matrix rot; // fix gltf orientation
             vector q = quaternion(-PI/2, vector3(1, 0, 0));
             rotation_matrix(q, &rot);
-            if (MODEL != MODEL_FLIGHT_HELMET)
-                mul_matrix(&mat_model, &rot, &mat_model);
+            switch(MODEL) {
+                case MODEL_FLIGHT_HELMET:
+                    break;
+                case MODEL_WATER_BOTTLE:
+                {
+                    vector trn = vector3(0, 0.8, 0);
+                    matrix mt;
+                    translation_matrix(trn, &mt);
+                    mul_matrix(&mt, &mat_model, &mat_model);
+                    break;
+                }
+                default:
+                    mul_matrix(&mat_model, &rot, &mat_model);
+                    break;
+            }
 
             update_vs_info_mat_model(&pr.gpu, vs_info_desc.bb_offset, &mat_model);
             update_vs_info_mat_view(&pr.gpu, vs_info_desc.bb_offset, &mat_view);

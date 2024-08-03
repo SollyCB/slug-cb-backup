@@ -2,6 +2,7 @@
 
 #extension GL_EXT_debug_printf : require
 
+// @Todo This is not being synced with gltf_limits.h lol (yikers! It's a debug file, it is fine)
 #define DIR_LIGHT_COUNT 1
 #define CSM_COUNT 4
 #define CSM_BLEND_BAND (2)

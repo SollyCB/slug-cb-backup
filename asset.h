@@ -11,6 +11,7 @@ enum {
     MODEL_CESIUM_MAN_TESTING,
     MODEL_SIMPLE_SKIN,
     MODEL_FLIGHT_HELMET,
+    MODEL_WATER_BOTTLE,
 };
 
 const char *MODEL_FILES[] = {
@@ -20,10 +21,12 @@ const char *MODEL_FILES[] = {
     "models/cesium-man-testing/CesiumMan.gltf",
     "models/simple-skin/SimpleSkin.gltf",
     "models/flight-helmet-testing/FlightHelmet.gltf",
+    "models/water-bottle/WaterBottle.gltf",
 };
 // #define MODEL MODEL_CESIUM_MAN_TESTING
 // #define MODEL MODEL_CUBE_TESTING
-#define MODEL MODEL_FLIGHT_HELMET
+// #define MODEL MODEL_FLIGHT_HELMET
+#define MODEL MODEL_WATER_BOTTLE
 
 enum {
     LOAD_MODEL_RESULT_INCOMPLETE,

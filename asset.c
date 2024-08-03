@@ -1053,7 +1053,10 @@ static struct model_material* material_descriptors_and_pipeline_info(
             dii[idx].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
             if (f & (1<<j)) {
-                dii[idx].sampler   = resources->samplers[model->textures[texture_infos[j].texture].sampler];
+                if (model->textures[texture_infos[j].texture].sampler == Max_u32)
+                    dii[idx].sampler   = gpu->defaults.sampler;
+                else
+                    dii[idx].sampler   = resources->samplers[model->textures[texture_infos[j].texture].sampler];
                 dii[idx].imageView = resources->images[model->textures[texture_infos[j].texture].source].view;
             } else {
                 dii[idx].sampler   = gpu->defaults.sampler;
