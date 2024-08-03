@@ -702,7 +702,9 @@ static void init_threads(allocator_info *allocs, thread_pool *pool)
     for(i=0;i<THREAD_COUNT;++i) {
         heap_buffers[i].size = THREAD_HEAP_ALLOCATOR_SIZE;
         temp_buffers[i].size = THREAD_TEMP_ALLOCATOR_SIZE;
-        #if !ARENA
+        #if ARENA
+        heap_buffers[i].data = NULL;
+        #else
         heap_buffers[i].data = allocate(&allocs->heap, THREAD_HEAP_ALLOCATOR_SIZE);
         #endif
         temp_buffers[i].data = allocate(&allocs->heap, THREAD_TEMP_ALLOCATOR_SIZE);

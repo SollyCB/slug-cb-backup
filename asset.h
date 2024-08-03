@@ -23,10 +23,10 @@ const char *MODEL_FILES[] = {
     "models/flight-helmet-testing/FlightHelmet.gltf",
     "models/water-bottle/WaterBottle.gltf",
 };
-// #define MODEL MODEL_CESIUM_MAN_TESTING
+#define MODEL MODEL_CESIUM_MAN_TESTING
 // #define MODEL MODEL_CUBE_TESTING
 // #define MODEL MODEL_FLIGHT_HELMET
-#define MODEL MODEL_WATER_BOTTLE
+// #define MODEL MODEL_WATER_BOTTLE
 
 enum {
     LOAD_MODEL_RESULT_INCOMPLETE,
