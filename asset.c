@@ -329,7 +329,7 @@ void draw_model_color(VkCommandBuffer cmd, struct draw_model_info *info)
             #if NO_DESCRIPTOR_BUFFER
             vk_cmd_bind_descriptor_sets(cmd,
                     VK_PIPELINE_BIND_POINT_GRAPHICS,
-                    info->pll_color,
+                    info->primitive_infos[pc].pll_color,
                     0,
                     info->primitive_infos[pc].ds_count_color,
                     info->primitive_infos[pc].ds_color,
@@ -351,6 +351,13 @@ void draw_model_color(VkCommandBuffer cmd, struct draw_model_info *info)
             vk_cmd_bind_pipeline(cmd,
                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                     info->pipelines[pc]);
+
+            vk_cmd_push_constants(cmd,
+                    info->primitive_infos[i].pll_color,
+                    VK_SHADER_STAGE_FRAGMENT_BIT,
+                    0,
+                    sizeof(info->primitive_infos[i].material_flags),
+                    &info->primitive_infos[i].material_flags);
 
             vk_cmd_bind_vertex_buffers(cmd,
                     0,
@@ -1214,7 +1221,6 @@ model_pipelines_transform_descriptors_and_draw_info(
     #endif
 
     draw_info->prim_count = pc;
-    draw_info->pll_color = model->material_count ? gpu->layouts[PLL_COLOR].pll : gpu->layouts[PLL_UNTEXTURED].pll;
     draw_info->pll_depth = gpu->layouts[PLL_DEPTH].pll;
 
     VkPipelineShaderStageCreateInfo depth_shaders[2] = {
@@ -1398,6 +1404,12 @@ model_pipelines_transform_descriptors_and_draw_info(
         for(uint j=0; j < model->meshes[i].primitive_count; ++j) {
             gltf_mesh_primitive *prim = &model->meshes[i].primitives[j];
 
+            draw_info->primitive_infos[pc].material_flags =
+                    prim->material != Max_u32 ? model->materials[prim->material].flags : 0x0;
+            draw_info->primitive_infos[pc].pll_color =
+                    prim->material != Max_u32 ? gpu->layouts[PLL_COLOR].pll :
+                                                gpu->layouts[PLL_UNTEXTURED].pll;
+
             if (prim->material == Max_u32) {
                 shaders[pc] = (struct model_shaders) {
                     .vertex = (VkPipelineShaderStageCreateInfo) {
@@ -1450,7 +1462,7 @@ model_pipelines_transform_descriptors_and_draw_info(
                 .pDepthStencilState  = &color_depth,
                 .pColorBlendState    = &color_blend[flag_check(materials[prim->material & maxif(prim->material+1)].flags, MODEL_MATERIAL_BLEND_BIT)],
                 .pDynamicState       = &dyn,
-                .layout              = model->material_count ? gpu->layouts[PLL_COLOR].pll : gpu->layouts[PLL_UNTEXTURED].pll,
+                .layout              = prim->material != Max_u32 ? gpu->layouts[PLL_COLOR].pll : gpu->layouts[PLL_UNTEXTURED].pll,
                 .renderPass          = arg->color_renderpass,
                 .subpass             = arg->color_subpass,
             };
