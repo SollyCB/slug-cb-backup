@@ -11,19 +11,37 @@ layout(push_constant) uniform pc {
 };
 
 void main() {
+    vec4 base_color;
+    vec4 metallic_roughness;
+    vec3 normal;
+    vec3 emissive;
+    float occlusion;
 
-    vec4 base_color = texture(material_textures[0], fs_info.texcoord) * material_ubo.bbbb;
+    if (bool(material_flags & GLTF_MATERIAL_BASE_COLOR_TEXTURE_BIT))
+        base_color = texture(material_textures[0], fs_info.texcoord);
+    else
+        base_color = vec4(1);
 
-    vec4 metallic_roughness = texture(material_textures[1], fs_info.texcoord);
-    float metallic = metallic_roughness.b * material_ubo.mrno.x;
+    if (bool(material_flags & GLTF_MATERIAL_METALLIC_ROUGHNESS_TEXTURE_BIT))
+        metallic_roughness = texture(material_textures[1], fs_info.texcoord);
+    else
+        metallic_roughness = vec4(1);
+
+    if (bool(material_flags & GLTF_MATERIAL_NORMAL_TEXTURE_BIT))
+        normal = normalize(texture(material_textures[2], fs_info.texcoord).xyz * material_ubo.mrno.z);
+
+    if (bool(material_flags & GLTF_MATERIAL_OCCLUSION_TEXTURE_BIT))
+        occlusion = 1 + material_ubo.mrno.w * (texture(material_textures[3], fs_info.texcoord).r - 1);
+
+    if (bool(material_flags & GLTF_MATERIAL_EMISSIVE_TEXTURE_BIT))
+        emissive = texture(material_textures[4], fs_info.texcoord).rgb;
+    else
+        emissive = vec3(1);
+
+    float metallic  = metallic_roughness.b * material_ubo.mrno.x;
     float roughness = metallic_roughness.g * material_ubo.mrno.y;
-
-    vec3  normal    = texture(material_textures[2], fs_info.texcoord).xyz * material_ubo.mrno.z;
-    float occlusion = texture(material_textures[3], fs_info.texcoord).r;
-    vec3  emissive  = texture(material_textures[4], fs_info.texcoord).rgb * material_ubo.eeea.xyz;
-
-    occlusion = bool(!feq(0, occlusion)) ? occlusion : 1;
-    emissive  = bool(!feq(length(emissive), 0)) ? emissive : vec3(1);
+    base_color *= material_ubo.bbbb;
+    emissive   *= material_ubo.eeea.xyz;
 
     /* V is the normalized vector from the shading location to the eye
      * L is the normalized vector from the shading location to the light
@@ -32,7 +50,7 @@ void main() {
     vec3 light = base_color.xyz * vs_info.ambient.xyz;
 
     vec3 V = normalize(fs_info.tang_eye_pos.xyz - fs_info.tang_frag_pos);
-    vec3 N = bool(!feq(length(normal), 0)) ? normalize(normal) : fs_info.tang_normal;
+    vec3 N = bool(material_flags & GLTF_MATERIAL_NORMAL_TEXTURE_BIT) ? normal : fs_info.tang_normal;
 
     float a = sq(roughness);
 
@@ -62,11 +80,18 @@ void main() {
         vec3 matbrdf = spec + diff;
 
         matbrdf *= in_shadow(i);
-        matbrdf *= 1 + material_ubo.mrno.w * (occlusion - 1);
         matbrdf *= emissive;
+
+        if (bool(material_flags & GLTF_MATERIAL_OCCLUSION_TEXTURE_BIT))
+            matbrdf *= occlusion;
 
         light += fs_info.dir_lights[i].color * matbrdf * max(dot(N, L), 0);
     }
 
-    fc = vec4(light, 1);
+    if (bool(material_flags & GLTF_MATERIAL_ALPHA_MODE_MASK_BIT))
+        fc = vec4(light, base_color.a > material_ubo.eeea.w);
+    else if (bool(material_flags & GLTF_MATERIAL_ALPHA_MODE_BLEND_BIT))
+        fc = vec4(light, base_color.a);
+    else
+        fc = vec4(light, 1);
 }
