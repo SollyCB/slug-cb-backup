@@ -8,7 +8,6 @@
 #define DIR_LIGHT_COUNT 1
 #define CSM_COUNT 4
 #define CSM_BLEND_BAND (2)
-#define MORPH_WEIGHT_COUNT 1
 #define SPLIT_SHADOW_MVP 0
 #define SHADER_MAX_MESH_INSTANCE_COUNT 2
 
@@ -57,7 +56,7 @@ struct Vertex_Info {
 
 struct Vertex_Transforms {
     mat4 joints[GLTF_JOINT_COUNT];
-    vec4 weights[(MORPH_WEIGHT_COUNT / 4) + 1];
+    vec4 weights[(GLTF_MORPH_WEIGHT_COUNT / 4) + 1];
 };
 
 // matched to gltf_material_uniforms but defined for shader alignment

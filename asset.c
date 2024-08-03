@@ -2158,16 +2158,20 @@ model_node_trs_fn NODE_TRS_FNS[3] = {
     model_node_scale,
 };
 
+float model_anim_weight_buffer[512];
+
 static inline void
 model_anim_weights(struct model_animation_timestep timestep, uint accessor_flags,
                    uint count, void *output_data, float *weight_data_to, float anim_weight)
 {
-    assert(count < 32 && "Below array too small");
-    float buf[32];
+    assert(count < carrlen(model_anim_weight_buffer) && "Below array too small");
 
-    convert_accessor(timestep.frame_0, accessor_flags, output_data, count*2, buf);
+    // @Todo This is messy. I did not pay anything like the same attention to morph weights as I did
+    // skinned animation. Skinned animation is much more interesting to me.
+    convert_accessor(timestep.frame_0, accessor_flags, output_data, count*2, model_anim_weight_buffer);
     for(uint i=0; i < count; ++i)
-        weight_data_to[i] += lerp(buf[i], buf[count+i], timestep.lerp_constant) * anim_weight;
+        weight_data_to[i] += lerp(model_anim_weight_buffer[i], model_anim_weight_buffer[count+i],
+                timestep.lerp_constant) * anim_weight;
 }
 
 static void model_animations(

@@ -43,6 +43,8 @@ void main() {
     base_color *= material_ubo.bbbb;
     emissive   *= material_ubo.eeea.xyz;
 
+    emissive += vec3(1);
+
     /* V is the normalized vector from the shading location to the eye
      * L is the normalized vector from the shading location to the light
      * N is the surface normal in the same space as the above values
@@ -80,7 +82,7 @@ void main() {
         vec3 matbrdf = spec + diff;
 
         // matbrdf *= in_shadow(i); // Looks ugly on the flight helmet, but good on cesium man
-        matbrdf *= vec3(1) + emissive;
+        matbrdf *= emissive;
 
         if (bool(material_flags & GLTF_MATERIAL_OCCLUSION_TEXTURE_BIT))
             matbrdf *= occlusion;

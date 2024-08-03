@@ -89,6 +89,9 @@ void load_gltf(const char *file_name, struct shader_dir *dir, struct shader_conf
         g->images[i].uri.cstr  = ptrinc_or_null(g->images[i].uri.cstr, b, d);
     }
     for(uint i=0; i < g->mesh_count; ++i) {
+        log_print_error_if(g->meshes[i].weight_count > GLTF_MORPH_WEIGHT_COUNT,
+                "meshes[%u].weight_count exceeds GLTF_MORPH_WEIGHT_COUNT");
+
         g->meshes[i].primitives = ptrinc_or_null(g->meshes[i].primitives, b, d);
         for(uint j=0; j < g->meshes[i].primitive_count; ++j) {
             g->meshes[i].primitives[j].attributes =
@@ -1660,6 +1663,7 @@ static void gltf_parse_meshes(uint index, json *j, struct gltf_extra_attrs *extr
         meshes[i].weight_count = json_meshes[i].values[ki].arr.len & max32_if_true(tmp != Max_u32);
         meshes[i].weights = sallocate(alloc, *meshes[i].weights, meshes[i].weight_count);
 
+        log_print_error_if(meshes[i].weight_count > GLTF_MORPH_WEIGHT_COUNT, "meshes[%u].weight_count exceeds GLTF_MORPH_WEIGHT_COUNT");
         for(tmp = 0; tmp < meshes[i].weight_count; ++tmp)
             meshes[i].weights[tmp] = json_meshes[i].values[ki].arr.nums[tmp];
     }
