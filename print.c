@@ -1,16 +1,5 @@
-// GCC_IGNORE_WARNINGS_BEGIN
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wall"
-#pragma GCC diagnostic ignored "-Wextra"
-
-#define STB_SPRINTF_IMPLEMENTATION
-#include "external/stb_sprintf.h"
-
-#pragma GCC diagnostic pop
-// GCC_IGNORE_WARNINGS_END
-
 #include "print.h"
+#include "external/stb_sprintf.h"
 #include "defs.h"
 
 typedef enum {

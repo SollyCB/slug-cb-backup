@@ -1,7 +1,7 @@
 #include "defs.h"
 
+#include "external/stb_sprintf.c"
 #include "external/stb_image.c"
-#undef STB_IMAGE_IMPLEMENTATION
 
 #include "allocator.c"
 #include "thread.c"
