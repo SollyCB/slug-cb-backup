@@ -3,7 +3,6 @@
 #include "external/stb_image.c"
 #undef STB_IMAGE_IMPLEMENTATION
 
-#include "external/tlsf.c"
 #include "allocator.c"
 #include "thread.c"
 #include "hash_map.c"

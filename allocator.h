@@ -4,9 +4,6 @@
 #include "defs.h"
 #include "assert.h"
 
-#define tlsf_assert assert
-#include "external/tlsf.h"
-
 #define ALLOCATOR_ALIGNMENT 16
 
 #define allocalign(sz) align(sz, ALLOCATOR_ALIGNMENT)
@@ -26,13 +23,6 @@ struct allocation {
     void *data;
     size_t size;
 };
-
-typedef struct {
-    uint64 cap;
-    uint64 used;
-    uint8 *mem;
-    void *tlsf_handle;
-} heap_allocator;
 
 typedef struct {
     uint64 cap;
@@ -59,12 +49,11 @@ typedef struct arena_allocator {
 } arena_allocator;
 
 typedef enum {
-    ALLOCATOR_HEAP_BIT        = 0x01,
-    ALLOCATOR_LINEAR_BIT      = 0x02,
-    ALLOCATOR_ARENA_BIT       = 0x04,
-    ALLOCATOR_DO_NOT_FREE_BIT = 0x08,
+    ALLOCATOR_LINEAR_BIT      = 0x01,
+    ALLOCATOR_ARENA_BIT       = 0x02,
+    ALLOCATOR_DO_NOT_FREE_BIT = 0x04,
 
-    ALLOCATOR_TYPE_BITS = ALLOCATOR_ARENA_BIT | ALLOCATOR_HEAP_BIT | ALLOCATOR_LINEAR_BIT,
+    ALLOCATOR_TYPE_BITS = ALLOCATOR_ARENA_BIT | ALLOCATOR_LINEAR_BIT,
 } allocator_flag_bits;
 
 typedef struct allocator allocator;
@@ -76,7 +65,6 @@ struct allocator {
     void* (*fpn_deallocate)(allocator*, void*);
     void* (*fpn_reallocate_with_old_size)(allocator *, void *, size_t, size_t);
     union {
-        heap_allocator   heap;
         linear_allocator linear;
         arena_allocator  arena;
     };
@@ -91,7 +79,6 @@ struct allocators {
 allocator new_allocator(size_t cap, void *buffer, allocator_flag_bits type);
 void free_allocator(allocator *alloc);
 
-#define new_heap_allocator(cap, buffer) new_allocator(cap, buffer, ALLOCATOR_HEAP_BIT)
 #define new_linear_allocator(cap, buffer) new_allocator(cap, buffer, ALLOCATOR_LINEAR_BIT)
 #define new_arena_allocator(cap, buffer) new_allocator(cap, buffer, ALLOCATOR_ARENA_BIT)
 
@@ -121,16 +108,37 @@ static inline void *allocate_and_zero(allocator *alloc, size_t size) {
 #define sreallocate(alloc, ptr, type, count) reallocate(alloc, ptr, sizeof(type) * count)
 #define sallocate_unaligned(alloc, type, count) allocate_unaligned(alloc, sizeof(type), sizeof(type) * count)
 
-static inline size_t allocator_used(allocator *alloc) {
+static inline size_t allocator_used(allocator *alloc)
+{
     switch(alloc->flags & ALLOCATOR_TYPE_BITS) {
-        case ALLOCATOR_HEAP_BIT:
-        return alloc->heap.used;
-        case ALLOCATOR_LINEAR_BIT:
+    case ALLOCATOR_LINEAR_BIT:
+    {
         return alloc->linear.used;
-        default:
+    }
+    case ALLOCATOR_ARENA_BIT:
+    {
+        size_t s = 0;
+        struct arena_footer *f = alloc->arena.tail;
+        while(f) { s += f->used; f = f->next; }
+        return s;
+    }
+    default:
         assert(false && "Invalid allocator flags");
         return Max_u64;
     }
+}
+
+static inline uint allocator_block_count(allocator *alloc)
+{
+    log_print_error_if(!(alloc->flags & ALLOCATOR_ARENA_BIT),
+                       "linear allocators do not use blocks");
+
+    struct arena_footer *f = alloc->arena.tail;
+
+    uint count = 0;
+    while(f->next) { count++; f = f->next; }
+
+    return count;
 }
 
 static inline void allocator_reset_linear(allocator *alloc) {
