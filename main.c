@@ -219,7 +219,7 @@ int main() {
     if (!create_shadow_maps(&pr.gpu, transfer_cmd, graphics_cmd, &shadow_maps))
         return -1;
 
-    // for(uint frame_index=0; frame_index < 2; ++frame_index) {
+    // for(uint frame_index=0; frame_index < 1000; ++frame_index) {
     while(1) {
         poll_glfw();
 
@@ -627,16 +627,6 @@ int main() {
 
         FRAMES_ELAPSED++;
         FRAME_I = FRAMES_ELAPSED & 1;
-        // println("Frame %i", FRAMES_ELAPSED);
-
-        {
-            #if 0 // Throttle frame rate
-            struct timespec rq,rm;
-            rq.tv_sec  = 0;
-            rq.tv_nsec = 10 * 10e6;
-            nanosleep(&rq, &rm);
-            #endif
-        }
 
         while(ONE_FRAME)
             ;
@@ -672,7 +662,11 @@ static void run_tests(allocator *alloc)
 
 static void init_allocators(allocator_info *allocs)
 {
+    #if ARENA
+    allocs->heap = new_arena_allocator(MAIN_HEAP_ALLOCATOR_SIZE, NULL);
+    #else
     allocs->heap = new_heap_allocator(MAIN_HEAP_ALLOCATOR_SIZE, NULL);
+    #endif
     allocs->temp = new_linear_allocator(MAIN_TEMP_ALLOCATOR_SIZE, NULL);
     allocs->to_free = new_array(32, void*, &allocs->heap);
 }
@@ -695,7 +689,9 @@ static void init_threads(allocator_info *allocs, thread_pool *pool)
     for(i=0;i<THREAD_COUNT;++i) {
         heap_buffers[i].size = THREAD_HEAP_ALLOCATOR_SIZE;
         temp_buffers[i].size = THREAD_TEMP_ALLOCATOR_SIZE;
+        #if !ARENA
         heap_buffers[i].data = allocate(&allocs->heap, THREAD_HEAP_ALLOCATOR_SIZE);
+        #endif
         temp_buffers[i].data = allocate(&allocs->heap, THREAD_TEMP_ALLOCATOR_SIZE);
         array_add(allocs->to_free, heap_buffers[i].data);
         array_add(allocs->to_free, temp_buffers[i].data);

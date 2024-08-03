@@ -19,22 +19,6 @@ static inline PFN_vkEnumerateInstanceExtensionProperties sol_vkEnumerateInstance
     return fn;
 }
 
-// @Validation Layers are controlled by vkconfig now.
-#if 0
-static inline PFN_vkCreateDebugUtilsMessengerEXT sol_vkCreateDebugUtilsMessengerEXT(VkInstance instance) {
-    PFN_vkCreateDebugUtilsMessengerEXT fn = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
-    log_print_error_if(!fn, "PFN_vkCreateDebugUtilsMessengerEXT not present");
-    return fn;
-}
-
-static inline PFN_vkDestroyDebugUtilsMessengerEXT sol_vkDestroyDebugUtilsMessengerEXT(VkInstance instance) {
-    // @Validation Layers are controlled by vkconfig now.
-    // PFN_vkDestroyDebugUtilsMessengerEXT fn = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
-    // log_print_error_if(!fn, "PFN_vkDestroyDebugUtilsMessengerEXT not present");
-    // return fn;
-}
-#endif
-
 static inline PFN_vkCreateSwapchainKHR sol_vkCreateSwapchainKHR(VkDevice device) {
     PFN_vkCreateSwapchainKHR fn = (PFN_vkCreateSwapchainKHR)vkGetDeviceProcAddr(device, "vkCreateSwapchainKHR");
     log_print_error_if(!fn, "PFN_vkCreateSwapchainKHR not present");

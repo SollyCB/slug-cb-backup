@@ -12,6 +12,8 @@ extern float FOV;
 #define PERSPECTIVE_NEAR 0.1
 #define PERSPECTIVE_FAR  100.0
 
+#define ARENA 1
+
 #define _GNU_SOURCE
 
 #define FRAME_COUNT 2

@@ -57,7 +57,11 @@ int new_thread_pool(struct allocation buffers_heap[THREAD_COUNT], struct allocat
         pool->threads[i].id = i+1; // disambiguate from main thread
         pool->threads[i].pool_write_flags = 0x0;
         pool->threads[i].thread_write_flags = 0x0;
+    #if ARENA
+        pool->threads[i].persistent = new_arena_allocator(buffers_heap[i].size, NULL);
+    #else
         pool->threads[i].persistent = new_heap_allocator(buffers_heap[i].size, buffers_heap[i].data);
+    #endif
         pool->threads[i].temp = new_linear_allocator(buffers_temp[i].size, buffers_temp[i].data);
         pool->threads[i].public_work_queues = pool->work_queues;
         pool->threads[i].private_work_queue = new_private_work_queue(1024, &pool->threads[i].persistent);

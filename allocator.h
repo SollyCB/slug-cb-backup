@@ -9,6 +9,7 @@
 
 #define ALLOCATOR_ALIGNMENT 16
 
+#define allocalign(sz) align(sz, ALLOCATOR_ALIGNMENT)
 #define alloc_align(sz) align(sz, ALLOCATOR_ALIGNMENT)
 #define alloc_align_type(t) align(sizeof(t), ALLOCATOR_ALIGNMENT)
 
@@ -16,6 +17,9 @@
    @Todo: This file and its corresponding source are really old and have little
    ugly silly bits and comments. I need to move in the slightly more refined versions
    from sol.h...
+
+   new_allocator should not return such a large struct, allocator stores too many function
+   pointers since I never use realloc, there are some redundant lines, etc.
 */
 
 struct allocation {
@@ -36,12 +40,31 @@ typedef struct {
     uint8 *mem;
 } linear_allocator;
 
+#define ARENA_FOOTER_CHECK_BYTES 0xfeedbeef
+
+struct arena_footer {
+    uint check_bytes;
+    uint allocation_count;
+    size_t used;
+    size_t cap;
+    void *base;
+    struct arena_footer *next;
+};
+
+typedef struct arena_allocator {
+    struct arena_footer *tail;
+    struct arena_footer *head;
+    size_t max_total_size;
+    size_t min_block_size;
+} arena_allocator;
+
 typedef enum {
     ALLOCATOR_HEAP_BIT        = 0x01,
     ALLOCATOR_LINEAR_BIT      = 0x02,
-    ALLOCATOR_DO_NOT_FREE_BIT = 0x04,
+    ALLOCATOR_ARENA_BIT       = 0x04,
+    ALLOCATOR_DO_NOT_FREE_BIT = 0x08,
 
-    ALLOCATOR_TYPE_BITS = ALLOCATOR_HEAP_BIT | ALLOCATOR_LINEAR_BIT,
+    ALLOCATOR_TYPE_BITS = ALLOCATOR_ARENA_BIT | ALLOCATOR_HEAP_BIT | ALLOCATOR_LINEAR_BIT,
 } allocator_flag_bits;
 
 typedef struct allocator allocator;
@@ -50,11 +73,12 @@ struct allocator {
     uint32 flags;
     void* (*fpn_allocate)(allocator*, size_t);
     void* (*fpn_reallocate)(allocator*, void*, size_t);
-    void  (*fpn_deallocate)(allocator*, void*);
+    void* (*fpn_deallocate)(allocator*, void*);
     void* (*fpn_reallocate_with_old_size)(allocator *, void *, size_t, size_t);
     union {
-        heap_allocator heap;
+        heap_allocator   heap;
         linear_allocator linear;
+        arena_allocator  arena;
     };
 };
 
@@ -69,6 +93,7 @@ void free_allocator(allocator *alloc);
 
 #define new_heap_allocator(cap, buffer) new_allocator(cap, buffer, ALLOCATOR_HEAP_BIT)
 #define new_linear_allocator(cap, buffer) new_allocator(cap, buffer, ALLOCATOR_LINEAR_BIT)
+#define new_arena_allocator(cap, buffer) new_allocator(cap, buffer, ALLOCATOR_ARENA_BIT)
 
 static inline void *allocate(allocator *alloc, size_t size) {
     return alloc->fpn_allocate(alloc, size);
@@ -82,7 +107,7 @@ static inline void *reallocate_with_old_size(allocator *alloc, void *ptr, size_t
     return alloc->fpn_reallocate_with_old_size(alloc, ptr, old_size, new_size);
 }
 
-static inline void deallocate(allocator *alloc, void *ptr) {
+static inline void* deallocate(allocator *alloc, void *ptr) {
     return alloc->fpn_deallocate(alloc, ptr);
 }
 
