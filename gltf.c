@@ -1452,9 +1452,9 @@ static void gltf_parse_materials(uint index, json *j, allocator *alloc, gltf *g)
             gltf_material_parse_emissive(&json_materials[i].values[ki].obj, &materials[i]);
 
         ki = json_find_key(&json_materials[i], "emissiveFactor");
-        materials[i].uniforms.emissive_factor[0] = 1;
-        materials[i].uniforms.emissive_factor[1] = 1;
-        materials[i].uniforms.emissive_factor[2] = 1;
+        materials[i].uniforms.emissive_factor[0] = 0;
+        materials[i].uniforms.emissive_factor[1] = 0;
+        materials[i].uniforms.emissive_factor[2] = 0;
         for(tmp = 0; tmp < 3 * (ki != Max_u32); ++tmp)
             materials[i].uniforms.emissive_factor[tmp] = json_materials[i].values[ki].arr.nums[tmp];
 

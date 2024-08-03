@@ -79,8 +79,8 @@ void main() {
 
         vec3 matbrdf = spec + diff;
 
-        matbrdf *= in_shadow(i);
-        matbrdf *= emissive;
+        // matbrdf *= in_shadow(i); // Looks ugly on the flight helmet, but good on cesium man
+        matbrdf *= vec3(1) + emissive;
 
         if (bool(material_flags & GLTF_MATERIAL_OCCLUSION_TEXTURE_BIT))
             matbrdf *= occlusion;
