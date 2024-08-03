@@ -1905,12 +1905,13 @@ static void model_node_transforms(
 }
 
 struct model_animation_timestep {
-    uint  frame_i;
+    uint  frame_0;
+    uint  frame_1;
     float lerp_constant;
 };
 static inline void println_timestep(struct model_animation_timestep ts)
 {
-    println("[frame %u, lerp %f]", ts.frame_i, ts.lerp_constant);
+    println("[frame_0 %u, frame_1 %u, lerp %f]", ts.frame_0, ts.frame_1, ts.lerp_constant);
 }
 
 inline static
@@ -1921,17 +1922,20 @@ struct model_animation_timestep get_model_animation_timestep(
     uint   count,
     float *data)
 {
-    // @Hack @Todo This is just a cheap way of getting looping for now. Later I
-    // will make it be controlled externally so that the playing of animations
-    // can be better controlled.  Right now this causes a small skip between
-    // frame 0 and frame N-1, the animation does not fade back into itself
-    // because this function alone cannot see how long the animation has been
-    // playing. 'time' is just the running time of the program rn.
     time -= max * floorf(time / max);
 
+    if (time < 0) { // @Todo This is little clumsy in my eyes.
+        return (struct model_animation_timestep) {
+            .frame_0 = count-1,
+            .frame_1 = 0,
+            .lerp_constant = (time - data[count-1]) / (data[0] - data[count-1]),
+        };
+    }
+
     // gltf spec, clamp animation to frame 0 if time < min
-    if (time <= min)
+    if (time <= min) {
         return (struct model_animation_timestep){0,0};
+    }
 
     uint i;
     for(i=0; i < count; ++i)
@@ -1939,7 +1943,8 @@ struct model_animation_timestep get_model_animation_timestep(
             break;
 
     struct model_animation_timestep ts = {
-        .frame_i = i-1,
+        .frame_0 = i-1,
+        .frame_1 = i,
         .lerp_constant = (time - data[i-1]) / (data[i] - data[i-1]),
     };
 
@@ -2073,8 +2078,8 @@ convert_accessor(uint ofs, uint accessor_flags, void *data, uint count, float *r
 static inline void model_anim_transform_translation(struct model_animation_timestep timestep, float weight,
                                                     uint accessor_flags, float* data, matrix* ret)
 {
-    float *uvec1 = data + (timestep.frame_i+0) * 3;
-    float *uvec2 = data + (timestep.frame_i+1) * 3;
+    float *uvec1 = data + (timestep.frame_0) * 3;
+    float *uvec2 = data + (timestep.frame_1) * 3;
     vector v1 = get_vector(uvec1[0], uvec1[1], uvec1[2], 0);
     vector v2 = get_vector(uvec2[0], uvec2[1], uvec2[2], 0);
     vector vt = lerp_vector(v1, v2, timestep.lerp_constant);
@@ -2092,8 +2097,8 @@ static inline void model_anim_transform_rotation(struct model_animation_timestep
 */
     vector q1 = {0};
     vector q2 = {0};
-    convert_accessor((timestep.frame_i+0) * 4, accessor_flags, data, 4, (float*)&q1);
-    convert_accessor((timestep.frame_i+1) * 4, accessor_flags, data, 4, (float*)&q2);
+    convert_accessor((timestep.frame_0) * 4, accessor_flags, data, 4, (float*)&q1);
+    convert_accessor((timestep.frame_1) * 4, accessor_flags, data, 4, (float*)&q2);
 
     vector q = lerp_vector(q1, q2, timestep.lerp_constant);
     float t = quaternion_angle(q);
@@ -2104,8 +2109,8 @@ static inline void model_anim_transform_rotation(struct model_animation_timestep
 static inline void model_anim_transform_scale(struct model_animation_timestep timestep, float weight,
                                               uint accessor_flags, float* data, matrix* ret)
 {
-    float *uvec1 = data + (timestep.frame_i+0) * 3;
-    float *uvec2 = data + (timestep.frame_i+1) * 3;
+    float *uvec1 = data + (timestep.frame_0) * 3;
+    float *uvec2 = data + (timestep.frame_1) * 3;
     vector v1 = get_vector(uvec1[0], uvec1[1], uvec1[2], 0);
     vector v2 = get_vector(uvec2[0], uvec2[1], uvec2[2], 0);
     vector vs = lerp_vector(v1, v2, timestep.lerp_constant);
@@ -2148,7 +2153,7 @@ model_anim_weights(struct model_animation_timestep timestep, uint accessor_flags
     assert(count < 32 && "Below array too small");
     float buf[32];
 
-    convert_accessor(timestep.frame_i, accessor_flags, output_data, count*2, buf);
+    convert_accessor(timestep.frame_0, accessor_flags, output_data, count*2, buf);
     for(uint i=0; i < count; ++i)
         weight_data_to[i] += lerp(buf[i], buf[count+i], timestep.lerp_constant) * anim_weight;
 }
