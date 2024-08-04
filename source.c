@@ -6,6 +6,7 @@
 #include "allocator.c"
 #include "thread.c"
 #include "hash_map.c"
+#include "ringbuffer.c"
 #include "math.c"
 #include "print.c"
 #include "string.c"
