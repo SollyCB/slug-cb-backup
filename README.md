@@ -5,7 +5,7 @@ Emphasises minimising dependencies and library usage.
 
 ## Example Renders
 
-*water bottle*
+*metal and plastic bottle*
 ---
 
 ![](examples/water-bottle-no-ambient.png)
