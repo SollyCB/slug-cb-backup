@@ -1,11 +1,30 @@
 # 3D Vulkan Rendering Engine In C On Linux
 
 Supports skinned animation, physically based rendering, multithreaded asset loading and model transformation, and cascaded shadow mapping.
-Emphasises minimising dependencies.
+Emphasises minimising dependencies and library usage.
 
 ## Example Renders
 
-(replace via drag and drop)
+*water bottle*
+---
+
+![](examples/water-bottle-no-ambient.png)
+
+*cesium man animated*
+---
+
+https://github.com/user-attachments/assets/75b6870d-1446-4b5e-90a6-1a0d6fc8dac8
+
+*flight helmet*
+---
+
+![](examples/flight-helmet-above-left.png)
+
+*cascade frustums tightly fit to camera frustum and scene bounding box*
+---
+
+![](examples/cascade-fitting.png)
+
 
 ## Project Break Down
 
