@@ -24,8 +24,8 @@ const char *SHADER_ENTRY_POINT = "main";
 // in shader sets want to be accessed like an array, but keeping module names
 // also has its benefits. I really do not enjoy just casting structs to arrays
 // and then iterating members that way, as if the struct has been reordered,
-// BAM! ur fucked. This way seems to fix this issue of robustness to change to
-// some degree. But it still is not particularly beatiful.
+// BAM! you have a bug. This way seems to fix this issue of robustness to
+// change to some degree. But it still is not particularly beatiful.
 const uint SHADER_SET_MODULE_OFFSETS[GRAPHICS_PIPELINE_SHADER_STAGE_LIMIT_VULKAN] = {
     offsetof(struct shader_set, vert),
     Max_u32, // tesselation control

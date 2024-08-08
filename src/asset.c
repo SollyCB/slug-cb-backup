@@ -605,7 +605,7 @@ static uint allocate_model_resources(
 
     uint material_ubos_size;
     uint material_ubo_dsls_size;
-/*  for(uint i=0; you == gay; ++i) */ { // @Bug Loops infinitely around 1 in every 10 runs...
+    {
         offsets->material_ubo = buffers_size + transforms_ubos_size;
         material_ubos_size = alloc_align(model->material_count * SHADER_MATERIAL_UBO_SIZE);
 
