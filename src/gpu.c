@@ -1406,16 +1406,19 @@ static void compile_shaders(struct gpu *gpu, allocator *temp)
     const char *ver = "#version 460\n";
     memcpy(src, ver, strlen(ver));
 
+    const char *gltf_limits = "src/gltf_limits.h";
+    const char *shader_h = "src/shader.h.glsl";
+
     uint incl_sz = 0;
     {
-        int fd = file_open("gltf_limits.h", READ);
+        int fd = file_open(gltf_limits, READ);
         uint sz = file_size_fd(fd); assert(sz + strlen(ver) < allocation_size && "increase allocation_size");
         file_read(fd, 0, sz, src + strlen(ver));
         sz += strlen(ver);
         file_close(fd);
         incl_sz += sz;
     } {
-        int fd = file_open("shader.h.glsl", READ);
+        int fd = file_open(shader_h, READ);
         uint sz = file_size_fd(fd); assert(sz + incl_sz < allocation_size && "increase allocation_size");
         file_read(fd, 0, sz, src + incl_sz);
         file_close(fd);
@@ -1426,7 +1429,7 @@ static void compile_shaders(struct gpu *gpu, allocator *temp)
     for(uint i=0; i < SHADER_COUNT; ++i) {
         if (file_exists(SHADERS[i].dst_uri.cstr)                                                         &&
            (ts_after(file_last_modified(SHADERS[i].dst_uri.cstr),
-                     file_last_modified("shader.h.glsl")) || (SHADERS[i].flags & SHADER_NO_INCLUDE_BIT)) &&
+                     file_last_modified(shader_h)) || (SHADERS[i].flags & SHADER_NO_INCLUDE_BIT)) &&
             ts_after(file_last_modified(SHADERS[i].dst_uri.cstr),
                      file_last_modified(SHADERS[i].src_uri.cstr)))
         {

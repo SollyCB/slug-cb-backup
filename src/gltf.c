@@ -37,7 +37,7 @@ void load_gltf(const char *file_name, struct shader_dir *dir, struct shader_conf
     static bool gltf_source_changed_msg = false;
 
     if (gltf_source_changed == -1)
-        gltf_source_changed = ts_after(file_last_modified("gltf.c"), file_last_modified("exe"));
+        gltf_source_changed = ts_after(file_last_modified("src/gltf.c"), file_last_modified("exe"));
 
     if (gltf_source_changed && !gltf_source_changed_msg) {
         println("gltf.c has changed, parsing files again...");
