@@ -1,7 +1,6 @@
 #include "defs.h"
 #include "math.h"
 #include "print.h"
-#include "hash_map.h"
 #include "array.h"
 #include "sol_vulkan.h"
 #include "string.h"
@@ -28,8 +27,8 @@
 #define HTP_SUBPASS  1
 
 int FRAME_I = 0;
-int SCR_W = 1920;
-int SCR_H = 1080;
+int SCR_W = 640 * 2;
+int SCR_H = 480 * 2;
 float FOV = PI / 4;
 
 int FRAMES_ELAPSED = 0;
